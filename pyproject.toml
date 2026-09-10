@@ -32,3 +32,7 @@ slm-post-train = "slm_post_train.cli:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/slm_post_train"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+
