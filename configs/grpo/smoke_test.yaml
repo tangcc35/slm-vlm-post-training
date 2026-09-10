@@ -1,0 +1,32 @@
+stage: grpo
+
+model:
+  name_or_path: "unsloth/gemma-2-2b-it"
+  max_seq_length: 512
+  load_in_4bit: true
+
+lora:
+  r: 8
+  lora_alpha: 16
+  target_modules: ["q_proj", "k_proj", "v_proj", "o_proj"]
+
+dataset:
+  path: "data/dummy/grpo_sample.jsonl"
+  split: "train"
+
+rewards:
+  - "xml_format"
+  - "exact_match"
+
+training:
+  batch_size: 1
+  gradient_accumulation_steps: 1
+  num_generations: 2
+  max_steps: 2
+  max_prompt_length: 128
+  max_completion_length: 128
+  learning_rate: 5.0e-6
+
+output:
+  output_dir: "outputs/grpo_smoke_test"
+  logging_steps: 1

@@ -1,0 +1,29 @@
+stage: sft
+
+model:
+  name_or_path: "unsloth/gemma-2-2b-it"
+  max_seq_length: 512
+  load_in_4bit: true
+
+lora:
+  r: 8
+  lora_alpha: 16
+  target_modules: ["q_proj", "k_proj", "v_proj", "o_proj"]
+  use_gradient_checkpointing: "unsloth"
+
+dataset:
+  path: "data/dummy/sft_sample.jsonl"
+  chat_template: "chatml"
+  split: "train"
+
+training:
+  batch_size: 1
+  gradient_accumulation_steps: 1
+  max_steps: 2
+  learning_rate: 2.0e-4
+  optim: "adamw_8bit"
+  train_on_responses_only: true
+
+output:
+  output_dir: "outputs/sft_smoke_test"
+  logging_steps: 1
