@@ -1,0 +1,5 @@
+{"conversations": [{"role": "user", "content": "What is the capital of France?"}, {"role": "assistant", "content": "The capital of France is Paris."}]}
+{"conversations": [{"role": "user", "content": "Solve: 2 + 2"}, {"role": "assistant", "content": "2 + 2 is equal to 4."}]}
+{"conversations": [{"role": "user", "content": "Explain gravity in one sentence."}, {"role": "assistant", "content": "Gravity is the fundamental force of attraction that pulls objects with mass toward one another."}]}
+{"conversations": [{"role": "user", "content": "Write a python print statement."}, {"role": "assistant", "content": "print('Hello, world!')"}]}
+{"conversations": [{"role": "user", "content": "What is 10 divided by 2?"}, {"role": "assistant", "content": "10 divided by 2 is 5."}]}

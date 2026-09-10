@@ -1,0 +1,5 @@
+{"prompt": "Calculate the result of 15 + 27. Output the reasoning inside <think>...</think> and the final answer inside <answer>...</answer>.", "answer": "42"}
+{"prompt": "Calculate the result of 8 * 9. Output the reasoning inside <think>...</think> and the final answer inside <answer>...</answer>.", "answer": "72"}
+{"prompt": "Calculate the result of 100 - 37. Output the reasoning inside <think>...</think> and the final answer inside <answer>...</answer>.", "answer": "63"}
+{"prompt": "What is 5 cubed? Output the reasoning inside <think>...</think> and the final answer inside <answer>...</answer>.", "answer": "125"}
+{"prompt": "Calculate 14 + 18. Output the reasoning inside <think>...</think> and the final answer inside <answer>...</answer>.", "answer": "32"}
