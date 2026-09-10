@@ -1,18 +1,6 @@
+import unsloth  # Must precede trl/transformers imports
 import logging
 import torch
-import unsloth
-
-try:
-    import trl.import_utils as _tiu
-
-    for _attr in dir(_tiu):
-        if _attr.startswith("_") and _attr.endswith("_available"):
-            _val = getattr(_tiu, _attr)
-            if isinstance(_val, tuple):
-                setattr(_tiu, _attr, _val[0])
-except Exception:
-    pass
-
 from trl import GRPOConfig, GRPOTrainer
 from slm_post_train.models.loader import load_model_and_tokenizer
 from slm_post_train.data.grpo_data import prepare_grpo_dataset

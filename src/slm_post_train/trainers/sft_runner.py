@@ -1,18 +1,6 @@
+import unsloth  # Must precede trl/transformers imports
 import logging
 import torch
-import unsloth
-
-try:
-    import trl.import_utils as _tiu
-
-    for _attr in dir(_tiu):
-        if _attr.startswith("_") and _attr.endswith("_available"):
-            _val = getattr(_tiu, _attr)
-            if isinstance(_val, tuple):
-                setattr(_tiu, _attr, _val[0])
-except Exception:
-    pass
-
 from trl import SFTTrainer, SFTConfig
 from unsloth.chat_templates import train_on_responses_only
 from slm_post_train.models.loader import load_model_and_tokenizer
@@ -50,11 +38,21 @@ def run_sft(config: dict = None):
         max_samples=data_cfg.get("max_samples", None),
     )
 
+    packing = training_cfg.get("packing", False)
+    train_on_responses = training_cfg.get("train_on_responses_only", True)
+
+    if packing and train_on_responses:
+        logger.warning(
+            "train_on_responses_only is incompatible with packing=True. "
+            "Disabling train_on_responses_only to avoid conflicts."
+        )
+        train_on_responses = False
+
     sft_args = SFTConfig(
         dataset_text_field="text",
         max_seq_length=model_cfg.get("max_seq_length", 2048),
         dataset_num_proc=data_cfg.get("dataset_num_proc", 2),
-        packing=training_cfg.get("packing", False),
+        packing=packing,
         per_device_train_batch_size=training_cfg.get("batch_size", 1),
         gradient_accumulation_steps=training_cfg.get("gradient_accumulation_steps", 2),
         warmup_steps=training_cfg.get("warmup_steps", 5),
@@ -76,7 +74,7 @@ def run_sft(config: dict = None):
         args=sft_args,
     )
 
-    if training_cfg.get("train_on_responses_only", True):
+    if train_on_responses:
         trainer = train_on_responses_only(trainer)
 
     logger.info("Starting SFT training...")

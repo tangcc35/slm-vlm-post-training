@@ -261,6 +261,37 @@ def test_run_sft_none_config(
     )
 
 
+@patch("slm_post_train.trainers.sft_runner.train_on_responses_only")
+@patch("slm_post_train.trainers.sft_runner.SFTTrainer")
+@patch("slm_post_train.trainers.sft_runner.SFTConfig")
+@patch("slm_post_train.trainers.sft_runner.prepare_sft_dataset")
+@patch("slm_post_train.trainers.sft_runner.load_model_and_tokenizer")
+def test_run_sft_packing_disables_train_on_responses_only(
+    mock_load_model,
+    mock_prep_dataset,
+    mock_sft_config_cls,
+    mock_sft_trainer_cls,
+    mock_train_on_responses,
+):
+    from slm_post_train.trainers.sft_runner import run_sft
+
+    mock_load_model.return_value = (MagicMock(), MagicMock())
+    mock_raw_trainer = MagicMock(name="raw_trainer")
+    mock_sft_trainer_cls.return_value = mock_raw_trainer
+
+    cfg = {
+        "training": {
+            "packing": True,
+            "train_on_responses_only": True,
+        }
+    }
+    run_sft(cfg)
+
+    # When packing=True and train_on_responses_only=True, train_on_responses_only must be disabled to avoid conflict
+    mock_train_on_responses.assert_not_called()
+    mock_raw_trainer.train.assert_called_once()
+
+
 # ============================================================================
 # GRPO Runner Tests
 # ============================================================================
