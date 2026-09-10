@@ -43,3 +43,4 @@ exports/
 .pytest_cache/
 .coverage
 htmlcov/
+unsloth_compiled_cache/
