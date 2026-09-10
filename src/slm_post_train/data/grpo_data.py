@@ -1,14 +1,17 @@
 import os
-from typing import Optional
+from typing import Optional, Union
+import pathlib
 from datasets import load_dataset, Dataset
 
 
 def prepare_grpo_dataset(
-    dataset_path_or_id: str,
+    dataset_path_or_id: Union[str, pathlib.Path],
     split: str = "train",
     max_samples: Optional[int] = None,
 ) -> Dataset:
     """Loads and formats prompt dataset for GRPO reinforcement learning."""
+    dataset_path_or_id = str(dataset_path_or_id)
+
     if os.path.exists(dataset_path_or_id):
         if dataset_path_or_id.endswith(".jsonl") or dataset_path_or_id.endswith(".json"):
             dataset = load_dataset("json", data_files=dataset_path_or_id, split=split)
@@ -23,14 +26,33 @@ def prepare_grpo_dataset(
         dataset = dataset.select(range(min(len(dataset), max_samples)))
 
     def format_row(example):
-        prompt = example["prompt"]
+        prompt = None
+        for key in ("prompt", "question", "problem"):
+            if example.get(key) is not None:
+                prompt = example[key]
+                break
+
+        if prompt is None:
+            raise ValueError(
+                f"Dataset row does not contain a recognized prompt column ('prompt', 'question', 'problem'). Available columns: {list(example.keys())}"
+            )
+
         if isinstance(prompt, str):
             formatted_prompt = [{"role": "user", "content": prompt}]
         else:
             formatted_prompt = prompt
+
         result = {"prompt": formatted_prompt}
-        if "answer" in example:
-            result["answer"] = str(example["answer"]) if example["answer"] is not None else None
+
+        raw_answer = None
+        for key in ("answer", "solution", "ground_truth"):
+            if example.get(key) is not None:
+                raw_answer = example[key]
+                break
+
+        if raw_answer is not None:
+            result["answer"] = str(raw_answer)
+
         return result
 
     return dataset.map(format_row)

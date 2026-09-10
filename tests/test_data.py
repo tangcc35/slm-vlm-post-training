@@ -1,4 +1,5 @@
 import os
+import pathlib
 import tempfile
 from unittest.mock import patch
 
@@ -45,6 +46,42 @@ def test_prepare_grpo_dataset_dummy():
     assert sample["prompt"][0]["role"] == "user"
     assert "15 + 27" in sample["prompt"][0]["content"]
     assert sample["answer"] == "42"
+
+
+def test_prepare_grpo_dataset_pathlib():
+    path = pathlib.Path("data/dummy/grpo_sample.jsonl")
+    dataset = prepare_grpo_dataset(path)
+    assert len(dataset) == 5
+    assert dataset[0]["answer"] == "42"
+
+
+def test_prepare_grpo_dataset_aliases():
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".jsonl", delete=False) as f:
+        f.write('{"question": "What is 3*3?", "solution": "9"}\n')
+        f.write('{"problem": "Solve for x: x=10", "ground_truth": "10"}\n')
+        f_path = f.name
+    try:
+        dataset = prepare_grpo_dataset(f_path)
+        assert len(dataset) == 2
+        # First row: question -> prompt, solution -> answer
+        assert dataset[0]["prompt"] == [{"role": "user", "content": "What is 3*3?"}]
+        assert dataset[0]["answer"] == "9"
+        # Second row: problem -> prompt, ground_truth -> answer
+        assert dataset[1]["prompt"] == [{"role": "user", "content": "Solve for x: x=10"}]
+        assert dataset[1]["answer"] == "10"
+    finally:
+        os.remove(f_path)
+
+
+def test_prepare_grpo_dataset_missing_prompt_raises():
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".jsonl", delete=False) as f:
+        f.write('{"unrecognized_col": "some input", "answer": "42"}\n')
+        f_path = f.name
+    try:
+        with pytest.raises(ValueError, match="prompt"):
+            prepare_grpo_dataset(f_path)
+    finally:
+        os.remove(f_path)
 
 
 def test_prepare_grpo_dataset_max_samples():
@@ -118,6 +155,13 @@ def test_prepare_sft_dataset_dummy(fast_tokenizer):
     assert "What is the capital of France?" in sample["text"]
     assert "<|im_start|>assistant" in sample["text"]
     assert "Paris" in sample["text"]
+
+
+def test_prepare_sft_dataset_pathlib(fast_tokenizer):
+    path = pathlib.Path("data/dummy/sft_sample.jsonl")
+    dataset = prepare_sft_dataset(path, tokenizer=fast_tokenizer)
+    assert len(dataset) == 5
+    assert "text" in dataset[0]
 
 
 def test_prepare_sft_dataset_max_samples(fast_tokenizer):

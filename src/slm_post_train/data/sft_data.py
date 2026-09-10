@@ -1,5 +1,6 @@
 import os
-from typing import Optional
+from typing import Optional, Union
+import pathlib
 
 import unsloth
 from datasets import load_dataset, Dataset
@@ -7,13 +8,15 @@ from unsloth.chat_templates import get_chat_template, standardize_data_formats
 
 
 def prepare_sft_dataset(
-    dataset_path_or_id: str,
+    dataset_path_or_id: Union[str, pathlib.Path],
     tokenizer,
     chat_template: str = "chatml",
     split: str = "train",
     max_samples: Optional[int] = None,
 ) -> Dataset:
     """Loads and standardizes chat dataset for SFT training."""
+    dataset_path_or_id = str(dataset_path_or_id)
+
     if os.path.exists(dataset_path_or_id):
         if dataset_path_or_id.endswith(".jsonl") or dataset_path_or_id.endswith(".json"):
             dataset = load_dataset("json", data_files=dataset_path_or_id, split=split)
