@@ -1,7 +1,7 @@
 stage: sft
 
 model:
-  name_or_path: "unsloth/gemma-2-2b-it"
+  name_or_path: "unsloth/Qwen3.5-0.8B"
   max_seq_length: 512
   load_in_4bit: true
 

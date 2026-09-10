@@ -97,7 +97,11 @@ def test_run_sft_default_config(
     )
 
     # 5. Verify responses-only masking applied
-    mock_train_on_responses.assert_called_once_with(mock_raw_trainer)
+    mock_train_on_responses.assert_called_once_with(
+        mock_raw_trainer,
+        instruction_part="<|im_start|>user\n",
+        response_part="<|im_start|>assistant\n",
+    )
 
     # 6. Verify training initiated and returned
     mock_masked_trainer.train.assert_called_once()
@@ -106,6 +110,182 @@ def test_run_sft_default_config(
     # 7. Verify model & tokenizer saving
     mock_model.save_pretrained.assert_called_once_with("outputs/sft_model")
     mock_tokenizer.save_pretrained.assert_called_once_with("outputs/sft_model")
+
+
+@patch("slm_post_train.trainers.sft_runner.train_on_responses_only")
+@patch("slm_post_train.trainers.sft_runner.SFTTrainer")
+@patch("slm_post_train.trainers.sft_runner.SFTConfig")
+@patch("slm_post_train.trainers.sft_runner.prepare_sft_dataset")
+@patch("slm_post_train.trainers.sft_runner.load_model_and_tokenizer")
+def test_run_sft_explicit_delimiters(
+    mock_load_model,
+    mock_prep_dataset,
+    mock_sft_config_cls,
+    mock_sft_trainer_cls,
+    mock_train_on_responses,
+):
+    from slm_post_train.trainers.sft_runner import run_sft
+
+    mock_load_model.return_value = (MagicMock(), MagicMock())
+    mock_raw_trainer = MagicMock()
+    mock_sft_trainer_cls.return_value = mock_raw_trainer
+    mock_masked_trainer = MagicMock()
+    mock_train_on_responses.return_value = mock_masked_trainer
+
+    cfg = {
+        "training": {
+            "train_on_responses_only": True,
+            "instruction_part": "Human: ",
+            "response_part": "Assistant: ",
+        }
+    }
+    run_sft(cfg)
+
+    mock_train_on_responses.assert_called_once_with(
+        mock_raw_trainer,
+        instruction_part="Human: ",
+        response_part="Assistant: ",
+    )
+
+
+@patch("slm_post_train.trainers.sft_runner.train_on_responses_only")
+@patch("slm_post_train.trainers.sft_runner.SFTTrainer")
+@patch("slm_post_train.trainers.sft_runner.SFTConfig")
+@patch("slm_post_train.trainers.sft_runner.prepare_sft_dataset")
+@patch("slm_post_train.trainers.sft_runner.load_model_and_tokenizer")
+def test_run_sft_llama_chat_template_delimiters(
+    mock_load_model,
+    mock_prep_dataset,
+    mock_sft_config_cls,
+    mock_sft_trainer_cls,
+    mock_train_on_responses,
+):
+    from slm_post_train.trainers.sft_runner import run_sft
+
+    mock_load_model.return_value = (MagicMock(), MagicMock())
+    mock_raw_trainer = MagicMock()
+    mock_sft_trainer_cls.return_value = mock_raw_trainer
+    mock_masked_trainer = MagicMock()
+    mock_train_on_responses.return_value = mock_masked_trainer
+
+    cfg = {
+        "dataset": {
+            "chat_template": "llama-3",
+        },
+        "training": {
+            "train_on_responses_only": True,
+        }
+    }
+    run_sft(cfg)
+
+    mock_train_on_responses.assert_called_once_with(
+        mock_raw_trainer,
+        instruction_part="<|start_header_id|>user<|end_header_id|>\n\n",
+        response_part="<|start_header_id|>assistant<|end_header_id|>\n\n",
+    )
+
+
+@patch("slm_post_train.trainers.sft_runner.train_on_responses_only")
+@patch("slm_post_train.trainers.sft_runner.SFTTrainer")
+@patch("slm_post_train.trainers.sft_runner.SFTConfig")
+@patch("slm_post_train.trainers.sft_runner.prepare_sft_dataset")
+@patch("slm_post_train.trainers.sft_runner.load_model_and_tokenizer")
+def test_run_sft_tokenizer_with_existing_unsloth_parts(
+    mock_load_model,
+    mock_prep_dataset,
+    mock_sft_config_cls,
+    mock_sft_trainer_cls,
+    mock_train_on_responses,
+):
+    from slm_post_train.trainers.sft_runner import run_sft
+
+    mock_tok = MagicMock()
+    mock_tok._unsloth_input_part = "<|user|>"
+    mock_tok._unsloth_output_part = "<|bot|>"
+    del mock_tok.image_processor
+    del mock_tok.tokenizer
+
+    mock_load_model.return_value = (MagicMock(), mock_tok)
+    mock_raw_trainer = MagicMock()
+    mock_raw_trainer.tokenizer = mock_tok
+    del mock_raw_trainer.processing_class
+    mock_sft_trainer_cls.return_value = mock_raw_trainer
+    mock_masked_trainer = MagicMock()
+    mock_train_on_responses.return_value = mock_masked_trainer
+
+    run_sft({})
+
+    mock_train_on_responses.assert_called_once_with(mock_raw_trainer)
+
+
+@patch("slm_post_train.trainers.sft_runner.train_on_responses_only")
+@patch("slm_post_train.trainers.sft_runner.SFTTrainer")
+@patch("slm_post_train.trainers.sft_runner.SFTConfig")
+@patch("slm_post_train.trainers.sft_runner.prepare_sft_dataset")
+@patch("slm_post_train.trainers.sft_runner.load_model_and_tokenizer")
+def test_run_sft_unknown_template_raises_error(
+    mock_load_model,
+    mock_prep_dataset,
+    mock_sft_config_cls,
+    mock_sft_trainer_cls,
+    mock_train_on_responses,
+):
+    from slm_post_train.trainers.sft_runner import run_sft
+
+    mock_load_model.return_value = (MagicMock(), MagicMock())
+    mock_raw_trainer = MagicMock()
+    mock_sft_trainer_cls.return_value = mock_raw_trainer
+
+    cfg = {
+        "dataset": {
+            "chat_template": "unknown_custom_template",
+        },
+        "training": {
+            "train_on_responses_only": True,
+        },
+    }
+
+    with pytest.raises(ValueError, match="Could not automatically determine instruction/response delimiters"):
+        run_sft(cfg)
+
+
+@patch("slm_post_train.trainers.sft_runner.train_on_responses_only")
+@patch("slm_post_train.trainers.sft_runner.SFTTrainer")
+@patch("slm_post_train.trainers.sft_runner.SFTConfig")
+@patch("slm_post_train.trainers.sft_runner.prepare_sft_dataset")
+@patch("slm_post_train.trainers.sft_runner.load_model_and_tokenizer")
+def test_run_sft_unknown_template_with_explicit_delimiters(
+    mock_load_model,
+    mock_prep_dataset,
+    mock_sft_config_cls,
+    mock_sft_trainer_cls,
+    mock_train_on_responses,
+):
+    from slm_post_train.trainers.sft_runner import run_sft
+
+    mock_load_model.return_value = (MagicMock(), MagicMock())
+    mock_raw_trainer = MagicMock()
+    mock_sft_trainer_cls.return_value = mock_raw_trainer
+    mock_masked_trainer = MagicMock()
+    mock_train_on_responses.return_value = mock_masked_trainer
+
+    cfg = {
+        "dataset": {
+            "chat_template": "unknown_custom_template",
+        },
+        "training": {
+            "train_on_responses_only": True,
+            "instruction_part": "USER>>",
+            "response_part": "ASSISTANT>>",
+        },
+    }
+
+    run_sft(cfg)
+    mock_train_on_responses.assert_called_once_with(
+        mock_raw_trainer,
+        instruction_part="USER>>",
+        response_part="ASSISTANT>>",
+    )
 
 
 @patch("slm_post_train.trainers.sft_runner.train_on_responses_only")

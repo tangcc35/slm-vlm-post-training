@@ -6,7 +6,7 @@ def load_model_and_tokenizer(model_cfg: dict = None, lora_cfg: dict = None, moda
     if model_cfg is None:
         model_cfg = {}
 
-    model_name = model_cfg.get("name_or_path", "unsloth/gemma-2-2b-it")
+    model_name = model_cfg.get("name_or_path", "")
     max_seq_length = model_cfg.get("max_seq_length", 2048)
     load_in_4bit = model_cfg.get("load_in_4bit", True)
     dtype = model_cfg.get("dtype", None)
