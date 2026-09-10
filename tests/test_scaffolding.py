@@ -51,6 +51,11 @@ class TestScaffolding(unittest.TestCase):
         self.assertIn("unsloth", project["dependencies"])
         self.assertEqual(project["scripts"]["slm-post-train"], "slm_post_train.cli:main")
 
+    def test_readme_file(self):
+        readme_path = ROOT_DIR / "README.md"
+        self.assertTrue(readme_path.is_file(), "README.md must exist for pyproject.toml compatibility")
+        self.assertGreater(len(readme_path.read_text().strip()), 0, "README.md must not be empty")
+
     def test_package_init(self):
         self.assertEqual(slm_post_train.__version__, "0.1.0")
 
