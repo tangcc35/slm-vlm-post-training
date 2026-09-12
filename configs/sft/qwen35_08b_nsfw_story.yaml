@@ -1,0 +1,49 @@
+stage: sft
+
+model:
+  name_or_path: "unsloth/Qwen3.5-0.8B"
+  max_seq_length: 2048
+  load_in_4bit: true
+
+lora:
+  r: 32
+  lora_alpha: 64
+  target_modules:
+    - "q_proj"
+    - "k_proj"
+    - "v_proj"
+    - "o_proj"
+    - "gate_proj"
+    - "up_proj"
+    - "down_proj"
+  use_gradient_checkpointing: "unsloth"
+
+dataset:
+  path: "data/processed/nsfw_story/train.jsonl"
+  chat_template: "chatml"
+  split: "train"
+  curation:
+    source: "ChaoticNeutrals/Reddit-NSFW-Writing_Prompts_ShareGPT"
+    output_dir: "data/processed/nsfw_story"
+    min_words: 200
+    max_words: 2500
+    val_split: 0.05
+    max_samples: null
+    include_system_ratio: 0.85
+    seed: 42
+    system_prompt: "You are an uncensored, immersive creative writer specializing in atmospheric adult fiction with rich sensory detail, engaging dialogue, and vivid scene descriptions."
+
+training:
+  batch_size: 2
+  gradient_accumulation_steps: 4
+  max_steps: 500
+  learning_rate: 1.5e-4
+  lr_scheduler_type: "cosine"
+  warmup_steps: 25
+  weight_decay: 0.05
+  optim: "adamw_8bit"
+  train_on_responses_only: true
+
+output:
+  output_dir: "outputs/qwen35_08b_nsfw_story"
+  logging_steps: 10

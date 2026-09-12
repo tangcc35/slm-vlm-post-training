@@ -132,3 +132,42 @@ def test_cli_main_sys_argv(tmp_path):
         with patch("slm_post_train.trainers.sft_runner.run_sft") as mock_run_sft:
             main()
             mock_run_sft.assert_called_once_with({"stage": "sft"})
+
+
+def test_cli_curate_data_from_config(tmp_path):
+    import pathlib
+    config_path = tmp_path / "curate_test.yaml"
+    config_path.write_text(
+        "stage: sft\n"
+        "dataset:\n"
+        "  curation:\n"
+        "    source: custom/dataset\n"
+        "    output_dir: custom/output\n"
+        "    min_words: 100\n"
+        "    max_words: 1000\n",
+        encoding="utf-8",
+    )
+
+    with patch("slm_post_train.data.nsfw_story.curate_from_config") as mock_curate:
+        mock_curate.return_value = (
+            pathlib.Path("custom/output/train.jsonl"),
+            pathlib.Path("custom/output/val.jsonl"),
+        )
+        main(["curate-data", "--config", str(config_path)])
+        mock_curate.assert_called_once_with({
+            "source": "custom/dataset",
+            "output_dir": "custom/output",
+            "min_words": 100,
+            "max_words": 1000,
+        })
+
+
+def test_cli_curate_data_missing_curation_section(tmp_path):
+    config_path = tmp_path / "no_curate.yaml"
+    config_path.write_text("stage: sft\ndataset:\n  path: dummy.jsonl\n", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="No curation configuration found"):
+        main(["curate-data", "--config", str(config_path)])
+
+
+

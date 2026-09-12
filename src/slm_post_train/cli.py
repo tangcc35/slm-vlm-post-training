@@ -34,6 +34,10 @@ def main(argv: list[str] | None = None):
     )
     export_parser.add_argument("--quant", default="q4_k_m", help="Quantization method for GGUF")
 
+    # Curate data command
+    curate_parser = subparsers.add_parser("curate-data", help="Curate and process dataset using a YAML config")
+    curate_parser.add_argument("--config", required=True, help="Path to YAML configuration")
+
     args = parser.parse_args(argv)
 
     if args.subcommand == "train":
@@ -50,6 +54,23 @@ def main(argv: list[str] | None = None):
         else:
             raise ValueError(f"Unknown training stage: '{stage}'. Must be 'sft' or 'grpo'.")
 
+    elif args.subcommand == "curate-data":
+        config = load_yaml_config(args.config)
+        curation_cfg = config.get("dataset", {}).get("curation") or config.get("curation")
+        if not curation_cfg:
+            raise ValueError(
+                f"No curation configuration found in {args.config}. "
+                "Please add a 'curation' section under 'dataset' (or at root level)."
+            )
+
+        from slm_post_train.data.nsfw_story import curate_from_config
+
+        train_p, val_p = curate_from_config(curation_cfg)
+        logger.info("Dataset curation completed successfully.")
+        logger.info(f"Train file: {train_p}")
+        logger.info(f"Validation file: {val_p}")
+
+
     elif args.subcommand == "export":
         from unsloth import FastLanguageModel
         from slm_post_train.export.exporter import export_model
@@ -63,6 +84,7 @@ def main(argv: list[str] | None = None):
             export_format=args.format,
             quantization_method=args.quant,
         )
+
 
 
 if __name__ == "__main__":

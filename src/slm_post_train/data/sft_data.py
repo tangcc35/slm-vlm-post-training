@@ -62,8 +62,31 @@ def prepare_sft_dataset(
 
             dataset = dataset.map(to_conversations)
 
+    if "conversations" in dataset.column_names:
+        def normalize_sharegpt_format(example):
+            convos = example.get("conversations")
+            if convos and isinstance(convos, list) and len(convos) > 0 and isinstance(convos[0], dict) and "from" in convos[0]:
+                role_map = {
+                    "human": "user",
+                    "user": "user",
+                    "gpt": "assistant",
+                    "assistant": "assistant",
+                    "system": "system",
+                    "bot": "assistant",
+                }
+                new_convos = []
+                for turn in convos:
+                    from_role = turn.get("from", "user")
+                    role = role_map.get(from_role, "assistant" if from_role == "gpt" else "user")
+                    content = turn.get("value") or turn.get("content") or ""
+                    new_convos.append({"role": role, "content": content})
+                return {"conversations": new_convos}
+            return example
+
+        dataset = dataset.map(normalize_sharegpt_format)
+
     tokenizer = get_chat_template(tokenizer, chat_template=chat_template)
-    dataset = standardize_data_formats(dataset)
+
 
     def formatting_prompts_func(examples):
         convos = examples["conversations"]

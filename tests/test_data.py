@@ -220,6 +220,20 @@ def test_prepare_sft_dataset_hf_id(fast_tokenizer):
         assert "HF response 1" in dataset[0]["text"]
 
 
+def test_prepare_sft_dataset_sharegpt_format(fast_tokenizer):
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".jsonl", delete=False) as f:
+        f.write('{"conversations": [{"from": "human", "value": "Write an intro"}, {"from": "gpt", "value": "Once upon a time"}]}\n')
+        f_path = f.name
+    try:
+        dataset = prepare_sft_dataset(f_path, tokenizer=fast_tokenizer)
+        assert len(dataset) == 1
+        assert "text" in dataset[0]
+        assert "Write an intro" in dataset[0]["text"]
+        assert "Once upon a time" in dataset[0]["text"]
+    finally:
+        os.remove(f_path)
+
+
 # --- Module exports test ---
 
 def test_data_package_exports():

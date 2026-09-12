@@ -30,6 +30,8 @@ ENV/
 outputs/
 checkpoints/
 exports/
+data/*
+!data/dummy
 *.gguf
 
 # IDE / OS metadata
