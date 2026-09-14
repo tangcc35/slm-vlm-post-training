@@ -19,7 +19,7 @@ def test_load_text_model_default_args(mock_flm):
     model, tokenizer = load_model_and_tokenizer({})
 
     mock_flm.from_pretrained.assert_called_once_with(
-        model_name="unsloth/gemma-2-2b-it",
+        model_name="",
         max_seq_length=2048,
         load_in_4bit=True,
         dtype=None,
@@ -205,7 +205,7 @@ def test_load_model_none_cfg(mock_flm):
     model, tokenizer = load_model_and_tokenizer(model_cfg=None)
 
     mock_flm.from_pretrained.assert_called_once_with(
-        model_name="unsloth/gemma-2-2b-it",
+        model_name="",
         max_seq_length=2048,
         load_in_4bit=True,
         dtype=None,

@@ -36,13 +36,14 @@ dataset:
 training:
   batch_size: 2
   gradient_accumulation_steps: 4
-  max_steps: 500
+  max_steps: 100
   learning_rate: 1.5e-4
   lr_scheduler_type: "cosine"
   warmup_steps: 25
   weight_decay: 0.05
   optim: "adamw_8bit"
   train_on_responses_only: true
+  packing: true
 
 output:
   output_dir: "outputs/qwen35_08b_nsfw_story"

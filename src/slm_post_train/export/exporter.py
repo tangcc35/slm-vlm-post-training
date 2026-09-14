@@ -1,7 +1,26 @@
 import logging
 import os
+import shutil
+import sys
 
 logger = logging.getLogger(__name__)
+
+
+def setup_llama_cpp_env(llama_cpp_dir: str | None = None) -> str | None:
+    """Ensures llama.cpp and its internal conversion package are on sys.path and PYTHONPATH."""
+    if llama_cpp_dir is None:
+        llama_cpp_dir = os.path.expanduser("~/.unsloth/llama.cpp")
+
+    if os.path.exists(llama_cpp_dir):
+        if llama_cpp_dir not in sys.path:
+            sys.path.insert(0, llama_cpp_dir)
+        current_pp = os.environ.get("PYTHONPATH", "")
+        if llama_cpp_dir not in current_pp.split(os.pathsep):
+            os.environ["PYTHONPATH"] = (
+                f"{llama_cpp_dir}{os.pathsep}{current_pp}" if current_pp else llama_cpp_dir
+            )
+        return llama_cpp_dir
+    return None
 
 
 def export_model(
@@ -29,7 +48,20 @@ def export_model(
         logger.info(f"Saved 4-bit merged model to {output_dir}")
 
     elif export_format == "gguf":
+        setup_llama_cpp_env()
         model.save_pretrained_gguf(output_dir, tokenizer, quantization_method=quantization_method)
+
+        # Unsloth saves GGUF files to f"{output_dir}_gguf"; copy artifacts into output_dir
+        # so they reside directly where the user specified.
+        gguf_dir = f"{output_dir.rstrip('/')}_gguf"
+        if os.path.exists(gguf_dir) and os.path.abspath(gguf_dir) != os.path.abspath(output_dir):
+            for fname in os.listdir(gguf_dir):
+                src_path = os.path.join(gguf_dir, fname)
+                dst_path = os.path.join(output_dir, fname)
+                if os.path.isfile(src_path) and not os.path.exists(dst_path):
+                    shutil.copy2(src_path, dst_path)
+                    logger.info(f"Copied {fname} to {output_dir}")
+
         logger.info(f"Saved GGUF ({quantization_method}) to {output_dir}")
 
     else:
