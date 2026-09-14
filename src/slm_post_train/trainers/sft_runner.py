@@ -13,7 +13,7 @@ from slm_post_train.data.sft_data import prepare_sft_dataset
 logger = logging.getLogger(__name__)
 
 
-DT_STR = datetime.now().strftime("%Y%m%d_%H%M%S")
+DT_STR = datetime.now().strftime("%Y%m%d-%H%M%S")
 CHAT_TEMPLATE_DELIMITERS = {
     "chatml": ("<|im_start|>user\n", "<|im_start|>assistant\n"),
     "qwen-2.5": ("<|im_start|>user\n", "<|im_start|>assistant\n"),

@@ -1,9 +1,13 @@
+import datetime
 import logging
 import os
 import shutil
 import sys
 
 logger = logging.getLogger(__name__)
+
+
+DT_STR = datetime.now().strftime("%Y%m%d-%H%M%S")
 
 
 def setup_llama_cpp_env(llama_cpp_dir: str | None = None) -> str | None:
@@ -31,6 +35,8 @@ def export_model(
     quantization_method: str = "q4_k_m",
 ):
     """Exports model as LoRA adapter, 16-bit/4-bit merged model, or GGUF binary."""
+    output_dir = os.path.join(output_dir, DT_STR)
+
     os.makedirs(output_dir, exist_ok=True)
     logger.info(f"Exporting model to {output_dir} using format: {export_format}")
 
