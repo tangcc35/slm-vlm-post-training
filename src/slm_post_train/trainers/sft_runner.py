@@ -1,6 +1,7 @@
 import unsloth  # Must precede trl/transformers imports
 import logging
 import torch
+import wandb
 from trl import SFTTrainer, SFTConfig
 from unsloth.chat_templates import train_on_responses_only
 from slm_post_train.models.loader import load_model_and_tokenizer
@@ -87,6 +88,13 @@ def run_sft(config: dict = None):
         )
         train_on_responses = False
 
+    # init wandb with project name and run name
+    wandb.init(
+        project=output_cfg.get("wandb_project", "sft_training"),
+        name=output_cfg.get("wandb_run_name", None),
+        config=config,
+    )
+
     sft_args = SFTConfig(
         dataset_text_field="text",
         max_seq_length=model_cfg.get("max_seq_length", 2048),
@@ -103,7 +111,7 @@ def run_sft(config: dict = None):
         lr_scheduler_type=training_cfg.get("lr_scheduler_type", "linear"),
         seed=training_cfg.get("seed", 3407),
         output_dir=output_dir,
-        report_to="none",
+        report_to="wandb",
     )
 
     trainer = SFTTrainer(
