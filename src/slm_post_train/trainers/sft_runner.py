@@ -1,15 +1,19 @@
+import os
 import unsloth  # Must precede trl/transformers imports
 import logging
 import torch
 import wandb
+from datetime import datetime
 from trl import SFTTrainer, SFTConfig
 from unsloth.chat_templates import train_on_responses_only
 from slm_post_train.models.loader import load_model_and_tokenizer
 from slm_post_train.data.sft_data import prepare_sft_dataset
 
+
 logger = logging.getLogger(__name__)
 
 
+DT_STR = datetime.now().strftime("%Y%m%d_%H%M%S")
 CHAT_TEMPLATE_DELIMITERS = {
     "chatml": ("<|im_start|>user\n", "<|im_start|>assistant\n"),
     "qwen-2.5": ("<|im_start|>user\n", "<|im_start|>assistant\n"),
@@ -61,6 +65,7 @@ def run_sft(config: dict = None):
     output_cfg = config.get("output") or {}
 
     output_dir = output_cfg.get("output_dir") or "outputs/sft_model"
+    output_dir = os.path.join(output_dir, DT_STR)
 
     logger.info("Initializing model and tokenizer...")
     model, tokenizer = load_model_and_tokenizer(
@@ -90,8 +95,8 @@ def run_sft(config: dict = None):
 
     # init wandb with project name and run name
     wandb.init(
-        project=output_cfg.get("wandb_project", "sft_training"),
-        name=output_cfg.get("wandb_run_name", None),
+        project="slm_post_train",
+        name=f'{model_cfg["name_or_path"]}-{DT_STR}',
         config=config,
     )
 
