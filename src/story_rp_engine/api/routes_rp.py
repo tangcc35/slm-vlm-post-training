@@ -3,9 +3,27 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from story_rp_engine.core.types import CharacterCardV2, ChatMessage
+import story_rp_engine.rp.agent as rp_agent
 from story_rp_engine.rp.agent import create_rp_agent, run_rp_turn
 
+_original_run_rp_turn = run_rp_turn
+_original_create_rp_agent = create_rp_agent
+
+
+def _get_run_rp_turn():
+    if rp_agent.run_rp_turn is not _original_run_rp_turn:
+        return rp_agent.run_rp_turn
+    return run_rp_turn
+
+
+def _get_create_rp_agent():
+    if rp_agent.create_rp_agent is not _original_create_rp_agent:
+        return rp_agent.create_rp_agent
+    return create_rp_agent
+
+
 router = APIRouter(prefix="/api/v1", tags=["Roleplay"])
+
 
 
 class RPChatRequest(BaseModel):
@@ -48,8 +66,10 @@ def chat_rp(req: RPChatRequest, request: Request):
         raise HTTPException(status_code=404, detail="Character not found")
 
     history = store.get_history(req.session_id)
-    agent = create_rp_agent(card, config, active_lore=[], user_name=req.user_name or "User")
-    reply = run_rp_turn(agent, history, req.message, authors_note=req.authors_note)
+    agent_creator = _get_create_rp_agent()
+    agent = agent_creator(card, config, active_lore=[], user_name=req.user_name or "User")
+    turn_fn = _get_run_rp_turn()
+    reply = turn_fn(agent, history, req.message, authors_note=req.authors_note)
 
     # Persist updated history
     updated_history = history + [
