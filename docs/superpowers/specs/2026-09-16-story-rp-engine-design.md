@@ -4,11 +4,11 @@
 
 This project designs and implements a **Dual-Mode AI Engine** capable of:
 1. **Character Roleplay (RP) Mode:** High-fidelity, 1-on-1 interactive conversation with a user-defined character maintaining strict adherence to persona, tone, style, and memory.
-2. **General Story Co-Pilot Mode:** A collaborative creative writing engine that takes user premises, outlines, or prose and expands narrative beats, suggests plot directions, or continues writing.
+2. **General Story Co-Pilot Mode:** A collaborative creative writing engine that takes user premises, outlines, or prose and expands the narrative with scene framing, stylistic guidance, and seamless continuation.
 
 The system is:
 * **Model-Agnostic with Local-First Support:** Built to run on local models (Ollama, vLLM, `llama.cpp`) via OpenAI-compatible APIs and LiteLLM, while retaining full compatibility with cloud models (e.g. Gemini).
-* **Orchestrated via Google ADK (`google-adk`):** Leverages Google's Agent Development Kit for multi-agent coordination (Director, Writer, and Critic) and agent lifecycle management.
+* **Orchestrated via Google ADK (`google-adk`):** Leverages Google's Agent Development Kit for multi-agent coordination (Director and Writer) and agent lifecycle management.
 * **Modular & Decoupled:** Backend first (Python core engine + FastAPI REST/SSE streaming service), designed for seamless integration with any web frontend.
 
 ---
@@ -24,7 +24,7 @@ src/story_rp_engine/
 │   ├── __init__.py
 │   ├── config.py              # Server settings, local model URLs, sampling parameters
 │   ├── model_provider.py      # Factory for ADK LiteLlm instances (Ollama, vLLM, etc.)
-│   └── types.py               # Pydantic schemas (CharacterCardV2, Lorebook, Messages)
+│   └── types.py               # Pydantic schemas (CharacterCardV2, Lorebook, Messages, StoryRequest)
 ├── rp/
 │   ├── __init__.py
 │   ├── character.py           # Character Card V2 JSON parser and validator
@@ -33,9 +33,9 @@ src/story_rp_engine/
 │   └── agent.py               # ADK Character Roleplay Agent & runner
 ├── story/
 │   ├── __init__.py
-│   ├── director_agent.py      # ADK Director Agent (beat planning, tone, pacing)
+│   ├── director_agent.py      # ADK Director Agent (narrative framing, tone, scene context)
 │   ├── writer_agent.py        # ADK Writer Agent (prose expansion, dialogue, scene generation)
-│   └── workflow.py            # ADK Orchestration for Story Co-Pilot
+│   └── workflow.py            # ADK Orchestration for Story Co-Pilot (Director -> Writer pipeline)
 ├── storage/
 │   ├── __init__.py
 │   └── store.py               # File/SQLite storage for characters, lorebooks, and sessions
@@ -43,7 +43,7 @@ src/story_rp_engine/
     ├── __init__.py
     ├── app.py                 # FastAPI application factory with CORS and lifecycle
     ├── routes_rp.py           # Endpoints: /api/v1/characters, /api/v1/rp/chat, /stream
-    └── routes_story.py        # Endpoints: /api/v1/story/expand, /api/v1/story/beats, /stream
+    └── routes_story.py        # Endpoints: /api/v1/story/expand, /api/v1/story/expand/stream
 ```
 
 ---
@@ -94,17 +94,12 @@ class ChatMessage(BaseModel):
     content: str
     timestamp: datetime = Field(default_factory=datetime.utcnow)
 
-class StoryBeatRequest(BaseModel):
-    premise: str
+class StoryRequest(BaseModel):
+    premise: Optional[str] = None
+    current_text: str = ""
+    instruction: Optional[str] = "Continue the story naturally from the current point."
     genre: Optional[str] = "Fiction"
     tone: Optional[str] = "Balanced"
-    current_text: Optional[str] = ""
-
-class StoryExpandRequest(BaseModel):
-    current_text: str
-    instruction: Optional[str] = "Continue the story naturally from the current point."
-    genre: Optional[str] = None
-    tone: Optional[str] = None
     max_tokens: int = 512
 ```
 
@@ -131,20 +126,15 @@ To preserve persona fidelity and adherence:
 
 ### 5.1 Multi-Agent Roles
 * **Director Agent (`director_agent.py`):**
-  * Evaluates the story premise, genre, and existing prose.
-  * Formulates 3 actionable next-step narrative beats (options for where the story could go).
-  * Outlines scene structure, conflict, and emotional stakes.
+  * Evaluates the story premise, genre, tone, and existing prose.
+  * Formulates narrative framing, scene context, and tonal direction to guide the story expansion.
 * **Writer Agent (`writer_agent.py`):**
   * Focuses strictly on literary prose, pacing, dialogue, and sensory detail.
-  * Takes selected beat(s) or user instructions and expands the narrative seamlessly.
-* **Critic / Refiner Agent (Optional Workflow Step):**
-  * Scans prose for clichés, repetitions, or breaks in requested tone before finalizing.
+  * Takes the Director's framing guidance and user instruction to expand the narrative seamlessly.
 
 ### 5.2 Workflow Pipeline (`story/workflow.py`)
-* **Mode A: Beat Suggestion (`suggest_beats`)**
-  $\text{Premise + Current Text} \to \text{Director Agent} \to \text{Structured Beat Options}$
-* **Mode B: Prose Expansion (`expand_prose`)**
-  $\text{Current Text + Selected Beat / Steering} \to \text{Writer Agent} \to \text{Draft Prose} \to \text{Streamed Output}$
+* **Prose Expansion Workflow (`expand_story`):**
+  $$\text{StoryRequest (Premise, Current Text, Instruction, Tone)} \to \text{Director Agent (Scene Framing \& Guidance)} \to \text{Writer Agent} \to \text{Prose Expansion (Streamed or Buffered)}$$
 
 ---
 
@@ -167,8 +157,7 @@ To preserve persona fidelity and adherence:
 * `GET /api/v1/characters/{id}` — Retrieve character details.
 * `POST /api/v1/rp/chat` — Generate RP response (buffered).
 * `POST /api/v1/rp/chat/stream` — SSE streaming response for interactive chat UI.
-* `POST /api/v1/story/beats` — Generate next narrative beat suggestions via Director Agent.
-* `POST /api/v1/story/expand` — Expand story prose via Writer Agent (buffered).
+* `POST /api/v1/story/expand` — Expand story prose via Director $\to$ Writer workflow (buffered).
 * `POST /api/v1/story/expand/stream` — SSE streaming prose expansion for editor canvas.
 
 ---
