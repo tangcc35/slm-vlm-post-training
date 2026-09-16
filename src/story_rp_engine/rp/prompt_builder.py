@@ -1,12 +1,15 @@
+import re
 from typing import Dict, List, Optional
 from story_rp_engine.core.types import CharacterCardV2, ChatMessage, LorebookEntry
 
 
 def replace_macros(text: Optional[str], char_name: str, user_name: str) -> str:
-    """Replaces {{char}} and {{user}} macro placeholders with specified character and user names."""
+    """Replaces {{char}} and {{user}} macro placeholders (case-insensitive) with specified character and user names."""
     if not text:
         return ""
-    return text.replace("{{char}}", char_name).replace("{{user}}", user_name)
+    text = re.sub(r"\{\{char\}\}", char_name, text, flags=re.IGNORECASE)
+    text = re.sub(r"\{\{user\}\}", user_name, text, flags=re.IGNORECASE)
+    return text
 
 
 def build_rp_system_instruction(

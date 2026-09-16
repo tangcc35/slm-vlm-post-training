@@ -1,7 +1,7 @@
 from unittest.mock import MagicMock, patch
 from story_rp_engine.core.config import EngineConfig
 from story_rp_engine.core.types import CharacterCardV2, CharacterCardV2Data, ChatMessage, LorebookEntry
-from story_rp_engine.rp.agent import create_rp_agent, run_rp_turn
+from story_rp_engine.rp.agent import create_rp_agent, run_rp_turn, stream_rp_turn
 
 
 def test_create_rp_agent():
@@ -126,3 +126,71 @@ def test_run_rp_turn_response_object():
             user_input="Stand with me!",
         )
         assert reply == "Stand firm behind my shield!"
+
+
+def test_run_rp_turn_none_response():
+    data = CharacterCardV2Data(
+        name="Theron",
+        description="Paladin",
+        personality="Noble",
+        scenario="Castle gate",
+        first_mes="Stand firm!",
+        mes_example="",
+    )
+    card = CharacterCardV2(data=data)
+    config = EngineConfig(model_name="ollama/llama3.1:8b")
+    agent = create_rp_agent(card, config, active_lore=[], user_name="Traveler")
+
+    with patch.object(agent, "invoke", return_value=None):
+        reply = run_rp_turn(
+            agent=agent,
+            history=[],
+            user_input="Stand with me!",
+        )
+        assert reply == ""
+
+
+def test_stream_rp_turn():
+    data = CharacterCardV2Data(
+        name="Theron",
+        description="Paladin",
+        personality="Noble",
+        scenario="Castle gate",
+        first_mes="Stand firm!",
+        mes_example="",
+    )
+    card = CharacterCardV2(data=data)
+    config = EngineConfig(model_name="ollama/llama3.1:8b")
+    agent = create_rp_agent(card, config, active_lore=[], user_name="Traveler")
+
+    with patch.object(agent, "invoke", return_value="May light guide your step."):
+        chunks = list(stream_rp_turn(
+            agent=agent,
+            history=[],
+            user_input="Bless us.",
+        ))
+        assert len(chunks) > 1
+        assert "".join(chunks) == "May light guide your step."
+
+
+def test_stream_rp_turn_none_response():
+    data = CharacterCardV2Data(
+        name="Theron",
+        description="Paladin",
+        personality="Noble",
+        scenario="Castle gate",
+        first_mes="Stand firm!",
+        mes_example="",
+    )
+    card = CharacterCardV2(data=data)
+    config = EngineConfig(model_name="ollama/llama3.1:8b")
+    agent = create_rp_agent(card, config, active_lore=[], user_name="Traveler")
+
+    with patch.object(agent, "invoke", return_value=None):
+        chunks = list(stream_rp_turn(
+            agent=agent,
+            history=[],
+            user_input="Bless us.",
+        ))
+        assert chunks == []
+

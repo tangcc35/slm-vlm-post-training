@@ -6,7 +6,21 @@ from story_rp_engine.core.model_provider import get_adk_model
 from google.adk.models.lite_llm import LiteLlm
 
 
-def test_get_adk_model_ollama():
+@pytest.fixture(autouse=True)
+def clean_environ(monkeypatch):
+    """Ensure os.environ changes made during tests do not leak across tests."""
+    orig_env = dict(os.environ)
+    yield
+    for k in list(os.environ.keys()):
+        if k not in orig_env:
+            monkeypatch.delenv(k, raising=False)
+        elif os.environ[k] != orig_env[k]:
+            monkeypatch.setenv(k, orig_env[k])
+
+
+def test_get_adk_model_ollama(monkeypatch):
+    monkeypatch.delenv("LITELLM_API_BASE", raising=False)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     config = EngineConfig(model_name="ollama/llama3.1:8b", api_base="http://localhost:11434")
     model = get_adk_model(config)
     assert isinstance(model, LiteLlm)
@@ -14,7 +28,9 @@ def test_get_adk_model_ollama():
     assert os.environ.get("LITELLM_API_BASE") == "http://localhost:11434"
 
 
-def test_get_adk_model_openai_compat():
+def test_get_adk_model_openai_compat(monkeypatch):
+    monkeypatch.delenv("LITELLM_API_BASE", raising=False)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     config = EngineConfig(
         model_name="openai/gemma-2-9b-it",
         api_base="http://localhost:8000/v1",
@@ -26,14 +42,20 @@ def test_get_adk_model_openai_compat():
     assert os.environ.get("OPENAI_API_KEY") == "custom-key"
 
 
-def test_get_adk_model_defaults():
+def test_get_adk_model_defaults(monkeypatch):
+    monkeypatch.delenv("LITELLM_API_BASE", raising=False)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     config = EngineConfig(model_name="ollama/phi3:mini")
     model = get_adk_model(config)
     assert isinstance(model, LiteLlm)
     assert getattr(model, "model", None) == "ollama/phi3:mini" or getattr(model, "model_name", None) == "ollama/phi3:mini"
+    assert "LITELLM_API_BASE" not in os.environ
+    assert "OPENAI_API_KEY" not in os.environ
 
 
-def test_get_adk_model_fallback_handling():
+def test_get_adk_model_fallback_handling(monkeypatch):
+    monkeypatch.delenv("LITELLM_API_BASE", raising=False)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     config = EngineConfig(model_name="ollama/test-model")
 
     # Simulate LiteLlm where model_name argument raises TypeError, falling back to model argument
@@ -52,3 +74,4 @@ def test_get_adk_model_fallback_handling():
         assert len(call_records) == 2
         assert "model_name" in call_records[0]
         assert "model" in call_records[1]
+

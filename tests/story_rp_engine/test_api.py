@@ -139,7 +139,10 @@ def test_rp_chat_stream_endpoint(tmp_path):
         },
     )
 
-    with patch("story_rp_engine.api.routes_rp.run_rp_turn", return_value="Here is a tune."):
+    with patch(
+        "story_rp_engine.api.routes_rp.stream_rp_turn",
+        return_value=iter(["Here ", "is ", "a tune."]),
+    ) as mock_stream:
         res = client.post(
             "/api/v1/rp/chat/stream",
             json={
@@ -151,8 +154,19 @@ def test_rp_chat_stream_endpoint(tmp_path):
         assert res.status_code == 200
         assert "text/event-stream" in res.headers["content-type"]
         body = res.text
-        assert "data: Here is a tune.\n\n" in body
+        assert "data: Here \n\n" in body
+        assert "data: is \n\n" in body
+        assert "data: a tune.\n\n" in body
         assert "data: [DONE]\n\n" in body
+        assert mock_stream.called
+
+    # Verify history was accumulated and persisted
+    history = store.get_history("session_2")
+    assert len(history) == 2
+    assert history[0].role == "user"
+    assert history[0].content == "Stream a song!"
+    assert history[1].role == "assistant"
+    assert history[1].content == "Here is a tune."
 
 
 def test_story_expand_endpoint(tmp_path):
@@ -179,7 +193,10 @@ def test_story_expand_stream_endpoint(tmp_path):
     app = create_app(store=store, config=EngineConfig())
     client = TestClient(app)
 
-    with patch("story_rp_engine.api.routes_story.expand_story", return_value="The sun rose above the horizon."):
+    with patch(
+        "story_rp_engine.api.routes_story.stream_expand_story",
+        return_value=iter(["The sun ", "rose above ", "the horizon."]),
+    ) as mock_stream:
         res = client.post(
             "/api/v1/story/expand/stream",
             json={
@@ -191,8 +208,11 @@ def test_story_expand_stream_endpoint(tmp_path):
         assert res.status_code == 200
         assert "text/event-stream" in res.headers["content-type"]
         body = res.text
-        assert "data: The sun rose above the horizon.\n\n" in body
+        assert "data: The sun \n\n" in body
+        assert "data: rose above \n\n" in body
+        assert "data: the horizon.\n\n" in body
         assert "data: [DONE]\n\n" in body
+        assert mock_stream.called
 
 
 def test_rp_chat_authors_note_and_custom_user(tmp_path):
@@ -249,3 +269,122 @@ def test_default_app_state():
     app = create_app()
     assert isinstance(app.state.store, EngineStore)
     assert isinstance(app.state.config, EngineConfig)
+
+
+def test_path_traversal_characters_rejected_400(tmp_path):
+    store = EngineStore(storage_dir=str(tmp_path))
+    app = create_app(store=store, config=EngineConfig())
+    client = TestClient(app)
+
+    card_payload = {
+        "spec": "chara_card_v2",
+        "spec_version": "2.0",
+        "data": {
+            "name": "Evil",
+            "description": "desc",
+            "personality": "bad",
+            "scenario": "hack",
+            "first_mes": "pwn",
+            "mes_example": "",
+        },
+    }
+
+    # Path traversal in save_character query param
+    res_save = client.post("/api/v1/characters?char_id=../../evil", json=card_payload)
+    assert res_save.status_code == 400
+    assert "Invalid ID: path traversal characters not allowed" in res_save.json()["detail"]
+
+    # Path traversal in get_character path param
+    res_get = client.get("/api/v1/characters/..evil")
+    assert res_get.status_code == 400
+    assert "Invalid ID: path traversal characters not allowed" in res_get.json()["detail"]
+
+
+
+def test_path_traversal_rp_chat_rejected_400(tmp_path):
+    store = EngineStore(storage_dir=str(tmp_path))
+    app = create_app(store=store, config=EngineConfig())
+    client = TestClient(app)
+
+    card_payload = {
+        "spec": "chara_card_v2",
+        "spec_version": "2.0",
+        "data": {
+            "name": "Valid",
+            "description": "a",
+            "personality": "b",
+            "scenario": "c",
+            "first_mes": "d",
+            "mes_example": "",
+        },
+    }
+    client.post("/api/v1/characters?char_id=valid_char", json=card_payload)
+
+    # Bad char_id in chat
+    res1 = client.post(
+        "/api/v1/rp/chat",
+        json={
+            "char_id": "../../evil",
+            "session_id": "session_valid",
+            "message": "hello",
+        },
+    )
+    assert res1.status_code == 400
+    assert "Invalid ID: path traversal characters not allowed" in res1.json()["detail"]
+
+    # Bad session_id in chat
+    res2 = client.post(
+        "/api/v1/rp/chat",
+        json={
+            "char_id": "valid_char",
+            "session_id": "../../evil_session",
+            "message": "hello",
+        },
+    )
+    assert res2.status_code == 400
+    assert "Invalid ID: path traversal characters not allowed" in res2.json()["detail"]
+
+
+def test_path_traversal_rp_chat_stream_rejected_400(tmp_path):
+    store = EngineStore(storage_dir=str(tmp_path))
+    app = create_app(store=store, config=EngineConfig())
+    client = TestClient(app)
+
+    card_payload = {
+        "spec": "chara_card_v2",
+        "spec_version": "2.0",
+        "data": {
+            "name": "Valid",
+            "description": "a",
+            "personality": "b",
+            "scenario": "c",
+            "first_mes": "d",
+            "mes_example": "",
+        },
+    }
+    client.post("/api/v1/characters?char_id=valid_char", json=card_payload)
+
+    # Bad char_id in stream
+    res1 = client.post(
+        "/api/v1/rp/chat/stream",
+        json={
+            "char_id": "../../evil",
+            "session_id": "session_valid",
+            "message": "hello",
+        },
+    )
+    assert res1.status_code == 400
+    assert "Invalid ID: path traversal characters not allowed" in res1.json()["detail"]
+
+    # Bad session_id in stream
+    res2 = client.post(
+        "/api/v1/rp/chat/stream",
+        json={
+            "char_id": "valid_char",
+            "session_id": "../../evil_session",
+            "message": "hello",
+        },
+    )
+    assert res2.status_code == 400
+    assert "Invalid ID: path traversal characters not allowed" in res2.json()["detail"]
+

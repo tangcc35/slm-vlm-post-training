@@ -3,7 +3,7 @@ from story_rp_engine.core.config import EngineConfig
 from story_rp_engine.core.types import StoryRequest
 from story_rp_engine.story.director_agent import create_director_agent
 from story_rp_engine.story.writer_agent import create_writer_agent
-from story_rp_engine.story.workflow import expand_story
+from story_rp_engine.story.workflow import expand_story, stream_expand_story
 
 
 def test_create_director_and_writer_agents():
@@ -90,3 +90,46 @@ def test_expand_story_with_response_objects_and_defaults():
         with patch("story_rp_engine.story.writer_agent.LlmAgent.invoke", return_value=writer_resp):
             prose = expand_story(request, config)
             assert prose == "A lone figure raised an iron tankard, eyes gleaming in the firelight."
+
+
+def test_stream_expand_story_pipeline():
+    config = EngineConfig(model_name="ollama/llama3.1:8b")
+    request = StoryRequest(
+        premise="A detective arrives at a quiet harbor.",
+        current_text="Fog covered the docks.",
+        instruction="Describe his arrival and first impression.",
+        genre="Noir Mystery",
+        tone="Dark and brooding",
+    )
+
+    with patch(
+        "story_rp_engine.story.director_agent.LlmAgent.invoke",
+        return_value="Focus on cold rain and solitary footsteps.",
+    ):
+        with patch(
+            "story_rp_engine.story.writer_agent.LlmAgent.invoke",
+            return_value="He stepped into the mist.",
+        ):
+            chunks = list(stream_expand_story(request, config))
+            assert len(chunks) > 1
+            assert "".join(chunks) == "He stepped into the mist."
+
+
+def test_stream_expand_story_none_response():
+    config = EngineConfig(model_name="ollama/llama3.1:8b")
+    request = StoryRequest(
+        premise="Test",
+        current_text="...",
+    )
+
+    with patch(
+        "story_rp_engine.story.director_agent.LlmAgent.invoke",
+        return_value="framing",
+    ):
+        with patch(
+            "story_rp_engine.story.writer_agent.LlmAgent.invoke",
+            return_value=None,
+        ):
+            chunks = list(stream_expand_story(request, config))
+            assert chunks == []
+

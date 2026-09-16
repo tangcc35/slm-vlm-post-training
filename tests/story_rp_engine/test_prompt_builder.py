@@ -68,6 +68,16 @@ def test_replace_macros_edge_cases():
     assert replace_macros(text, "Aria", "Alex") == expected
 
 
+def test_replace_macros_case_insensitive():
+    text = "{{Char}} greeted {{USER}}. {{CHAR}} nodded to {{User}}."
+    expected = "Aria greeted Alex. Aria nodded to Alex."
+    result = replace_macros(text, "Aria", "Alex")
+    assert result == expected
+    assert "{{char}}" not in result.lower()
+    assert "{{user}}" not in result.lower()
+
+
+
 def test_assemble_history_with_authors_note_injection():
     messages = [
         ChatMessage(role="user", content="Turn 1"),
