@@ -48,3 +48,8 @@ wandb/
 .coverage
 htmlcov/
 unsloth_compiled_cache/
+
+# Worktrees and agent scratch
+.worktrees/
+worktrees/
+.superpowers/
