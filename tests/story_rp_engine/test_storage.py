@@ -1,4 +1,5 @@
 import pytest
+from google.adk.sessions import Session
 from story_rp_engine.core.types import (
     CharacterCardV2,
     CharacterCardV2Data,
@@ -175,3 +176,24 @@ def test_key_whitespace_stripping(tmp_path):
     assert retrieved.data.name == "Valerie"
 
 
+@pytest.mark.anyio
+async def test_store_session_service_lifecycle(tmp_path):
+    store = EngineStore(storage_dir=str(tmp_path))
+    session = await store.get_or_create_session(
+        app_name="rp_app",
+        user_id="user_123",
+        session_id="session_abc",
+        initial_state={"char_id": "lyra"},
+    )
+    assert isinstance(session, Session)
+    assert session.id == "session_abc"
+    assert session.state.get("char_id") == "lyra"
+
+    # Re-fetching returns the existing session
+    session_again = await store.get_or_create_session(
+        app_name="rp_app",
+        user_id="user_123",
+        session_id="session_abc",
+    )
+    assert session_again.id == "session_abc"
+    assert session_again.state.get("char_id") == "lyra"

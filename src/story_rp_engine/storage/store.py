@@ -1,6 +1,7 @@
 import json
 import os
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
+from google.adk.sessions import InMemorySessionService, Session
 from story_rp_engine.core.types import CharacterCardV2, ChatMessage, Lorebook
 
 
@@ -14,7 +15,11 @@ def _sanitize_key(key: str) -> str:
 
 
 class EngineStore:
-    def __init__(self, storage_dir: str = ".engine_data"):
+    def __init__(
+        self,
+        storage_dir: str = ".engine_data",
+        session_service: Optional[InMemorySessionService] = None,
+    ):
         self.storage_dir = storage_dir
         self.char_dir = os.path.join(storage_dir, "characters")
         self.lorebooks_dir = os.path.join(storage_dir, "lorebooks")
@@ -22,6 +27,28 @@ class EngineStore:
         os.makedirs(self.char_dir, exist_ok=True)
         os.makedirs(self.lorebooks_dir, exist_ok=True)
         os.makedirs(self.sessions_dir, exist_ok=True)
+        self.session_service = session_service or InMemorySessionService()
+
+    async def get_or_create_session(
+        self,
+        app_name: str,
+        user_id: str,
+        session_id: str,
+        initial_state: Optional[Dict[str, Any]] = None,
+    ) -> Session:
+        session_id = _sanitize_key(session_id)
+        user_id = _sanitize_key(user_id)
+        session = await self.session_service.get_session(
+            app_name=app_name, user_id=user_id, session_id=session_id
+        )
+        if session is None:
+            session = await self.session_service.create_session(
+                app_name=app_name,
+                user_id=user_id,
+                session_id=session_id,
+                state=initial_state or {},
+            )
+        return session
 
     def save_character(self, char_id: str, card: CharacterCardV2) -> None:
         char_id = _sanitize_key(char_id)
