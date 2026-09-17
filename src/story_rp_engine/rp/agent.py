@@ -1,6 +1,6 @@
 from typing import Iterator, List, Optional
+from google.adk.agents import LlmAgent
 from story_rp_engine.core.agent_utils import (
-    LlmAgent as _BaseLlmAgent,
     build_adk_agent,
     extract_agent_response_text,
     stream_agent_response,
@@ -12,11 +12,6 @@ from story_rp_engine.rp.prompt_builder import (
     assemble_history_with_steering,
     build_rp_system_instruction,
 )
-
-
-class LlmAgent(_BaseLlmAgent):
-    """ADK LlmAgent for Roleplay."""
-    pass
 
 
 def create_rp_agent(
@@ -34,8 +29,8 @@ def create_rp_agent(
         name=sanitized_name,
         model=model,
         instruction=instruction,
-        agent_cls=LlmAgent,
     )
+
 
 
 def build_rp_turn_prompt(

@@ -27,16 +27,17 @@ def test_expand_story_pipeline():
         tone="Dark and brooding",
     )
 
-    with patch(
-        "story_rp_engine.story.director_agent.LlmAgent.invoke",
-        return_value="Focus on cold rain and solitary footsteps.",
+    mock_director = MagicMock()
+    mock_director.invoke.return_value = "Focus on cold rain and solitary footsteps."
+    mock_writer = MagicMock()
+    mock_writer.invoke.return_value = "He stepped into the mist, collar turned against the damp chill."
+
+    with (
+        patch("story_rp_engine.story.workflow.create_director_agent", return_value=mock_director),
+        patch("story_rp_engine.story.workflow.create_writer_agent", return_value=mock_writer),
     ):
-        with patch(
-            "story_rp_engine.story.writer_agent.LlmAgent.invoke",
-            return_value="He stepped into the mist, collar turned against the damp chill.",
-        ):
-            prose = expand_story(request, config)
-            assert "mist" in prose
+        prose = expand_story(request, config)
+        assert "mist" in prose
 
 
 def test_expand_story_prompt_assembly_and_framing_flow():
@@ -49,28 +50,32 @@ def test_expand_story_prompt_assembly_and_framing_flow():
         tone="Tense and claustrophobic",
     )
 
-    mock_director_invoke = MagicMock(return_value="Emphasize silent mechanical groans and fluctuating air pressure.")
-    mock_writer_invoke = MagicMock(return_value="The airlock clamped with a heavy shudder, echoing into silence.")
+    mock_director = MagicMock()
+    mock_director.invoke.return_value = "Emphasize silent mechanical groans and fluctuating air pressure."
+    mock_writer = MagicMock()
+    mock_writer.invoke.return_value = "The airlock clamped with a heavy shudder, echoing into silence."
 
-    with patch("story_rp_engine.story.director_agent.LlmAgent.invoke", mock_director_invoke):
-        with patch("story_rp_engine.story.writer_agent.LlmAgent.invoke", mock_writer_invoke):
-            prose = expand_story(request, config)
-            assert prose == "The airlock clamped with a heavy shudder, echoing into silence."
+    with (
+        patch("story_rp_engine.story.workflow.create_director_agent", return_value=mock_director),
+        patch("story_rp_engine.story.workflow.create_writer_agent", return_value=mock_writer),
+    ):
+        prose = expand_story(request, config)
+        assert prose == "The airlock clamped with a heavy shudder, echoing into silence."
 
-            # Verify director received the story details
-            director_prompt = mock_director_invoke.call_args[0][0]
-            assert "Premise: Spaceship approaching an unknown derelict." in director_prompt
-            assert "Genre: Sci-Fi Thriller" in director_prompt
-            assert "Tone: Tense and claustrophobic" in director_prompt
-            assert "Sensors pinged with erratic signals." in director_prompt
-            assert "Detail docking procedure." in director_prompt
+        # Verify director received the story details
+        director_prompt = mock_director.invoke.call_args[0][0]
+        assert "Premise: Spaceship approaching an unknown derelict." in director_prompt
+        assert "Genre: Sci-Fi Thriller" in director_prompt
+        assert "Tone: Tense and claustrophobic" in director_prompt
+        assert "Sensors pinged with erratic signals." in director_prompt
+        assert "Detail docking procedure." in director_prompt
 
-            # Verify writer received director's framing
-            writer_prompt = mock_writer_invoke.call_args[0][0]
-            assert "Director's Guidance: Emphasize silent mechanical groans and fluctuating air pressure." in writer_prompt
-            assert "Genre: Sci-Fi Thriller" in writer_prompt
-            assert "Tone: Tense and claustrophobic" in writer_prompt
-            assert "Detail docking procedure." in writer_prompt
+        # Verify writer received director's framing
+        writer_prompt = mock_writer.invoke.call_args[0][0]
+        assert "Director's Guidance: Emphasize silent mechanical groans and fluctuating air pressure." in writer_prompt
+        assert "Genre: Sci-Fi Thriller" in writer_prompt
+        assert "Tone: Tense and claustrophobic" in writer_prompt
+        assert "Detail docking procedure." in writer_prompt
 
 
 def test_expand_story_with_response_objects_and_defaults():
@@ -80,16 +85,18 @@ def test_expand_story_with_response_objects_and_defaults():
         current_text="The tavern fell silent.",
     )
 
-    director_resp = MagicMock()
-    director_resp.text = "   Spotlight the hooded stranger in the corner.   "
+    mock_director = MagicMock()
+    mock_director.invoke.return_value = MagicMock(text="   Spotlight the hooded stranger in the corner.   ")
 
-    writer_resp = MagicMock()
-    writer_resp.text = "   A lone figure raised an iron tankard, eyes gleaming in the firelight.   "
+    mock_writer = MagicMock()
+    mock_writer.invoke.return_value = MagicMock(text="   A lone figure raised an iron tankard, eyes gleaming in the firelight.   ")
 
-    with patch("story_rp_engine.story.director_agent.LlmAgent.invoke", return_value=director_resp):
-        with patch("story_rp_engine.story.writer_agent.LlmAgent.invoke", return_value=writer_resp):
-            prose = expand_story(request, config)
-            assert prose == "A lone figure raised an iron tankard, eyes gleaming in the firelight."
+    with (
+        patch("story_rp_engine.story.workflow.create_director_agent", return_value=mock_director),
+        patch("story_rp_engine.story.workflow.create_writer_agent", return_value=mock_writer),
+    ):
+        prose = expand_story(request, config)
+        assert prose == "A lone figure raised an iron tankard, eyes gleaming in the firelight."
 
 
 def test_stream_expand_story_pipeline():
@@ -102,17 +109,19 @@ def test_stream_expand_story_pipeline():
         tone="Dark and brooding",
     )
 
-    with patch(
-        "story_rp_engine.story.director_agent.LlmAgent.invoke",
-        return_value="Focus on cold rain and solitary footsteps.",
+    mock_director = MagicMock()
+    mock_director.invoke.return_value = "Focus on cold rain and solitary footsteps."
+
+    mock_writer = MagicMock()
+    mock_writer.invoke.return_value = "He stepped into the mist."
+
+    with (
+        patch("story_rp_engine.story.workflow.create_director_agent", return_value=mock_director),
+        patch("story_rp_engine.story.workflow.create_writer_agent", return_value=mock_writer),
     ):
-        with patch(
-            "story_rp_engine.story.writer_agent.LlmAgent.invoke",
-            return_value="He stepped into the mist.",
-        ):
-            chunks = list(stream_expand_story(request, config))
-            assert len(chunks) > 1
-            assert "".join(chunks) == "He stepped into the mist."
+        chunks = list(stream_expand_story(request, config))
+        assert len(chunks) > 1
+        assert "".join(chunks) == "He stepped into the mist."
 
 
 def test_stream_expand_story_none_response():
@@ -122,14 +131,17 @@ def test_stream_expand_story_none_response():
         current_text="...",
     )
 
-    with patch(
-        "story_rp_engine.story.director_agent.LlmAgent.invoke",
-        return_value="framing",
+    mock_director = MagicMock()
+    mock_director.invoke.return_value = "framing"
+
+    mock_writer = MagicMock()
+    mock_writer.invoke.return_value = None
+
+    with (
+        patch("story_rp_engine.story.workflow.create_director_agent", return_value=mock_director),
+        patch("story_rp_engine.story.workflow.create_writer_agent", return_value=mock_writer),
     ):
-        with patch(
-            "story_rp_engine.story.writer_agent.LlmAgent.invoke",
-            return_value=None,
-        ):
-            chunks = list(stream_expand_story(request, config))
-            assert chunks == []
+        chunks = list(stream_expand_story(request, config))
+        assert chunks == []
+
 

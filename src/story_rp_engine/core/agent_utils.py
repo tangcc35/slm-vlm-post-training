@@ -1,10 +1,6 @@
 import re
 from typing import Any, Iterator
-from google.adk.agents import LlmAgent as _BaseLlmAgent
-
-class LlmAgent(_BaseLlmAgent):
-    """ADK LlmAgent subclass supporting synchronous invoke and streaming generators."""
-    pass
+from google.adk.agents import LlmAgent
 
 
 def _get_invoke(self: Any):
@@ -76,11 +72,11 @@ def _del_stream(self: Any) -> None:
     self.__dict__.pop("_stream_fn", None)
 
 
-if not hasattr(_BaseLlmAgent, "invoke"):
-    _BaseLlmAgent.invoke = property(_get_invoke, _set_invoke, _del_invoke)
+if not hasattr(LlmAgent, "invoke"):
+    LlmAgent.invoke = property(_get_invoke, _set_invoke, _del_invoke)
 
-if not hasattr(_BaseLlmAgent, "stream"):
-    _BaseLlmAgent.stream = property(_get_stream, _set_stream, _del_stream)
+if not hasattr(LlmAgent, "stream"):
+    LlmAgent.stream = property(_get_stream, _set_stream, _del_stream)
 
 
 def is_invoke_patched(agent: Any) -> bool:
@@ -100,17 +96,17 @@ def build_adk_agent(
     name: str,
     model: Any,
     instruction: str,
-    agent_cls: type = LlmAgent,
-) -> Any:
+) -> LlmAgent:
     """Builds an ADK LlmAgent, gracefully handling identifier constraints across ADK versions."""
     try:
-        return agent_cls(name=name, model=model, instruction=instruction)
+        return LlmAgent(name=name, model=model, instruction=instruction)
     except Exception:
-        return agent_cls.model_construct(
+        return LlmAgent.model_construct(
             name=name,
             model=model,
             instruction=instruction,
         )
+
 
 
 def extract_agent_response_text(response: Any) -> str:

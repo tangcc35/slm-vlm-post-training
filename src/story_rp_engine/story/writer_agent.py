@@ -1,11 +1,7 @@
-from story_rp_engine.core.agent_utils import LlmAgent as _BaseLlmAgent, build_adk_agent
+from google.adk.agents import LlmAgent
+from story_rp_engine.core.agent_utils import build_adk_agent
 from story_rp_engine.core.config import EngineConfig
 from story_rp_engine.core.model_provider import get_adk_model
-
-
-class LlmAgent(_BaseLlmAgent):
-    """ADK LlmAgent for Fiction Writer."""
-    pass
 
 
 def create_writer_agent(config: EngineConfig) -> LlmAgent:
@@ -19,6 +15,6 @@ def create_writer_agent(config: EngineConfig) -> LlmAgent:
         name="story-writer",
         model=model,
         instruction=instruction,
-        agent_cls=LlmAgent,
     )
+
 
