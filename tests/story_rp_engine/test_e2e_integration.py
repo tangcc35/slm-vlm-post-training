@@ -1,5 +1,5 @@
 from fastapi.testclient import TestClient
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, patch
 from story_rp_engine.api.app import create_app
 from story_rp_engine.core.config import EngineConfig
 from story_rp_engine.storage.store import EngineStore
@@ -33,9 +33,11 @@ def test_full_engine_lifecycle(tmp_path):
     assert save_res.status_code == 200
 
     # 3. Conversational RP turn
-    mock_agent = MagicMock()
-    mock_agent.invoke.return_value = "Snow is coming. Move faster."
-    with patch("story_rp_engine.api.routes_rp.create_rp_agent", return_value=mock_agent):
+    with patch(
+        "story_rp_engine.api.routes_rp.execute_runner_turn",
+        new_callable=AsyncMock,
+        return_value="Snow is coming. Move faster.",
+    ):
         chat_res = client.post(
             "/api/v1/rp/chat",
             json={
@@ -55,11 +57,10 @@ def test_full_engine_lifecycle(tmp_path):
     assert saved_history[1].content == "Snow is coming. Move faster."
 
     # 5. Story Co-Pilot expansion
-    mock_writer = MagicMock()
-    mock_writer.invoke.return_value = "The ridge gave way to a vast frozen valley."
     with patch(
-        "story_rp_engine.api.routes_story.prepare_story_expansion",
-        return_value=(mock_writer, "writer prompt"),
+        "story_rp_engine.api.routes_story.execute_runner_turn",
+        new_callable=AsyncMock,
+        return_value="The ridge gave way to a vast frozen valley.",
     ):
         story_res = client.post(
             "/api/v1/story/expand",

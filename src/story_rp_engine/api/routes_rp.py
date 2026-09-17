@@ -1,13 +1,13 @@
 from typing import Optional
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
+from google.adk import Runner
 from pydantic import BaseModel
 from story_rp_engine.core.agent_utils import (
-    extract_agent_response_text,
-    stream_agent_response,
+    execute_runner_turn,
+    stream_runner_turn,
 )
 from story_rp_engine.core.types import CharacterCardV2, ChatMessage
-from story_rp_engine.rp.agent import build_rp_turn_prompt, create_rp_agent
 
 router = APIRouter(prefix="/api/v1", tags=["Roleplay"])
 
@@ -50,26 +50,33 @@ def get_character(char_id: str, request: Request):
 
 
 @router.post("/rp/chat")
-def chat_rp(req: RPChatRequest, request: Request):
+async def chat_rp(req: RPChatRequest, request: Request):
     store = request.app.state.store
-    config = request.app.state.config
-
-    try:
-        card = store.get_character(req.char_id)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-
-    if not card:
-        raise HTTPException(status_code=404, detail="Character not found")
+    session_service = request.app.state.session_service
+    registry = request.app.state.agent_registry
 
     try:
         history = store.get_history(req.session_id)
+        agent = registry.get_or_create_rp_agent(req.char_id)
     except ValueError as e:
+        if "not found" in str(e).lower():
+            raise HTTPException(status_code=404, detail="Character not found")
         raise HTTPException(status_code=400, detail=str(e))
 
-    agent = create_rp_agent(card, config, active_lore=[], user_name=req.user_name or "User")
-    prompt = build_rp_turn_prompt(history, req.message, authors_note=req.authors_note)
-    reply = extract_agent_response_text(agent.invoke(prompt))
+    runner = Runner(
+        agent=agent,
+        session_service=session_service,
+        app_name="rp_app",
+        auto_create_session=True,
+    )
+
+    reply = await execute_runner_turn(
+        runner,
+        user_id=req.user_name or "User",
+        session_id=req.session_id,
+        message=req.message,
+        state_delta={"authors_note": req.authors_note},
+    )
 
     updated_history = history + [
         ChatMessage(role="user", content=req.message),
@@ -84,33 +91,39 @@ def chat_rp(req: RPChatRequest, request: Request):
 
 
 @router.post("/rp/chat/stream")
-def chat_rp_stream(req: RPChatRequest, request: Request):
+async def chat_rp_stream(req: RPChatRequest, request: Request):
     store = request.app.state.store
-    config = request.app.state.config
-
-    try:
-        card = store.get_character(req.char_id)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-
-    if not card:
-        raise HTTPException(status_code=404, detail="Character not found")
+    session_service = request.app.state.session_service
+    registry = request.app.state.agent_registry
 
     try:
         history = store.get_history(req.session_id)
+        agent = registry.get_or_create_rp_agent(req.char_id)
     except ValueError as e:
+        if "not found" in str(e).lower():
+            raise HTTPException(status_code=404, detail="Character not found")
         raise HTTPException(status_code=400, detail=str(e))
 
-    agent = create_rp_agent(card, config, active_lore=[], user_name=req.user_name or "User")
-    prompt = build_rp_turn_prompt(history, req.message, authors_note=req.authors_note)
-    generator = stream_agent_response(agent, prompt)
+    runner = Runner(
+        agent=agent,
+        session_service=session_service,
+        app_name="rp_app",
+        auto_create_session=True,
+    )
 
+    generator = stream_runner_turn(
+        runner,
+        user_id=req.user_name or "User",
+        session_id=req.session_id,
+        message=req.message,
+        state_delta={"authors_note": req.authors_note},
+    )
 
     accumulated_chunks = []
 
-    def event_stream():
+    async def event_stream():
         try:
-            for chunk in generator:
+            async for chunk in generator:
                 accumulated_chunks.append(chunk)
                 yield f"data: {chunk}\n\n"
         finally:

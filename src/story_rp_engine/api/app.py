@@ -1,8 +1,10 @@
 from typing import Optional
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from google.adk import Runner
 from story_rp_engine.api.routes_rp import router as rp_router
 from story_rp_engine.api.routes_story import router as story_router
+from story_rp_engine.core.agent_registry import AgentRegistry
 from story_rp_engine.core.config import EngineConfig
 from story_rp_engine.storage.store import EngineStore
 
@@ -21,8 +23,19 @@ def create_app(
         allow_headers=["*"],
     )
 
-    app.state.store = store or EngineStore()
-    app.state.config = config or EngineConfig()
+    resolved_store = store or EngineStore()
+    resolved_config = config or EngineConfig()
+
+    app.state.store = resolved_store
+    app.state.config = resolved_config
+    app.state.session_service = resolved_store.session_service
+    app.state.agent_registry = AgentRegistry(resolved_config, resolved_store)
+    app.state.runner = Runner(
+        agent=app.state.agent_registry.get_story_workflow(),
+        session_service=app.state.session_service,
+        app_name="story_app",
+        auto_create_session=True,
+    )
 
     app.include_router(rp_router)
     app.include_router(story_router)
