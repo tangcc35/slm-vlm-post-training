@@ -92,23 +92,6 @@ def is_invoke_patched(agent: Any) -> bool:
     return False
 
 
-def build_adk_agent(
-    name: str,
-    model: Any,
-    instruction: str,
-) -> LlmAgent:
-    """Builds an ADK LlmAgent, gracefully handling identifier constraints across ADK versions."""
-    try:
-        return LlmAgent(name=name, model=model, instruction=instruction)
-    except Exception:
-        return LlmAgent.model_construct(
-            name=name,
-            model=model,
-            instruction=instruction,
-        )
-
-
-
 def extract_agent_response_text(response: Any) -> str:
     """Extracts cleaned string response from an agent invocation."""
     if response is None:

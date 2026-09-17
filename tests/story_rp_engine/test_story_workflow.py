@@ -11,9 +11,9 @@ def test_create_director_and_writer_agents():
     director = create_director_agent(config)
     writer = create_writer_agent(config)
 
-    assert director.name == "story-director"
+    assert director.name == "story_director"
     assert "framing" in director.instruction.lower()
-    assert writer.name == "story-writer"
+    assert writer.name == "story_writer"
     assert "prose" in writer.instruction.lower()
 
 

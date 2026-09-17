@@ -1,5 +1,4 @@
 from google.adk.agents import LlmAgent
-from story_rp_engine.core.agent_utils import build_adk_agent
 from story_rp_engine.core.config import EngineConfig
 from story_rp_engine.core.model_provider import get_adk_model
 
@@ -10,11 +9,11 @@ def create_writer_agent(config: EngineConfig) -> LlmAgent:
         "Honor the Director's scene framing, user's instruction, genre, and tone. "
         "Seamlessly continue the existing text without unnecessary preamble or meta-commentary."
     )
-    model = get_adk_model(config)
-    return build_adk_agent(
-        name="story-writer",
-        model=model,
+    return LlmAgent(
+        name="story_writer",
+        model=get_adk_model(config),
         instruction=instruction,
     )
+
 
 

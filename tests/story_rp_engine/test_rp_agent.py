@@ -17,7 +17,7 @@ def test_create_rp_agent():
     config = EngineConfig(model_name="ollama/llama3.1:8b")
 
     agent = create_rp_agent(card, config, active_lore=[], user_name="Traveler")
-    assert agent.name == "rp-theron"
+    assert agent.name == "rp_theron"
     assert "Theron" in agent.instruction
     assert "Paladin" in agent.instruction
     assert "Traveler" in agent.instruction
