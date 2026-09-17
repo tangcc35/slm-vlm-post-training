@@ -14,14 +14,16 @@ router = APIRouter(prefix="/api/v1/story", tags=["Story Co-Pilot"])
 
 @router.post("/expand")
 async def expand_story_endpoint(req: StoryRequest, request: Request):
-    session_service = request.app.state.session_service
-    workflow = request.app.state.agent_registry.get_story_workflow()
-    runner = Runner(
-        agent=workflow,
-        session_service=session_service,
-        app_name="story_app",
-        auto_create_session=True,
-    )
+    runner = getattr(request.app.state, "runner", None)
+    if runner is None:
+        session_service = request.app.state.store.session_service
+        workflow = request.app.state.agent_registry.get_story_workflow()
+        runner = Runner(
+            agent=workflow,
+            session_service=session_service,
+            app_name="story_app",
+            auto_create_session=True,
+        )
     prompt = format_story_input(req)
     expansion = await execute_runner_turn(
         runner,
@@ -34,14 +36,16 @@ async def expand_story_endpoint(req: StoryRequest, request: Request):
 
 @router.post("/expand/stream")
 async def expand_story_stream(req: StoryRequest, request: Request):
-    session_service = request.app.state.session_service
-    workflow = request.app.state.agent_registry.get_story_workflow()
-    runner = Runner(
-        agent=workflow,
-        session_service=session_service,
-        app_name="story_app",
-        auto_create_session=True,
-    )
+    runner = getattr(request.app.state, "runner", None)
+    if runner is None:
+        session_service = request.app.state.store.session_service
+        workflow = request.app.state.agent_registry.get_story_workflow()
+        runner = Runner(
+            agent=workflow,
+            session_service=session_service,
+            app_name="story_app",
+            auto_create_session=True,
+        )
     prompt = format_story_input(req)
     generator = stream_runner_turn(
         runner,
