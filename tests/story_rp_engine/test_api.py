@@ -1,5 +1,5 @@
 from fastapi.testclient import TestClient
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 from story_rp_engine.api.app import create_app
 from story_rp_engine.core.config import EngineConfig
 from story_rp_engine.storage.store import EngineStore
@@ -78,7 +78,10 @@ def test_rp_chat_endpoint(tmp_path):
         },
     )
 
-    with patch("story_rp_engine.api.routes_rp.run_rp_turn", return_value="I sing a ballad.") as mock_turn:
+    mock_agent = MagicMock()
+    mock_agent.invoke.return_value = "I sing a ballad."
+
+    with patch("story_rp_engine.api.routes_rp.create_rp_agent", return_value=mock_agent):
         res = client.post(
             "/api/v1/rp/chat",
             json={
@@ -89,7 +92,7 @@ def test_rp_chat_endpoint(tmp_path):
         )
         assert res.status_code == 200
         assert res.json() == {"reply": "I sing a ballad.", "session_id": "session_1"}
-        assert mock_turn.called
+        assert mock_agent.invoke.called
 
     # Verify history was persisted
     history = store.get_history("session_1")
@@ -139,10 +142,10 @@ def test_rp_chat_stream_endpoint(tmp_path):
         },
     )
 
-    with patch(
-        "story_rp_engine.api.routes_rp.stream_rp_turn",
-        return_value=iter(["Here ", "is ", "a tune."]),
-    ) as mock_stream:
+    mock_agent = MagicMock()
+    mock_agent.invoke.return_value = "Here is a tune."
+
+    with patch("story_rp_engine.api.routes_rp.create_rp_agent", return_value=mock_agent):
         res = client.post(
             "/api/v1/rp/chat/stream",
             json={
@@ -154,11 +157,13 @@ def test_rp_chat_stream_endpoint(tmp_path):
         assert res.status_code == 200
         assert "text/event-stream" in res.headers["content-type"]
         body = res.text
-        assert "data: Here \n\n" in body
-        assert "data: is \n\n" in body
-        assert "data: a tune.\n\n" in body
+        assert "data: Here\n\n" in body
+        assert "data:  is\n\n" in body
+        assert "data:  a\n\n" in body
+        assert "data:  tune.\n\n" in body
         assert "data: [DONE]\n\n" in body
-        assert mock_stream.called
+        assert mock_agent.invoke.called
+
 
     # Verify history was accumulated and persisted
     history = store.get_history("session_2")
@@ -236,10 +241,10 @@ def test_rp_chat_authors_note_and_custom_user(tmp_path):
         },
     )
 
-    with (
-        patch("story_rp_engine.api.routes_rp.create_rp_agent") as mock_agent_factory,
-        patch("story_rp_engine.api.routes_rp.run_rp_turn", return_value="Secret chord.") as mock_turn,
-    ):
+    mock_agent = MagicMock()
+    mock_agent.invoke.return_value = "Secret chord."
+
+    with patch("story_rp_engine.api.routes_rp.create_rp_agent", return_value=mock_agent) as mock_agent_factory:
         res = client.post(
             "/api/v1/rp/chat",
             json={
@@ -253,7 +258,9 @@ def test_rp_chat_authors_note_and_custom_user(tmp_path):
         assert res.status_code == 200
         assert res.json()["reply"] == "Secret chord."
         assert mock_agent_factory.call_args.kwargs["user_name"] == "Adventurer"
-        assert mock_turn.call_args.kwargs["authors_note"] == "[Style: Melancholy]"
+        prompt_arg = mock_agent.invoke.call_args[0][0]
+        assert "[Style: Melancholy]" in prompt_arg
+
 
 
 def test_cors_headers():

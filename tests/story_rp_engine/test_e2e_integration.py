@@ -1,5 +1,5 @@
 from fastapi.testclient import TestClient
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 from story_rp_engine.api.app import create_app
 from story_rp_engine.core.config import EngineConfig
 from story_rp_engine.storage.store import EngineStore
@@ -33,7 +33,9 @@ def test_full_engine_lifecycle(tmp_path):
     assert save_res.status_code == 200
 
     # 3. Conversational RP turn
-    with patch("story_rp_engine.api.routes_rp.run_rp_turn", return_value="Snow is coming. Move faster."):
+    mock_agent = MagicMock()
+    mock_agent.invoke.return_value = "Snow is coming. Move faster."
+    with patch("story_rp_engine.api.routes_rp.create_rp_agent", return_value=mock_agent):
         chat_res = client.post(
             "/api/v1/rp/chat",
             json={
@@ -44,6 +46,7 @@ def test_full_engine_lifecycle(tmp_path):
         )
         assert chat_res.status_code == 200
         assert "Snow is coming" in chat_res.json()["reply"]
+
 
     # 4. Verify session persisted
     saved_history = store.get_history("sess_mountain_1")
