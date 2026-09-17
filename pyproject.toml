@@ -21,6 +21,11 @@ dependencies = [
     "sentencepiece",
     "protobuf",
     "wandb>=0.30.0",
+    "google-adk>=2.7.0",
+    "litellm>=1.101.0",
+    "fastapi>=0.141.1",
+    "uvicorn>=0.53.0",
+    "pydantic>=2.13.5",
 ]
 
 [project.optional-dependencies]
@@ -32,7 +37,7 @@ dev = [
 slm-post-train = "slm_post_train.cli:main"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/slm_post_train"]
+packages = ["src/slm_post_train", "src/story_rp_engine"]
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]
