@@ -4,48 +4,20 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from story_rp_engine.core.types import CharacterCardV2, ChatMessage
 import story_rp_engine.rp.agent as rp_agent
-from story_rp_engine.rp.agent import create_rp_agent, run_rp_turn, stream_rp_turn
-
-_original_run_rp_turn = run_rp_turn
-_original_stream_rp_turn = stream_rp_turn
-_original_create_rp_agent = create_rp_agent
-
-
-def _get_run_rp_turn():
-    import story_rp_engine.api.routes_rp as self_mod
-    if getattr(self_mod, "run_rp_turn", None) is not _original_run_rp_turn:
-        return self_mod.run_rp_turn
-    if rp_agent.run_rp_turn is not _original_run_rp_turn:
-        return rp_agent.run_rp_turn
-    return run_rp_turn
-
-
-def _get_stream_rp_turn():
-    import story_rp_engine.api.routes_rp as self_mod
-    if getattr(self_mod, "stream_rp_turn", None) is not _original_stream_rp_turn:
-        return self_mod.stream_rp_turn
-    if rp_agent.stream_rp_turn is not _original_stream_rp_turn:
-        return rp_agent.stream_rp_turn
-    if rp_agent.run_rp_turn is not _original_run_rp_turn:
-        def _adapted_stream(*args, **kwargs):
-            val = rp_agent.run_rp_turn(*args, **kwargs)
-            words = val.split(" ")
-            for i, w in enumerate(words):
-                yield w if i == 0 else " " + w
-        return _adapted_stream
-    return stream_rp_turn
-
-
-def _get_create_rp_agent():
-    import story_rp_engine.api.routes_rp as self_mod
-    if getattr(self_mod, "create_rp_agent", None) is not _original_create_rp_agent:
-        return self_mod.create_rp_agent
-    if rp_agent.create_rp_agent is not _original_create_rp_agent:
-        return rp_agent.create_rp_agent
-    return create_rp_agent
-
 
 router = APIRouter(prefix="/api/v1", tags=["Roleplay"])
+
+
+def create_rp_agent(*args, **kwargs):
+    return rp_agent.create_rp_agent(*args, **kwargs)
+
+
+def run_rp_turn(*args, **kwargs):
+    return rp_agent.run_rp_turn(*args, **kwargs)
+
+
+def stream_rp_turn(*args, **kwargs):
+    return rp_agent.stream_rp_turn(*args, **kwargs)
 
 
 class RPChatRequest(BaseModel):
@@ -79,6 +51,7 @@ def get_character(char_id: str, request: Request):
         card = store.get_character(char_id)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
     if not card:
         raise HTTPException(status_code=404, detail="Character not found")
     return card
@@ -93,6 +66,7 @@ def chat_rp(req: RPChatRequest, request: Request):
         card = store.get_character(req.char_id)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
     if not card:
         raise HTTPException(status_code=404, detail="Character not found")
 
@@ -101,12 +75,9 @@ def chat_rp(req: RPChatRequest, request: Request):
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-    agent_creator = _get_create_rp_agent()
-    agent = agent_creator(card, config, active_lore=[], user_name=req.user_name or "User")
-    turn_fn = _get_run_rp_turn()
-    reply = turn_fn(agent, history, req.message, authors_note=req.authors_note)
+    agent = create_rp_agent(card, config, active_lore=[], user_name=req.user_name or "User")
+    reply = run_rp_turn(agent, history, req.message, authors_note=req.authors_note)
 
-    # Persist updated history
     updated_history = history + [
         ChatMessage(role="user", content=req.message),
         ChatMessage(role="assistant", content=reply),
@@ -128,6 +99,7 @@ def chat_rp_stream(req: RPChatRequest, request: Request):
         card = store.get_character(req.char_id)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
     if not card:
         raise HTTPException(status_code=404, detail="Character not found")
 
@@ -136,27 +108,26 @@ def chat_rp_stream(req: RPChatRequest, request: Request):
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-    agent_creator = _get_create_rp_agent()
-    agent = agent_creator(card, config, active_lore=[], user_name=req.user_name or "User")
-    stream_fn = _get_stream_rp_turn()
+    agent = create_rp_agent(card, config, active_lore=[], user_name=req.user_name or "User")
+    generator = stream_rp_turn(agent, history, req.message, authors_note=req.authors_note)
+
+    accumulated_chunks = []
 
     def event_stream():
-        accumulated_chunks = []
         try:
-            for chunk in stream_fn(agent, history, req.message, authors_note=req.authors_note):
+            for chunk in generator:
                 accumulated_chunks.append(chunk)
                 yield f"data: {chunk}\n\n"
         finally:
-            full_reply = "".join(accumulated_chunks)
-            if full_reply:
-                updated_history = history + [
-                    ChatMessage(role="user", content=req.message),
-                    ChatMessage(role="assistant", content=full_reply),
-                ]
-                try:
-                    store.save_history(req.session_id, updated_history)
-                except Exception:
-                    pass
+            complete_reply = "".join(accumulated_chunks).strip()
+            updated_history = history + [
+                ChatMessage(role="user", content=req.message),
+                ChatMessage(role="assistant", content=complete_reply),
+            ]
+            try:
+                store.save_history(req.session_id, updated_history)
+            except ValueError:
+                pass
         yield "data: [DONE]\n\n"
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
