@@ -1,10 +1,9 @@
 from story_rp_engine.story.director_agent import create_director_agent
 from story_rp_engine.story.writer_agent import create_writer_agent
-from story_rp_engine.story.workflow import expand_story, prepare_story_expansion
+from story_rp_engine.story.workflow import prepare_story_expansion
 
 __all__ = [
     "create_director_agent",
     "create_writer_agent",
-    "expand_story",
     "prepare_story_expansion",
 ]

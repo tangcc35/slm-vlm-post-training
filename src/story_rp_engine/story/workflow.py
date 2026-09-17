@@ -46,6 +46,3 @@ def prepare_story_expansion(
     writer_prompt = build_writer_prompt(request, framing)
     return writer, writer_prompt
 
-
-expand_story = prepare_story_expansion
-
