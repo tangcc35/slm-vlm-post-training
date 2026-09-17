@@ -1,7 +1,7 @@
 from unittest.mock import MagicMock
 from story_rp_engine.core.agent_utils import extract_agent_response_text, stream_agent_response
 from story_rp_engine.core.config import EngineConfig
-from story_rp_engine.core.types import CharacterCardV2, CharacterCardV2Data, ChatMessage, LorebookEntry
+from story_rp_engine.core.types import CharacterCardV2, CharacterCardV2Data, ChatMessage, Lorebook, LorebookEntry
 from story_rp_engine.rp.agent import build_rp_turn_prompt, create_rp_agent
 
 
@@ -17,11 +17,12 @@ def test_create_rp_agent():
     card = CharacterCardV2(data=data)
     config = EngineConfig(model_name="ollama/llama3.1:8b")
 
-    agent = create_rp_agent(card, config, active_lore=[], user_name="Traveler")
+    agent = create_rp_agent(card, config, user_name="Traveler")
     assert agent.name == "rp_theron"
     assert "Theron" in agent.instruction
     assert "Paladin" in agent.instruction
     assert "Traveler" in agent.instruction
+    assert agent.before_model_callback is not None
 
 
 def test_create_rp_agent_with_lore():
@@ -35,12 +36,17 @@ def test_create_rp_agent_with_lore():
     )
     card = CharacterCardV2(data=data)
     config = EngineConfig(model_name="ollama/llama3.1:8b")
-    lore = [
-        LorebookEntry(keys=["silver"], content="Silver Order of Knights"),
-    ]
+    lorebook = Lorebook(
+        name="chivalry",
+        entries=[
+            LorebookEntry(keys=["silver"], content="Silver Order of Knights"),
+        ],
+    )
 
-    agent = create_rp_agent(card, config, active_lore=lore, user_name="Traveler")
-    assert "Silver Order of Knights" in agent.instruction
+    agent = create_rp_agent(card, config, lorebook=lorebook, user_name="Traveler")
+    assert agent.name == "rp_theron"
+    assert agent.before_model_callback is not None
+    assert "Silver Order of Knights" not in agent.instruction
 
 
 def test_build_rp_turn_prompt():
