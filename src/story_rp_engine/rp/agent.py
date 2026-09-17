@@ -32,8 +32,6 @@ def create_rp_agent(
     )
 
 
-
-
 def build_rp_turn_prompt(
     history: List[ChatMessage],
     user_input: str,
