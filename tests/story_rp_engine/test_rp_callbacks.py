@@ -4,7 +4,7 @@ from google.genai import types
 from google.adk.models import LlmRequest
 from google.adk.agents.callback_context import CallbackContext
 from story_rp_engine.core.types import Lorebook, LorebookEntry
-from story_rp_engine.rp.callbacks import create_rp_before_model_callback
+from story_rp_engine.rp.callbacks import create_rp_before_model_callback, rp_before_model_callback
 
 
 def test_before_model_callback_injects_lore_and_authors_note():
@@ -131,3 +131,35 @@ def test_before_model_callback_default_config_no_system_instruction():
     assert res is None
     assert request.config is not None
     assert "Tone: dark" in str(request.config.system_instruction)
+
+
+def test_rp_before_model_callback_direct_session_state():
+    lore = Lorebook(
+        name="Direct State Lore",
+        entries=[
+            LorebookEntry(keys=["dragon"], content="Dragons breathe fire."),
+        ],
+    )
+    mock_context = MagicMock(spec=CallbackContext)
+    mock_context.state = {
+        "lorebook": lore,
+        "authors_note": "Focus on combat tension.",
+    }
+
+    request = LlmRequest(
+        model="test-model",
+        contents=[
+            types.Content(
+                role="user",
+                parts=[types.Part.from_text(text="Look out, a dragon!")]
+            )
+        ],
+        config=types.GenerateContentConfig(system_instruction="Base RPG system.")
+    )
+
+    res = rp_before_model_callback(mock_context, request)
+    assert res is None
+    instruction = str(request.config.system_instruction)
+    assert "Dragons breathe fire." in instruction
+    assert "Focus on combat tension." in instruction
+
