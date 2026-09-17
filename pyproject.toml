@@ -26,6 +26,8 @@ dependencies = [
     "fastapi>=0.141.1",
     "uvicorn>=0.53.0",
     "pydantic>=2.13.5",
+    "llama-cpp-python[server]>=0.3.35",
+    "sse-starlette>=3.4.11",
 ]
 
 [project.optional-dependencies]
