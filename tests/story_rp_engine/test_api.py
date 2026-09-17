@@ -179,7 +179,13 @@ def test_story_expand_endpoint(tmp_path):
     app = create_app(store=store, config=EngineConfig())
     client = TestClient(app)
 
-    with patch("story_rp_engine.api.routes_story.expand_story", return_value="The ship docked at dawn.") as mock_expand:
+    mock_writer = MagicMock()
+    mock_writer.invoke.return_value = "The ship docked at dawn."
+
+    with patch(
+        "story_rp_engine.api.routes_story.prepare_story_expansion",
+        return_value=(mock_writer, "writer prompt"),
+    ) as mock_prepare:
         res = client.post(
             "/api/v1/story/expand",
             json={
@@ -190,7 +196,8 @@ def test_story_expand_endpoint(tmp_path):
         )
         assert res.status_code == 200
         assert res.json() == {"expansion": "The ship docked at dawn."}
-        assert mock_expand.called
+        assert mock_prepare.called
+        assert mock_writer.invoke.called
 
 
 def test_story_expand_stream_endpoint(tmp_path):
@@ -198,10 +205,13 @@ def test_story_expand_stream_endpoint(tmp_path):
     app = create_app(store=store, config=EngineConfig())
     client = TestClient(app)
 
+    mock_writer = MagicMock()
+    mock_writer.invoke.return_value = "The sun rose above the horizon."
+
     with patch(
-        "story_rp_engine.api.routes_story.stream_expand_story",
-        return_value=iter(["The sun ", "rose above ", "the horizon."]),
-    ) as mock_stream:
+        "story_rp_engine.api.routes_story.prepare_story_expansion",
+        return_value=(mock_writer, "writer prompt"),
+    ) as mock_prepare:
         res = client.post(
             "/api/v1/story/expand/stream",
             json={
@@ -213,11 +223,15 @@ def test_story_expand_stream_endpoint(tmp_path):
         assert res.status_code == 200
         assert "text/event-stream" in res.headers["content-type"]
         body = res.text
-        assert "data: The sun \n\n" in body
-        assert "data: rose above \n\n" in body
-        assert "data: the horizon.\n\n" in body
+        assert "data: The\n\n" in body
+        assert "data:  sun\n\n" in body
+        assert "data:  rose\n\n" in body
+        assert "data:  above\n\n" in body
+        assert "data:  the\n\n" in body
+        assert "data:  horizon.\n\n" in body
         assert "data: [DONE]\n\n" in body
-        assert mock_stream.called
+        assert mock_prepare.called
+        assert mock_writer.invoke.called
 
 
 def test_rp_chat_authors_note_and_custom_user(tmp_path):

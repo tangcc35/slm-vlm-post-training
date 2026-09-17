@@ -1,8 +1,6 @@
-from typing import Iterator
-from story_rp_engine.core.agent_utils import (
-    extract_agent_response_text,
-    stream_agent_response,
-)
+from typing import Tuple
+from google.adk.agents import LlmAgent
+from story_rp_engine.core.agent_utils import extract_agent_response_text
 from story_rp_engine.core.config import EngineConfig
 from story_rp_engine.core.types import StoryRequest
 from story_rp_engine.story.director_agent import create_director_agent
@@ -33,8 +31,10 @@ def build_writer_prompt(request: StoryRequest, framing: str) -> str:
     )
 
 
-def expand_story(request: StoryRequest, config: EngineConfig) -> str:
-    """Executes the Director -> Writer ADK pipeline to expand story prose."""
+def prepare_story_expansion(
+    request: StoryRequest, config: EngineConfig
+) -> Tuple[LlmAgent, str]:
+    """Executes the Director framing step and returns the Writer agent and continuation prompt."""
     director = create_director_agent(config)
     writer = create_writer_agent(config)
 
@@ -42,21 +42,10 @@ def expand_story(request: StoryRequest, config: EngineConfig) -> str:
     director_prompt = build_director_prompt(request)
     framing = extract_agent_response_text(director.invoke(director_prompt))
 
-    # Step 2: Writer writes the continuation
+    # Step 2: Writer continuation prompt
     writer_prompt = build_writer_prompt(request, framing)
-    return extract_agent_response_text(writer.invoke(writer_prompt))
+    return writer, writer_prompt
 
 
-def stream_expand_story(request: StoryRequest, config: EngineConfig) -> Iterator[str]:
-    """Executes the Director framing step and then streams Writer prose tokens."""
-    director = create_director_agent(config)
-    writer = create_writer_agent(config)
-
-    # Step 1: Director plans scene framing
-    director_prompt = build_director_prompt(request)
-    framing = extract_agent_response_text(director.invoke(director_prompt))
-
-    # Step 2: Writer streams the continuation
-    writer_prompt = build_writer_prompt(request, framing)
-    return stream_agent_response(writer, writer_prompt)
+expand_story = prepare_story_expansion
 

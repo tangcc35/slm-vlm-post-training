@@ -55,9 +55,11 @@ def test_full_engine_lifecycle(tmp_path):
     assert saved_history[1].content == "Snow is coming. Move faster."
 
     # 5. Story Co-Pilot expansion
+    mock_writer = MagicMock()
+    mock_writer.invoke.return_value = "The ridge gave way to a vast frozen valley."
     with patch(
-        "story_rp_engine.api.routes_story.expand_story",
-        return_value="The ridge gave way to a vast frozen valley.",
+        "story_rp_engine.api.routes_story.prepare_story_expansion",
+        return_value=(mock_writer, "writer prompt"),
     ):
         story_res = client.post(
             "/api/v1/story/expand",
