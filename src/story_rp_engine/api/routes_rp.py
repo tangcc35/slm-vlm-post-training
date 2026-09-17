@@ -3,21 +3,9 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from story_rp_engine.core.types import CharacterCardV2, ChatMessage
-import story_rp_engine.rp.agent as rp_agent
+from story_rp_engine.rp.agent import create_rp_agent, run_rp_turn, stream_rp_turn
 
 router = APIRouter(prefix="/api/v1", tags=["Roleplay"])
-
-
-def create_rp_agent(*args, **kwargs):
-    return rp_agent.create_rp_agent(*args, **kwargs)
-
-
-def run_rp_turn(*args, **kwargs):
-    return rp_agent.run_rp_turn(*args, **kwargs)
-
-
-def stream_rp_turn(*args, **kwargs):
-    return rp_agent.stream_rp_turn(*args, **kwargs)
 
 
 class RPChatRequest(BaseModel):

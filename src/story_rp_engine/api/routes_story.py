@@ -1,17 +1,10 @@
 from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse
 from story_rp_engine.core.types import StoryRequest
-import story_rp_engine.story.workflow as story_workflow
+from story_rp_engine.story.workflow import expand_story, stream_expand_story
 
 router = APIRouter(prefix="/api/v1/story", tags=["Story Co-Pilot"])
 
-
-def expand_story(*args, **kwargs):
-    return story_workflow.expand_story(*args, **kwargs)
-
-
-def stream_expand_story(*args, **kwargs):
-    return story_workflow.stream_expand_story(*args, **kwargs)
 
 
 @router.post("/expand")

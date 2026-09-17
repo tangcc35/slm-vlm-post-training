@@ -33,7 +33,7 @@ def test_full_engine_lifecycle(tmp_path):
     assert save_res.status_code == 200
 
     # 3. Conversational RP turn
-    with patch("story_rp_engine.rp.agent.run_rp_turn", return_value="Snow is coming. Move faster."):
+    with patch("story_rp_engine.api.routes_rp.run_rp_turn", return_value="Snow is coming. Move faster."):
         chat_res = client.post(
             "/api/v1/rp/chat",
             json={
@@ -53,7 +53,7 @@ def test_full_engine_lifecycle(tmp_path):
 
     # 5. Story Co-Pilot expansion
     with patch(
-        "story_rp_engine.story.workflow.expand_story",
+        "story_rp_engine.api.routes_story.expand_story",
         return_value="The ridge gave way to a vast frozen valley.",
     ):
         story_res = client.post(
