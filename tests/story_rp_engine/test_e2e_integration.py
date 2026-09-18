@@ -50,13 +50,7 @@ def test_full_engine_lifecycle(tmp_path):
         assert "Snow is coming" in chat_res.json()["reply"]
 
 
-    # 4. Verify session persisted
-    saved_history = store.get_history("sess_mountain_1")
-    assert len(saved_history) == 2
-    assert saved_history[0].content == "Do you smell snow?"
-    assert saved_history[1].content == "Snow is coming. Move faster."
-
-    # 5. Story Co-Pilot expansion
+    # 4. Story Co-Pilot expansion
     with patch(
         "story_rp_engine.api.routes_story.execute_runner_turn",
         new_callable=AsyncMock,

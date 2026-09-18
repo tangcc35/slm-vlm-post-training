@@ -7,6 +7,7 @@ from story_rp_engine.core.agent_utils import (
     stream_runner_turn,
 )
 from story_rp_engine.core.types import CharacterCardV2
+from story_rp_engine.storage.store import _sanitize_key
 
 router = APIRouter(prefix="/api/v1", tags=["Roleplay"])
 
@@ -53,6 +54,7 @@ async def chat_rp(req: RPChatRequest, request: Request):
     registry = request.app.state.agent_registry
 
     try:
+        _sanitize_key(req.session_id)
         runner = registry.get_or_create_rp_runner(req.char_id)
     except ValueError as e:
         if "not found" in str(e).lower():
@@ -75,6 +77,7 @@ async def chat_rp_stream(req: RPChatRequest, request: Request):
     registry = request.app.state.agent_registry
 
     try:
+        _sanitize_key(req.session_id)
         runner = registry.get_or_create_rp_runner(req.char_id)
     except ValueError as e:
         if "not found" in str(e).lower():

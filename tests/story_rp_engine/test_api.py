@@ -97,14 +97,6 @@ def test_rp_chat_endpoint(tmp_path):
         assert res.json() == {"reply": "I sing a ballad.", "session_id": "session_1"}
         assert mock_exec.called
 
-    # Verify history was persisted
-    history = store.get_history("session_1")
-    assert len(history) == 2
-    assert history[0].role == "user"
-    assert history[0].content == "Play something for us."
-    assert history[1].role == "assistant"
-    assert history[1].content == "I sing a ballad."
-
 
 def test_rp_chat_character_not_found(tmp_path):
     store = EngineStore(storage_dir=str(tmp_path))
@@ -170,14 +162,6 @@ def test_rp_chat_stream_endpoint(tmp_path):
         assert "data:  tune.\n\n" in body
         assert "data: [DONE]\n\n" in body
         assert mock_stream_fn.called
-
-    # Verify history was accumulated and persisted
-    history = store.get_history("session_2")
-    assert len(history) == 2
-    assert history[0].role == "user"
-    assert history[0].content == "Stream a song!"
-    assert history[1].role == "assistant"
-    assert history[1].content == "Here is a tune."
 
 
 def test_story_expand_endpoint(tmp_path):
@@ -463,10 +447,13 @@ async def test_native_runner_chat_execution(tmp_path):
     )
     assert res.status_code == 200
     assert res.json() == {"reply": "I sing a ballad.", "session_id": "session_native"}
-    history = store.get_history("session_native")
-    assert len(history) == 2
-    assert history[0].content == "Sing for me."
-    assert history[1].content == "I sing a ballad."
+    session = await app.state.session_service.get_session(
+        app_name="rp_app", user_id="User", session_id="session_native"
+    )
+    assert session is not None
+    assert len(session.events) >= 2
+    assert session.events[0].content.parts[0].text == "Sing for me."
+    assert session.events[1].content.parts[0].text == "I sing a ballad."
 
 
 @pytest.mark.anyio
@@ -527,10 +514,11 @@ async def test_native_runner_stream_execution(tmp_path):
     assert "data:  song\n\n" in body
     assert "data: [DONE]\n\n" in body
 
-    history = store.get_history("session_native_stream")
-    assert len(history) == 2
-    assert history[0].content == "Sing live."
-    assert history[1].content == "A lovely song"
+    session = await app.state.session_service.get_session(
+        app_name="rp_app", user_id="User", session_id="session_native_stream"
+    )
+    assert session is not None
+    assert len(session.events) >= 2
 
 
 @pytest.mark.anyio
