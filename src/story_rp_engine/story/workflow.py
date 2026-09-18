@@ -1,7 +1,4 @@
-from typing import Tuple
 from google.adk import Workflow
-from google.adk.agents import LlmAgent
-from story_rp_engine.core.agent_utils import extract_agent_response_text
 from story_rp_engine.core.config import EngineConfig
 from story_rp_engine.core.types import StoryRequest
 from story_rp_engine.story.director_agent import create_director_agent
@@ -34,53 +31,4 @@ def create_story_workflow(config: EngineConfig) -> Workflow:
             ("START", director, writer)
         ],
     )
-
-
-def build_director_prompt(request: StoryRequest) -> str:
-    """Deprecated: Builds the scene framing instruction prompt for the Director.
-
-    In ADK 2.0, use `format_story_input` with declarative `create_story_workflow` instead.
-    """
-    return (
-        f"Premise: {request.premise or 'Not specified'}\n"
-        f"Genre: {request.genre}\n"
-        f"Tone: {request.tone}\n"
-        f"Current Text:\n{request.current_text}\n\n"
-        f"User Instruction: {request.instruction}\n"
-        "Provide brief scene framing and narrative guidance for the writer."
-    )
-
-
-def build_writer_prompt(request: StoryRequest, framing: str) -> str:
-    """Deprecated: Builds the continuation prompt for the Writer including Director guidance.
-
-    In ADK 2.0, use declarative `create_story_workflow` instead.
-    """
-    return (
-        f"Genre: {request.genre}\n"
-        f"Tone: {request.tone}\n"
-        f"Director's Guidance: {framing}\n"
-        f"User Instruction: {request.instruction}\n\n"
-        f"Current Story:\n{request.current_text}\n\n"
-        "Write the next prose passage continuing the story:"
-    )
-
-
-def prepare_story_expansion(
-    request: StoryRequest, config: EngineConfig
-) -> Tuple[LlmAgent, str]:
-    """Deprecated: Executes the Director framing step and returns Writer agent and continuation prompt.
-
-    In ADK 2.0, use `create_story_workflow` and `format_story_input` with ADK Runner instead.
-    """
-    director = create_director_agent(config)
-    writer = create_writer_agent(config)
-
-    # Step 1: Director plans scene framing
-    director_prompt = build_director_prompt(request)
-    framing = extract_agent_response_text(director.invoke(director_prompt))
-
-    # Step 2: Writer continuation prompt
-    writer_prompt = build_writer_prompt(request, framing)
-    return writer, writer_prompt
 

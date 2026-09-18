@@ -4,7 +4,7 @@ from google.genai import types
 from google.adk.models import LlmRequest
 from google.adk.agents.callback_context import CallbackContext
 from story_rp_engine.core.types import Lorebook, LorebookEntry
-from story_rp_engine.rp.callbacks import create_rp_before_model_callback, rp_before_model_callback
+from story_rp_engine.rp.callbacks import rp_before_model_callback
 
 
 def test_before_model_callback_injects_lore_and_authors_note():
@@ -14,10 +14,11 @@ def test_before_model_callback_injects_lore_and_authors_note():
             LorebookEntry(keys=["sword"], content="Excalibur is a legendary blade."),
         ],
     )
-    cb = create_rp_before_model_callback(lorebook=lore)
-
     mock_context = MagicMock(spec=CallbackContext)
-    mock_context.state = {"authors_note": "Tone: mysterious"}
+    mock_context.state = {
+        "lorebook": lore,
+        "authors_note": "Tone: mysterious",
+    }
 
     request = LlmRequest(
         model="test-model",
@@ -30,17 +31,16 @@ def test_before_model_callback_injects_lore_and_authors_note():
         config=types.GenerateContentConfig(system_instruction="Base character prompt.")
     )
 
-    res = cb(mock_context, request)
+    res = rp_before_model_callback(mock_context, request)
     assert res is None  # Allow generation to proceed
 
-    # Verify lore and author's note were injected into system_instruction or dynamic instruction
+    # Verify lore and author's note were injected into system_instruction
     instruction = str(request.config.system_instruction)
     assert "Excalibur is a legendary blade." in instruction
     assert "Tone: mysterious" in instruction
 
 
 def test_before_model_callback_no_lorebook_and_no_state():
-    cb = create_rp_before_model_callback(lorebook=None)
     mock_context = MagicMock(spec=CallbackContext)
     mock_context.state = {}
 
@@ -55,7 +55,7 @@ def test_before_model_callback_no_lorebook_and_no_state():
         config=types.GenerateContentConfig(system_instruction="Base prompt")
     )
 
-    res = cb(mock_context, request)
+    res = rp_before_model_callback(mock_context, request)
     assert res is None
     assert request.config.system_instruction == "Base prompt"
 
@@ -67,9 +67,8 @@ def test_before_model_callback_lore_only_without_authors_note():
             LorebookEntry(keys=["hyperdrive"], content="Hyperdrive allows FTL travel."),
         ],
     )
-    cb = create_rp_before_model_callback(lorebook=lore)
     mock_context = MagicMock(spec=CallbackContext)
-    mock_context.state = {}
+    mock_context.state = {"lorebook": lore}
 
     request = LlmRequest(
         model="test-model",
@@ -82,7 +81,7 @@ def test_before_model_callback_lore_only_without_authors_note():
         config=types.GenerateContentConfig(system_instruction="Base prompt")
     )
 
-    res = cb(mock_context, request)
+    res = rp_before_model_callback(mock_context, request)
     assert res is None
     instruction = str(request.config.system_instruction)
     assert "Hyperdrive allows FTL travel." in instruction
@@ -90,7 +89,6 @@ def test_before_model_callback_lore_only_without_authors_note():
 
 
 def test_before_model_callback_authors_note_only_without_lore():
-    cb = create_rp_before_model_callback(lorebook=None)
     mock_context = MagicMock(spec=CallbackContext)
     mock_context.state = {"authors_note": "Keep replies under 2 sentences."}
 
@@ -105,7 +103,7 @@ def test_before_model_callback_authors_note_only_without_lore():
         config=types.GenerateContentConfig(system_instruction="Base prompt")
     )
 
-    res = cb(mock_context, request)
+    res = rp_before_model_callback(mock_context, request)
     assert res is None
     instruction = str(request.config.system_instruction)
     assert "Keep replies under 2 sentences." in instruction
@@ -113,7 +111,6 @@ def test_before_model_callback_authors_note_only_without_lore():
 
 
 def test_before_model_callback_default_config_no_system_instruction():
-    cb = create_rp_before_model_callback(lorebook=None)
     mock_context = MagicMock(spec=CallbackContext)
     mock_context.state = {"authors_note": "Tone: dark"}
 
@@ -127,7 +124,7 @@ def test_before_model_callback_default_config_no_system_instruction():
         ]
     )
 
-    res = cb(mock_context, request)
+    res = rp_before_model_callback(mock_context, request)
     assert res is None
     assert request.config is not None
     assert "Tone: dark" in str(request.config.system_instruction)
@@ -162,4 +159,3 @@ def test_rp_before_model_callback_direct_session_state():
     instruction = str(request.config.system_instruction)
     assert "Dragons breathe fire." in instruction
     assert "Focus on combat tension." in instruction
-

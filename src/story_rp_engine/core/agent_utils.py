@@ -1,4 +1,4 @@
-from typing import Any, AsyncIterator, Iterator, Optional
+from typing import Any, AsyncIterator, Optional
 from google.adk.agents.run_config import RunConfig, StreamingMode
 from google.adk.runners import Runner
 from google.genai import types
@@ -95,38 +95,3 @@ async def stream_runner_turn(
                 words = text.split(" ")
                 for i, w in enumerate(words):
                     yield w if i == 0 else " " + w
-
-
-def extract_agent_response_text(response: Any) -> str:
-    """Extracts cleaned string response from an agent invocation."""
-    if response is None:
-        return ""
-    if hasattr(response, "text"):
-        return str(response.text).strip() if response.text is not None else ""
-    return str(response).strip()
-
-
-def stream_agent_response(agent: Any, prompt: str) -> Iterator[str]:
-    """Streams tokens/chunks from an agent for backward compatibility."""
-    if hasattr(agent, "stream") and callable(agent.stream):
-        try:
-            chunks = list(agent.stream(prompt))
-            if chunks:
-                for chunk in chunks:
-                    yield str(chunk)
-                return
-        except Exception:
-            pass
-
-    if hasattr(agent, "invoke") and callable(getattr(agent, "invoke")):
-        resp = agent.invoke(prompt)
-        if resp is None:
-            return
-        if isinstance(resp, (list, tuple)):
-            for item in resp:
-                yield str(item)
-            return
-        text = getattr(resp, "text", str(resp))
-        words = text.split(" ")
-        for i, w in enumerate(words):
-            yield w if i == 0 else " " + w

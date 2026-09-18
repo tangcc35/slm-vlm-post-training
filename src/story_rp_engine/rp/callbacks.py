@@ -1,4 +1,4 @@
-from typing import Callable, Optional
+from typing import Optional
 from google.adk.agents.callback_context import CallbackContext
 from google.adk.models import LlmRequest, LlmResponse
 from google.genai import types
@@ -53,19 +53,3 @@ def rp_before_model_callback(
         llm_request.config.system_instruction = new_instruction
 
     return None
-
-
-def create_rp_before_model_callback(
-    lorebook: Optional[Lorebook] = None,
-) -> Callable[[CallbackContext, LlmRequest], Optional[LlmResponse]]:
-    """Deprecated compatibility factory. Use `rp_before_model_callback` directly."""
-    if lorebook is None:
-        return rp_before_model_callback
-
-    def wrapped_callback(callback_context: CallbackContext, llm_request: LlmRequest) -> Optional[LlmResponse]:
-        if callback_context is not None and getattr(callback_context, "state", None) is not None:
-            if "lorebook" not in callback_context.state:
-                callback_context.state["lorebook"] = lorebook
-        return rp_before_model_callback(callback_context, llm_request)
-
-    return wrapped_callback
