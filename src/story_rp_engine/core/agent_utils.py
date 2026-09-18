@@ -108,24 +108,21 @@ def extract_agent_response_text(response: Any) -> str:
 
 def stream_agent_response(agent: Any, prompt: str) -> Iterator[str]:
     """Streams tokens/chunks from an agent for backward compatibility."""
-    stream_fn = getattr(agent, "stream", None)
-    if stream_fn and callable(stream_fn) and type(stream_fn).__name__ not in ("Mock", "MagicMock"):
-        stream_gen = stream_fn(prompt)
-        if stream_gen is not None:
-            for chunk in stream_gen:
-                if chunk:
+    if hasattr(agent, "stream") and callable(agent.stream):
+        try:
+            chunks = list(agent.stream(prompt))
+            if chunks:
+                for chunk in chunks:
                     yield str(chunk)
-            return
+                return
+        except Exception:
+            pass
 
     if hasattr(agent, "invoke") and callable(getattr(agent, "invoke")):
         resp = agent.invoke(prompt)
         if resp is None:
             return
-        if (
-            hasattr(resp, "__iter__")
-            and not isinstance(resp, (str, bytes, dict))
-            and type(resp).__name__ not in ("Mock", "MagicMock")
-        ):
+        if isinstance(resp, (list, tuple)):
             for item in resp:
                 yield str(item)
             return
