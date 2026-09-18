@@ -6,7 +6,7 @@ from story_rp_engine.core.agent_utils import (
     execute_runner_turn,
     stream_runner_turn,
 )
-from story_rp_engine.core.types import CharacterCardV2, ChatMessage
+from story_rp_engine.core.types import CharacterCardV2
 
 router = APIRouter(prefix="/api/v1", tags=["Roleplay"])
 
@@ -50,11 +50,9 @@ def get_character(char_id: str, request: Request):
 
 @router.post("/rp/chat")
 async def chat_rp(req: RPChatRequest, request: Request):
-    store = request.app.state.store
     registry = request.app.state.agent_registry
 
     try:
-        history = store.get_history(req.session_id)
         runner = registry.get_or_create_rp_runner(req.char_id)
     except ValueError as e:
         if "not found" in str(e).lower():
@@ -69,25 +67,14 @@ async def chat_rp(req: RPChatRequest, request: Request):
         state_delta={"authors_note": req.authors_note},
     )
 
-    updated_history = history + [
-        ChatMessage(role="user", content=req.message),
-        ChatMessage(role="assistant", content=reply),
-    ]
-    try:
-        store.save_history(req.session_id, updated_history)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-
     return {"reply": reply, "session_id": req.session_id}
 
 
 @router.post("/rp/chat/stream")
 async def chat_rp_stream(req: RPChatRequest, request: Request):
-    store = request.app.state.store
     registry = request.app.state.agent_registry
 
     try:
-        history = store.get_history(req.session_id)
         runner = registry.get_or_create_rp_runner(req.char_id)
     except ValueError as e:
         if "not found" in str(e).lower():
@@ -102,23 +89,9 @@ async def chat_rp_stream(req: RPChatRequest, request: Request):
         state_delta={"authors_note": req.authors_note},
     )
 
-    accumulated_chunks = []
-
     async def event_stream():
-        try:
-            async for chunk in generator:
-                accumulated_chunks.append(chunk)
-                yield f"data: {chunk}\n\n"
-        finally:
-            complete_reply = "".join(accumulated_chunks).strip()
-            updated_history = history + [
-                ChatMessage(role="user", content=req.message),
-                ChatMessage(role="assistant", content=complete_reply),
-            ]
-            try:
-                store.save_history(req.session_id, updated_history)
-            except ValueError:
-                pass
+        async for chunk in generator:
+            yield f"data: {chunk}\n\n"
         yield "data: [DONE]\n\n"
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
