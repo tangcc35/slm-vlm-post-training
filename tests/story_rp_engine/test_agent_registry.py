@@ -83,3 +83,69 @@ def test_agent_registry_story_workflow_lifecycle(tmp_path):
     wf = Workflow(name="custom_workflow")
     registry.register_story_workflow(wf)
     assert registry.get_story_workflow() is wf
+
+
+def test_agent_registry_rp_runner_caching(tmp_path):
+    store = EngineStore(storage_dir=str(tmp_path))
+    config = EngineConfig(model_name="ollama/llama3.1:8b")
+    registry = AgentRegistry(config=config, store=store)
+
+    card = CharacterCardV2(
+        data=CharacterCardV2Data(
+            name="Seraphina",
+            description="High Priestess",
+            personality="Serene",
+            scenario="Temple",
+            first_mes="Blessings upon you.",
+            mes_example="",
+        )
+    )
+    store.save_character("seraphina", card)
+
+    runner1 = registry.get_or_create_rp_runner("seraphina")
+    assert runner1 is not None
+    assert runner1.app_name == "rp_app"
+
+    # Second call returns the exact same cached runner instance
+    runner2 = registry.get_or_create_rp_runner("seraphina")
+    assert runner1 is runner2
+
+
+def test_agent_registry_story_runner_caching(tmp_path):
+    store = EngineStore(storage_dir=str(tmp_path))
+    config = EngineConfig(model_name="ollama/llama3.1:8b")
+    registry = AgentRegistry(config=config, store=store)
+
+    runner1 = registry.get_story_runner()
+    assert runner1 is not None
+    assert runner1.app_name == "story_app"
+
+    # Second call returns the exact same cached runner instance
+    runner2 = registry.get_story_runner()
+    assert runner1 is runner2
+
+
+def test_agent_registry_register_rp_agent_invalidates_runner(tmp_path):
+    store = EngineStore(storage_dir=str(tmp_path))
+    config = EngineConfig(model_name="ollama/llama3.1:8b")
+    registry = AgentRegistry(config=config, store=store)
+
+    card = CharacterCardV2(
+        data=CharacterCardV2Data(
+            name="Seraphina",
+            description="Priestess",
+            personality="Serene",
+            scenario="Temple",
+            first_mes="Blessings.",
+            mes_example="",
+        )
+    )
+    store.save_character("seraphina", card)
+
+    runner1 = registry.get_or_create_rp_runner("seraphina")
+    new_agent = LlmAgent(name="rp_seraphina_v2")
+    registry.register_rp_agent("seraphina", new_agent)
+
+    runner2 = registry.get_or_create_rp_runner("seraphina")
+    assert runner1 is not runner2
+    assert runner2.agent is new_agent

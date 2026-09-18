@@ -16,14 +16,18 @@ router = APIRouter(prefix="/api/v1/story", tags=["Story Co-Pilot"])
 async def expand_story_endpoint(req: StoryRequest, request: Request):
     runner = getattr(request.app.state, "runner", None)
     if runner is None:
-        session_service = request.app.state.store.session_service
-        workflow = request.app.state.agent_registry.get_story_workflow()
-        runner = Runner(
-            agent=workflow,
-            session_service=session_service,
-            app_name="story_app",
-            auto_create_session=True,
-        )
+        registry = getattr(request.app.state, "agent_registry", None)
+        if registry is not None:
+            runner = registry.get_story_runner()
+        else:
+            session_service = request.app.state.store.session_service
+            workflow = request.app.state.agent_registry.get_story_workflow()
+            runner = Runner(
+                agent=workflow,
+                session_service=session_service,
+                app_name="story_app",
+                auto_create_session=True,
+            )
     prompt = format_story_input(req)
     expansion = await execute_runner_turn(
         runner,
@@ -38,14 +42,18 @@ async def expand_story_endpoint(req: StoryRequest, request: Request):
 async def expand_story_stream(req: StoryRequest, request: Request):
     runner = getattr(request.app.state, "runner", None)
     if runner is None:
-        session_service = request.app.state.store.session_service
-        workflow = request.app.state.agent_registry.get_story_workflow()
-        runner = Runner(
-            agent=workflow,
-            session_service=session_service,
-            app_name="story_app",
-            auto_create_session=True,
-        )
+        registry = getattr(request.app.state, "agent_registry", None)
+        if registry is not None:
+            runner = registry.get_story_runner()
+        else:
+            session_service = request.app.state.store.session_service
+            workflow = request.app.state.agent_registry.get_story_workflow()
+            runner = Runner(
+                agent=workflow,
+                session_service=session_service,
+                app_name="story_app",
+                auto_create_session=True,
+            )
     prompt = format_story_input(req)
     generator = stream_runner_turn(
         runner,

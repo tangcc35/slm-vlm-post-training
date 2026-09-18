@@ -1,7 +1,6 @@
 from typing import Optional
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
-from google.adk import Runner
 from pydantic import BaseModel
 from story_rp_engine.core.agent_utils import (
     execute_runner_turn,
@@ -52,23 +51,15 @@ def get_character(char_id: str, request: Request):
 @router.post("/rp/chat")
 async def chat_rp(req: RPChatRequest, request: Request):
     store = request.app.state.store
-    session_service = request.app.state.session_service
     registry = request.app.state.agent_registry
 
     try:
         history = store.get_history(req.session_id)
-        agent = registry.get_or_create_rp_agent(req.char_id)
+        runner = registry.get_or_create_rp_runner(req.char_id)
     except ValueError as e:
         if "not found" in str(e).lower():
             raise HTTPException(status_code=404, detail="Character not found")
         raise HTTPException(status_code=400, detail=str(e))
-
-    runner = Runner(
-        agent=agent,
-        session_service=session_service,
-        app_name="rp_app",
-        auto_create_session=True,
-    )
 
     reply = await execute_runner_turn(
         runner,
@@ -93,23 +84,15 @@ async def chat_rp(req: RPChatRequest, request: Request):
 @router.post("/rp/chat/stream")
 async def chat_rp_stream(req: RPChatRequest, request: Request):
     store = request.app.state.store
-    session_service = request.app.state.session_service
     registry = request.app.state.agent_registry
 
     try:
         history = store.get_history(req.session_id)
-        agent = registry.get_or_create_rp_agent(req.char_id)
+        runner = registry.get_or_create_rp_runner(req.char_id)
     except ValueError as e:
         if "not found" in str(e).lower():
             raise HTTPException(status_code=404, detail="Character not found")
         raise HTTPException(status_code=400, detail=str(e))
-
-    runner = Runner(
-        agent=agent,
-        session_service=session_service,
-        app_name="rp_app",
-        auto_create_session=True,
-    )
 
     generator = stream_runner_turn(
         runner,
