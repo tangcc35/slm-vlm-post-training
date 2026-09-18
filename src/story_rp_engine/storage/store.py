@@ -24,6 +24,7 @@ class EngineStore:
         self.storage_dir = storage_dir
         self.char_dir = os.path.join(storage_dir, "characters")
         self.lorebooks_dir = os.path.join(storage_dir, "lorebooks")
+        os.makedirs(self.storage_dir, exist_ok=True)
         os.makedirs(self.char_dir, exist_ok=True)
         os.makedirs(self.lorebooks_dir, exist_ok=True)
 

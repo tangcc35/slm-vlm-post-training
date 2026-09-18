@@ -30,3 +30,11 @@ class EngineConfig(BaseModel):
         ge=1,
         le=8192,
     )
+    storage_dir: str = Field(
+        default_factory=lambda: os.getenv("STORY_RP_STORAGE_DIR", ".engine_data"),
+        description="Directory for local storage (characters, lorebooks, sessions)",
+    )
+    db_url: Optional[str] = Field(
+        default_factory=lambda: os.getenv("STORY_RP_DB_URL"),
+        description="Database connection URL for ADK DatabaseSessionService",
+    )

@@ -22,8 +22,11 @@ def create_app(
         allow_headers=["*"],
     )
 
-    resolved_store = store or EngineStore()
     resolved_config = config or EngineConfig()
+    resolved_store = store or EngineStore(
+        storage_dir=resolved_config.storage_dir,
+        db_url=resolved_config.db_url,
+    )
 
     app.state.store = resolved_store
     app.state.config = resolved_config
