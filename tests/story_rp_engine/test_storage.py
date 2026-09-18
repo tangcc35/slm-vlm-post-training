@@ -169,6 +169,7 @@ async def test_database_session_service_default(tmp_path):
     )
     assert fetched is not None
     assert fetched.id == "sess_1"
+    assert (tmp_path / "sessions.db").is_file()
 
 
 @pytest.mark.anyio
@@ -183,3 +184,5 @@ async def test_database_session_service_custom_url(tmp_path):
         app_name="test_app", user_id="User", session_id="sess_custom"
     )
     assert session.id == "sess_custom"
+    assert db_file.is_file()
+
