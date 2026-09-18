@@ -37,7 +37,10 @@ def create_story_workflow(config: EngineConfig) -> Workflow:
 
 
 def build_director_prompt(request: StoryRequest) -> str:
-    """Builds the scene framing instruction prompt for the Director."""
+    """Deprecated: Builds the scene framing instruction prompt for the Director.
+
+    In ADK 2.0, use `format_story_input` with declarative `create_story_workflow` instead.
+    """
     return (
         f"Premise: {request.premise or 'Not specified'}\n"
         f"Genre: {request.genre}\n"
@@ -49,7 +52,10 @@ def build_director_prompt(request: StoryRequest) -> str:
 
 
 def build_writer_prompt(request: StoryRequest, framing: str) -> str:
-    """Builds the continuation prompt for the Writer including Director guidance."""
+    """Deprecated: Builds the continuation prompt for the Writer including Director guidance.
+
+    In ADK 2.0, use declarative `create_story_workflow` instead.
+    """
     return (
         f"Genre: {request.genre}\n"
         f"Tone: {request.tone}\n"
@@ -63,7 +69,10 @@ def build_writer_prompt(request: StoryRequest, framing: str) -> str:
 def prepare_story_expansion(
     request: StoryRequest, config: EngineConfig
 ) -> Tuple[LlmAgent, str]:
-    """Executes the Director framing step and returns the Writer agent and continuation prompt."""
+    """Deprecated: Executes the Director framing step and returns Writer agent and continuation prompt.
+
+    In ADK 2.0, use `create_story_workflow` and `format_story_input` with ADK Runner instead.
+    """
     director = create_director_agent(config)
     writer = create_writer_agent(config)
 

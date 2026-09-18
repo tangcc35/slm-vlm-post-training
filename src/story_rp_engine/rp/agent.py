@@ -18,7 +18,12 @@ def create_rp_agent(
     user_name: str = "User",
     active_lore: Optional[List[LorebookEntry]] = None,
 ) -> LlmAgent:
-    """Creates a Google ADK LlmAgent configured for character roleplay."""
+    """Creates a Google ADK LlmAgent configured for character roleplay.
+
+    Note: `lorebook` and `active_lore` are retained for backward-compatibility.
+    In ADK 2.0, dynamic lore retrieval is performed per turn via `rp_before_model_callback`
+    using lorebooks stored in the session state.
+    """
     model = get_adk_model(config)
     instruction = build_rp_system_instruction(card, active_lore=None, user_name=user_name)
     sanitized_name = re.sub(r"[^a-zA-Z0-9_]", "_", card.data.name.lower()).strip("_")
@@ -38,7 +43,10 @@ def build_rp_turn_prompt(
     depth: int = 2,
     max_turns: int = 20,
 ) -> str:
-    """Assembles chat history and steering note into a formatted conversation prompt."""
+    """Deprecated: Assembles chat history and steering note into a formatted conversation prompt.
+
+    In ADK 2.0, conversation turns are managed natively as Content parts by Runner.run_async().
+    """
     all_messages = history + [ChatMessage(role="user", content=user_input)]
     assembled = assemble_history_with_steering(
         all_messages,

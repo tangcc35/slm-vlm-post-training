@@ -48,7 +48,11 @@ def assemble_history_with_steering(
     depth: int = 2,
     max_turns: int = 20,
 ) -> List[Dict[str, str]]:
-    """Takes recent turns and injects an Author's Note steering directive at a given depth from the end."""
+    """Deprecated: Injects an Author's Note steering directive into a raw message list.
+
+    In ADK 2.0, narrative steering is handled dynamically before model calls via
+    `rp_before_model_callback` using `callback_context.state['authors_note']`.
+    """
     truncated = messages[-max_turns:] if max_turns > 0 else []
     history = [{"role": msg.role, "content": msg.content} for msg in truncated]
 
