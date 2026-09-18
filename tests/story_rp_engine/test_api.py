@@ -572,5 +572,43 @@ async def test_native_runner_story_execution(tmp_path):
     assert res.json() == {"expansion": "writer narrative"}
 
 
+def test_story_expand_without_registry_errors(tmp_path):
+    store = EngineStore(storage_dir=str(tmp_path))
+    app = create_app(store=store, config=EngineConfig())
+    app.state.runner = None
+    app.state.agent_registry = None
+    client = TestClient(app, raise_server_exceptions=False)
+
+    res = client.post(
+        "/api/v1/story/expand",
+        json={
+            "premise": "A journey north.",
+            "current_text": "The wind howled.",
+            "instruction": "Describe the frost.",
+        },
+    )
+    assert res.status_code == 500
+    assert "agent registry not initialized" in res.json()["detail"].lower()
+
+
+def test_story_expand_stream_without_registry_errors(tmp_path):
+    store = EngineStore(storage_dir=str(tmp_path))
+    app = create_app(store=store, config=EngineConfig())
+    app.state.runner = None
+    app.state.agent_registry = None
+    client = TestClient(app, raise_server_exceptions=False)
+
+    res = client.post(
+        "/api/v1/story/expand/stream",
+        json={
+            "premise": "A journey north.",
+            "current_text": "The wind howled.",
+            "instruction": "Describe the frost.",
+        },
+    )
+    assert res.status_code == 500
+    assert "agent registry not initialized" in res.json()["detail"].lower()
+
+
 
 
