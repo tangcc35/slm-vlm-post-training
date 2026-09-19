@@ -7,7 +7,6 @@ from story_rp_engine.core.agent_utils import (
     stream_runner_turn,
 )
 from story_rp_engine.core.types import StoryRequest
-from story_rp_engine.story.workflow import format_story_input
 
 router = APIRouter(prefix="/api/v1/story", tags=["Story Co-Pilot"])
 
@@ -27,12 +26,20 @@ def _get_story_runner(request: Request) -> Runner:
 @router.post("/expand")
 async def expand_story_endpoint(req: StoryRequest, request: Request):
     runner = _get_story_runner(request)
-    prompt = format_story_input(req)
+    state_delta = {
+        "premise": req.premise or "Not specified",
+        "genre": req.genre or "Fiction",
+        "tone": req.tone or "Balanced",
+        "current_text": req.current_text or "",
+        "instruction": req.instruction or "Continue the story naturally from the current point.",
+    }
+    user_instruction = req.instruction or "Continue the story naturally from the current point."
     expansion = await execute_runner_turn(
         runner,
         user_id="User",
         session_id=f"story_{uuid.uuid4().hex}",
-        message=prompt,
+        message=user_instruction,
+        state_delta=state_delta,
     )
     return {"expansion": expansion}
 
@@ -40,12 +47,20 @@ async def expand_story_endpoint(req: StoryRequest, request: Request):
 @router.post("/expand/stream")
 async def expand_story_stream(req: StoryRequest, request: Request):
     runner = _get_story_runner(request)
-    prompt = format_story_input(req)
+    state_delta = {
+        "premise": req.premise or "Not specified",
+        "genre": req.genre or "Fiction",
+        "tone": req.tone or "Balanced",
+        "current_text": req.current_text or "",
+        "instruction": req.instruction or "Continue the story naturally from the current point.",
+    }
+    user_instruction = req.instruction or "Continue the story naturally from the current point."
     generator = stream_runner_turn(
         runner,
         user_id="User",
         session_id=f"story_{uuid.uuid4().hex}",
-        message=prompt,
+        message=user_instruction,
+        state_delta=state_delta,
     )
 
     async def event_stream():

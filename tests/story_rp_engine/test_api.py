@@ -185,6 +185,11 @@ def test_story_expand_endpoint(tmp_path):
         assert res.status_code == 200
         assert res.json() == {"expansion": "The ship docked at dawn."}
         assert mock_exec.called
+        call_kwargs = mock_exec.call_args.kwargs
+        assert call_kwargs["message"] == "Describe docking."
+        assert call_kwargs["state_delta"]["premise"] == "A voyage across the sea."
+        assert call_kwargs["state_delta"]["current_text"] == "The waves were calm."
+        assert call_kwargs["state_delta"]["instruction"] == "Describe docking."
 
 
 def test_story_expand_stream_endpoint(tmp_path):
@@ -219,6 +224,11 @@ def test_story_expand_stream_endpoint(tmp_path):
         assert "data:  horizon.\n\n" in body
         assert "data: [DONE]\n\n" in body
         assert mock_stream_fn.called
+        call_kwargs = mock_stream_fn.call_args.kwargs
+        assert call_kwargs["message"] == "Describe the sun."
+        assert call_kwargs["state_delta"]["premise"] == "Dawn at sea."
+        assert call_kwargs["state_delta"]["current_text"] == "Morning came."
+        assert call_kwargs["state_delta"]["instruction"] == "Describe the sun."
 
 
 def test_rp_chat_authors_note_and_custom_user(tmp_path):
@@ -530,11 +540,13 @@ async def test_native_runner_story_execution(tmp_path):
     from google.adk.models.llm_response import LlmResponse
     from google.genai import types
 
+    captured = {}
     class MockStoryLlm(BaseLlm):
         model: str = "mock"
         prefix: str = ""
 
         async def generate_content_async(self, llm_request, stream=False):
+            captured[self.prefix] = llm_request.config.system_instruction
             yield LlmResponse(
                 partial=False,
                 content=types.Content(parts=[types.Part.from_text(text=f"{self.prefix} narrative")]),
@@ -558,6 +570,10 @@ async def test_native_runner_story_execution(tmp_path):
     )
     assert res.status_code == 200
     assert res.json() == {"expansion": "writer narrative"}
+    assert "Premise: A journey north." in captured["director"]
+    assert "The wind howled." in captured["director"]
+    assert "A journey north." in captured["writer"]
+    assert "The wind howled." in captured["writer"]
 
 
 def test_story_expand_without_registry_errors(tmp_path):
