@@ -31,9 +31,9 @@ async def expand_story_endpoint(req: StoryRequest, request: Request):
         "genre": req.genre or "Fiction",
         "tone": req.tone or "Balanced",
         "current_text": req.current_text or "",
-        "instruction": req.instruction or "Continue the story naturally from the current point.",
+        "instruction": req.instruction or "Expand the story based on the context.",
     }
-    user_instruction = req.instruction or "Continue the story naturally from the current point."
+    user_instruction = req.instruction or "Expand the story based on the context."
     expansion = await execute_runner_turn(
         runner,
         user_id="User",
@@ -52,9 +52,9 @@ async def expand_story_stream(req: StoryRequest, request: Request):
         "genre": req.genre or "Fiction",
         "tone": req.tone or "Balanced",
         "current_text": req.current_text or "",
-        "instruction": req.instruction or "Continue the story naturally from the current point.",
+        "instruction": req.instruction or "Expand the story based on the context.",
     }
-    user_instruction = req.instruction or "Continue the story naturally from the current point."
+    user_instruction = req.instruction or "Expand the story based on the context."
     generator = stream_runner_turn(
         runner,
         user_id="User",
