@@ -42,4 +42,4 @@ class StoryRequest(BaseModel):
     instruction: Optional[str] = "Continue the story naturally from the current point."
     genre: Optional[str] = "Fiction"
     tone: Optional[str] = "Balanced"
-    max_tokens: int = Field(default=512, ge=1, le=4096)
+    max_tokens: int = Field(default=512, ge=1, le=131072)

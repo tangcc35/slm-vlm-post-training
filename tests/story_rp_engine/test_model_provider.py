@@ -42,6 +42,19 @@ def test_get_adk_model_openai_compat(monkeypatch):
     assert os.environ.get("OPENAI_API_KEY") == "custom-key"
 
 
+def test_get_adk_model_openai_compat_defaults_local_key(monkeypatch):
+    monkeypatch.delenv("LITELLM_API_BASE", raising=False)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    config = EngineConfig(
+        model_name="openai/qwen3.5-2b",
+        api_base="http://localhost:8001/v1",
+    )
+    model = get_adk_model(config)
+    assert isinstance(model, LiteLlm)
+    assert getattr(model, "model", None) == "openai/qwen3.5-2b" or getattr(model, "model_name", None) == "openai/qwen3.5-2b"
+    assert os.environ.get("OPENAI_API_KEY") == "local"
+
+
 def test_get_adk_model_defaults(monkeypatch):
     monkeypatch.delenv("LITELLM_API_BASE", raising=False)
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
