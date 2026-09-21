@@ -2,8 +2,10 @@ import logging
 import os
 from contextlib import asynccontextmanager
 from typing import AsyncIterator, Optional
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, status
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from story_rp_engine.api.routes_rp import router as rp_router
 from story_rp_engine.api.routes_story import router as story_router
 from story_rp_engine.core.agent_registry import AgentRegistry
@@ -57,6 +59,38 @@ def create_app(
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    @app.exception_handler(RequestValidationError)
+    async def validation_exception_handler(request: Request, exc: RequestValidationError):
+        missing_fields = []
+        seen_missing = set()
+        other_errors = []
+
+        for err in exc.errors():
+            field_name = str(err["loc"][-1]) if err.get("loc") else "unknown"
+            if err.get("type") == "missing":
+                if field_name not in seen_missing:
+                    seen_missing.add(field_name)
+                    missing_fields.append(field_name)
+            else:
+                other_errors.append(f"{field_name}: {err.get('msg')}")
+
+        messages = []
+        if missing_fields:
+            messages.append(f"Missing required fields: {', '.join(missing_fields)}")
+        if other_errors:
+            messages.append(f"Invalid fields: {'; '.join(other_errors)}")
+
+        error_msg = " | ".join(messages) if messages else "Invalid request payload"
+
+        return JSONResponse(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            content={
+                "error": error_msg,
+                "detail": error_msg,
+                "missing_fields": missing_fields,
+            },
+        )
 
     resolved_config = config or EngineConfig()
     resolved_store = store or EngineStore(

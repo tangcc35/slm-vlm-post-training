@@ -241,7 +241,24 @@ def test_story_expand_endpoint_missing_session_id_fails(tmp_path):
             "current_text": "Tick tock.",
         },
     )
-    assert res.status_code == 422
+    assert res.status_code == 400
+    data = res.json()
+    assert "Missing required fields: session_id" in data["error"]
+    assert "session_id" in data["missing_fields"]
+
+
+def test_validation_multiple_missing_fields(tmp_path):
+    store = EngineStore(storage_dir=str(tmp_path))
+    app = create_app(store=store, config=EngineConfig())
+    client = TestClient(app)
+
+    # CharacterCard requires char_id and name
+    res = client.post("/api/v1/characters", json={})
+    assert res.status_code == 400
+    data = res.json()
+    assert "char_id" in data["missing_fields"]
+    assert "name" in data["missing_fields"]
+    assert "Missing required fields" in data["error"]
 
 
 def test_story_expand_endpoint_empty_session_id_fails(tmp_path):
