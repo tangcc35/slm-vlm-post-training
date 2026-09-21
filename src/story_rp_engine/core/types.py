@@ -44,7 +44,7 @@ class StoryRequest(BaseModel):
     genre: Optional[str] = "Fiction"
     tone: Optional[str] = "Balanced"
     max_tokens: int = Field(default=512, ge=1, le=131072)
-    chunk_size: Optional[int] = Field(default=4, ge=1, le=100, description="Number of tokens to buffer before yielding in streaming mode.")
+    chunk_size: Optional[int] = Field(default=16, ge=1, le=100, description="Number of tokens to buffer before yielding in streaming mode.")
 
 
 class RPChatRequest(BaseModel):
@@ -53,5 +53,5 @@ class RPChatRequest(BaseModel):
     message: str
     authors_note: Optional[str] = None
     user_name: Optional[str] = "User"
-    chunk_size: Optional[int] = 4
+    chunk_size: Optional[int] = Field(default=16, ge=1, le=100, description="Number of tokens to buffer before yielding in streaming mode.")
 
