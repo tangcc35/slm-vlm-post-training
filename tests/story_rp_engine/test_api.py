@@ -644,5 +644,33 @@ def test_story_expand_stream_without_registry_errors(tmp_path):
     assert "agent registry not initialized" in res.json()["detail"].lower()
 
 
+@pytest.mark.anyio
+async def test_lifespan_warmup_successful(tmp_path):
+    store = EngineStore(storage_dir=str(tmp_path))
+    app = create_app(store=store, config=EngineConfig())
+
+    with patch("story_rp_engine.api.app.execute_runner_turn", new_callable=AsyncMock) as mock_turn:
+        from story_rp_engine.api.app import lifespan
+        async with lifespan(app):
+            pass
+        assert mock_turn.called
+        call_kwargs = mock_turn.call_args.kwargs
+        assert call_kwargs["user_id"] == "SystemWarmup"
+        assert call_kwargs["session_id"] == "warmup_session"
+
+
+@pytest.mark.anyio
+async def test_lifespan_warmup_skipped_via_env(tmp_path, monkeypatch):
+    monkeypatch.setenv("STORY_RP_SKIP_WARMUP", "1")
+    store = EngineStore(storage_dir=str(tmp_path))
+    app = create_app(store=store, config=EngineConfig())
+
+    with patch("story_rp_engine.api.app.execute_runner_turn", new_callable=AsyncMock) as mock_turn:
+        from story_rp_engine.api.app import lifespan
+        async with lifespan(app):
+            pass
+        assert not mock_turn.called
+
+
 
 

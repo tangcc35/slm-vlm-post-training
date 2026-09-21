@@ -1,18 +1,54 @@
-from typing import Optional
+import logging
+import os
+from contextlib import asynccontextmanager
+from typing import AsyncIterator, Optional
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from story_rp_engine.api.routes_rp import router as rp_router
 from story_rp_engine.api.routes_story import router as story_router
 from story_rp_engine.core.agent_registry import AgentRegistry
+from story_rp_engine.core.agent_utils import execute_runner_turn
 from story_rp_engine.core.config import EngineConfig
 from story_rp_engine.storage.store import EngineStore
+
+logger = logging.getLogger("story_rp_engine.api")
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    skip_warmup = os.getenv("STORY_RP_SKIP_WARMUP", "0").lower() in ("1", "true")
+    runner = getattr(app.state, "runner", None)
+    if runner is not None and not skip_warmup:
+        try:
+            logger.info("Performing model warmup on startup...")
+            await execute_runner_turn(
+                runner=runner,
+                user_id="SystemWarmup",
+                session_id="warmup_session",
+                message="Hi",
+                state_delta={
+                    "premise": "Warmup",
+                    "genre": "General",
+                    "tone": "Neutral",
+                    "current_text": "",
+                    "instruction": "Say ready.",
+                },
+            )
+            logger.info("Model warmup completed successfully.")
+        except Exception as e:
+            logger.warning("Startup model warmup skipped: %s", e)
+    yield
 
 
 def create_app(
     store: Optional[EngineStore] = None,
     config: Optional[EngineConfig] = None,
 ) -> FastAPI:
-    app = FastAPI(title="Dual-Mode Story & Roleplay Engine API", version="1.0.0")
+    app = FastAPI(
+        title="Dual-Mode Story & Roleplay Engine API",
+        version="1.0.0",
+        lifespan=lifespan,
+    )
 
     app.add_middleware(
         CORSMiddleware,
