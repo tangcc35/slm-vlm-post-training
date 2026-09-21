@@ -298,6 +298,7 @@ def test_story_expand_stream_endpoint(tmp_path):
                 "premise": "Dawn at sea.",
                 "current_text": "Morning came.",
                 "instruction": "Describe the sun.",
+                "chunk_size": 4,
             },
         )
         assert res.status_code == 200
