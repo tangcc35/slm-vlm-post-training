@@ -850,10 +850,15 @@ const AppDefinition = {
       }
 
       const entries = (this.lorebookForm.entries || []).map((e) => ({
-        keys: (e.keys_str || '')
-          .split(',')
-          .map((k) => k.trim())
-          .filter(Boolean),
+        keys:
+          typeof e.keys_str === 'string'
+            ? e.keys_str
+                .split(',')
+                .map((k) => k.trim())
+                .filter(Boolean)
+            : Array.isArray(e.keys)
+            ? e.keys
+            : [],
         content: e.content || '',
         insertion_order:
           typeof e.insertion_order === 'number' ? e.insertion_order : 100,
