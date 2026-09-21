@@ -26,7 +26,15 @@ class EngineConfig(BaseModel):
         le=1.0,
     )
     max_tokens: int = Field(
-        default_factory=lambda: int(os.getenv("STORY_RP_MAX_TOKENS", "512")),
+        default_factory=lambda: int(os.getenv("STORY_RP_MAX_TOKENS", "131072")),
         ge=1,
-        le=8192,
+        le=131072,
+    )
+    storage_dir: str = Field(
+        default_factory=lambda: os.getenv("STORY_RP_STORAGE_DIR", ".engine_data"),
+        description="Directory for local storage (characters, lorebooks, sessions)",
+    )
+    db_url: Optional[str] = Field(
+        default_factory=lambda: os.getenv("STORY_RP_DB_URL"),
+        description="Database connection URL for ADK DatabaseSessionService",
     )

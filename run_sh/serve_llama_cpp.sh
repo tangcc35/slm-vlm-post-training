@@ -68,9 +68,12 @@ trap cleanup EXIT INT TERM
 # Wait for the model server to initialize and respond
 echo "Waiting for llama.cpp server to be ready on port $LLAMA_PORT..."
 MAX_RETRIES=30
-for ((i=1; i<=MAX_RETRIES; i++)); do
+SERVER_READY=0
+i=1
+while [ "$i" -le "$MAX_RETRIES" ]; do
     if curl -s "http://${LLAMA_HOST}:${LLAMA_PORT}/v1/models" >/dev/null 2>&1; then
         echo ">>> llama.cpp model server is ready!"
+        SERVER_READY=1
         break
     fi
     if ! kill -0 "$LLAMA_PID" 2>/dev/null; then
@@ -78,7 +81,13 @@ for ((i=1; i<=MAX_RETRIES; i++)); do
         exit 1
     fi
     sleep 1
+    i=$((i + 1))
 done
+
+if [ "$SERVER_READY" -ne 1 ]; then
+    echo "Error: Timed out waiting for llama.cpp server to be ready."
+    exit 1
+fi
 
 echo ""
 echo "==============================================================="
@@ -94,7 +103,7 @@ export STORY_RP_MODEL="openai/$MODEL_ALIAS"
 export STORY_RP_API_BASE="http://${LLAMA_HOST}:${LLAMA_PORT}/v1"
 
 # Run FastAPI backend in the foreground
-uv run uvicorn story_rp_engine.api.app:create_app \
+uv run python -m uvicorn story_rp_engine.api.app:create_app \
     --factory \
     --host "$APP_HOST" \
     --port "$APP_PORT" \

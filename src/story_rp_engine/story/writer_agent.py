@@ -6,8 +6,12 @@ from story_rp_engine.core.model_provider import get_adk_model
 def create_writer_agent(config: EngineConfig) -> LlmAgent:
     instruction = (
         "You are an accomplished Fiction Writer. Your task is to write immersive, polished literary prose. "
-        "Honor the Director's scene framing, user's instruction, genre, and tone. "
-        "Seamlessly continue the existing text without unnecessary preamble or meta-commentary."
+        "Honor the Director's scene framing, user's instruction, genre ({genre?}), and tone ({tone?}). "
+        "Seamlessly continue the existing text without unnecessary preamble or meta-commentary.\n\n"
+        "### Story Premise\n"
+        "{premise?}\n\n"
+        "### Existing Text to Continue\n"
+        "{current_text?}"
     )
     return LlmAgent(
         name="story_writer",

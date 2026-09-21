@@ -3,6 +3,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from story_rp_engine.api.routes_rp import router as rp_router
 from story_rp_engine.api.routes_story import router as story_router
+from story_rp_engine.core.agent_registry import AgentRegistry
 from story_rp_engine.core.config import EngineConfig
 from story_rp_engine.storage.store import EngineStore
 
@@ -21,8 +22,17 @@ def create_app(
         allow_headers=["*"],
     )
 
-    app.state.store = store or EngineStore()
-    app.state.config = config or EngineConfig()
+    resolved_config = config or EngineConfig()
+    resolved_store = store or EngineStore(
+        storage_dir=resolved_config.storage_dir,
+        db_url=resolved_config.db_url,
+    )
+
+    app.state.store = resolved_store
+    app.state.config = resolved_config
+    app.state.session_service = resolved_store.session_service
+    app.state.agent_registry = AgentRegistry(resolved_config, resolved_store)
+    app.state.runner = app.state.agent_registry.get_story_runner()
 
     app.include_router(rp_router)
     app.include_router(story_router)

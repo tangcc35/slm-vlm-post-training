@@ -1,128 +1,128 @@
-import re
-from typing import Any, Iterator
-from google.adk.agents import LlmAgent
+import json
+from typing import Any, AsyncIterator, Optional
+from google.adk.agents.run_config import RunConfig, StreamingMode
+from google.adk.runners import Runner
+from google.genai import types
 
 
-def _get_invoke(self: Any):
-    if "_invoke_fn" in self.__dict__:
-        return self.__dict__["_invoke_fn"]
-
-    def _default_invoke(prompt: str, **kwargs: Any) -> Any:
-        model = getattr(self, "model", None)
-        model_name = getattr(model, "model", None) or getattr(model, "model_name", str(model))
-        try:
-            import litellm
-
-            messages = []
-            if getattr(self, "instruction", None):
-                messages.append({"role": "system", "content": self.instruction})
-            messages.append({"role": "user", "content": prompt})
-            resp = litellm.completion(model=model_name, messages=messages, **kwargs)
-            return resp.choices[0].message.content
-        except Exception:
-            return f"Response from {self.name}: {prompt}"
-
-    return _default_invoke
+def _get_terminal_node_name(agent: Any) -> Optional[str]:
+    """Finds the terminal node name in a Workflow graph if present."""
+    if hasattr(agent, "graph") and hasattr(agent.graph, "edges") and hasattr(agent.graph, "nodes"):
+        from_nodes = {e.from_node.name for e in agent.graph.edges}
+        for n in agent.graph.nodes:
+            if n.name != "__START__" and n.name not in from_nodes:
+                return n.name
+    return None
 
 
-def _set_invoke(self: Any, val: Any) -> None:
-    self.__dict__["_invoke_fn"] = val
+async def execute_runner_turn(
+    runner: Runner,
+    user_id: str,
+    session_id: str,
+    message: str,
+    state_delta: Optional[dict] = None,
+) -> str:
+    """Executes a turn asynchronously via ADK Runner and returns final assistant text."""
+    content = types.Content(role="user", parts=[types.Part.from_text(text=message)])
+    target_node = _get_terminal_node_name(runner.agent)
+    final_text = ""
+    accumulated_partial = []
+
+    async for event in runner.run_async(
+        user_id=user_id,
+        session_id=session_id,
+        new_message=content,
+        state_delta=state_delta,
+    ):
+        if target_node and event.author and event.author != target_node:
+            continue
+
+        text = ""
+        if event.content and event.content.parts:
+            text = "".join(p.text for p in event.content.parts if getattr(p, "text", None))
+        elif event.output is not None:
+            text = str(event.output)
+
+        if text:
+            if event.partial:
+                accumulated_partial.append(text)
+            else:
+                final_text = text
+
+    if final_text:
+        return final_text.strip()
+    if accumulated_partial:
+        return "".join(accumulated_partial).strip()
+    return ""
 
 
-def _del_invoke(self: Any) -> None:
-    self.__dict__.pop("_invoke_fn", None)
+async def stream_runner_turn(
+    runner: Runner,
+    user_id: str,
+    session_id: str,
+    message: str,
+    state_delta: Optional[dict] = None,
+) -> AsyncIterator[str]:
+    """Streams output token deltas/chunks from a turn asynchronously via ADK Runner."""
+    content = types.Content(role="user", parts=[types.Part.from_text(text=message)])
+    target_node = _get_terminal_node_name(runner.agent)
+    run_cfg = RunConfig(streaming_mode=StreamingMode.SSE)
+    yielded_any_partial = False
+
+    async for event in runner.run_async(
+        user_id=user_id,
+        session_id=session_id,
+        new_message=content,
+        state_delta=state_delta,
+        run_config=run_cfg,
+    ):
+        if target_node and event.author and event.author != target_node:
+            continue
+
+        text = ""
+        if event.content and event.content.parts:
+            text = "".join(p.text for p in event.content.parts if getattr(p, "text", None))
+        elif event.output is not None:
+            text = str(event.output)
+
+        if not text:
+            continue
+
+        if event.partial:
+            yielded_any_partial = True
+            yield text
+        else:
+            if not yielded_any_partial:
+                words = text.split(" ")
+                for i, w in enumerate(words):
+                    yield w if i == 0 else " " + w
 
 
-def _get_stream(self: Any):
-    if "_stream_fn" in self.__dict__:
-        return self.__dict__["_stream_fn"]
+async def format_sse_stream(
+    generator: AsyncIterator[str],
+    chunk_size: Optional[int] = 4,
+) -> AsyncIterator[str]:
+    """Buffers string chunks, yielding structured SSE JSON deltas and a final complete text."""
+    buffer = []
+    full_text_chunks = []
+    chunk_threshold = max(1, chunk_size or 4)
 
-    def _default_stream(prompt: str, **kwargs: Any) -> Iterator[str]:
-        model = getattr(self, "model", None)
-        model_name = getattr(model, "model", None) or getattr(model, "model_name", str(model))
-        try:
-            import litellm
+    async for chunk in generator:
+        if not chunk:
+            continue
+        buffer.append(chunk)
+        full_text_chunks.append(chunk)
 
-            messages = []
-            if getattr(self, "instruction", None):
-                messages.append({"role": "system", "content": self.instruction})
-            messages.append({"role": "user", "content": prompt})
-            resp = litellm.completion(model=model_name, messages=messages, stream=True, **kwargs)
-            for chunk in resp:
-                content = None
-                if hasattr(chunk, "choices") and chunk.choices:
-                    delta = chunk.choices[0].delta
-                    content = getattr(delta, "content", None)
-                if content:
-                    yield content
-        except Exception:
-            text = f"Response from {self.name}: {prompt}"
-            words = text.split(" ")
-            for i, w in enumerate(words):
-                yield w if i == 0 else " " + w
+        if len(buffer) >= chunk_threshold or "\n" in chunk:
+            combined = "".join(buffer)
+            yield f"data: {json.dumps({'delta': combined}, ensure_ascii=False)}\n\n"
+            buffer.clear()
 
-    return _default_stream
+    if buffer:
+        combined = "".join(buffer)
+        yield f"data: {json.dumps({'delta': combined}, ensure_ascii=False)}\n\n"
+        buffer.clear()
 
-
-def _set_stream(self: Any, val: Any) -> None:
-    self.__dict__["_stream_fn"] = val
-
-
-def _del_stream(self: Any) -> None:
-    self.__dict__.pop("_stream_fn", None)
-
-
-if not hasattr(LlmAgent, "invoke"):
-    LlmAgent.invoke = property(_get_invoke, _set_invoke, _del_invoke)
-
-if not hasattr(LlmAgent, "stream"):
-    LlmAgent.stream = property(_get_stream, _set_stream, _del_stream)
-
-
-def is_invoke_patched(agent: Any) -> bool:
-    """Detects whether an agent's invoke method has been mocked or replaced."""
-    if "_invoke_fn" in getattr(agent, "__dict__", {}):
-        return True
-    invoke_attr = getattr(agent, "invoke", None)
-    if hasattr(invoke_attr, "mock_calls") or invoke_attr.__class__.__name__ in ("Mock", "MagicMock"):
-        return True
-    cls_invoke = getattr(type(agent), "invoke", None)
-    if hasattr(cls_invoke, "mock_calls") or cls_invoke.__class__.__name__ in ("Mock", "MagicMock"):
-        return True
-    return False
-
-
-def extract_agent_response_text(response: Any) -> str:
-    """Extracts cleaned string response from an agent invocation."""
-    if response is None:
-        return ""
-    if hasattr(response, "text"):
-        return str(response.text).strip() if response.text is not None else ""
-    return str(response).strip()
-
-
-def stream_agent_response(agent: Any, prompt: str) -> Iterator[str]:
-    """Streams tokens/chunks from an agent, falling back to invoke word-splitting when invoke is mocked."""
-    if is_invoke_patched(agent) or not (hasattr(agent, "stream") and callable(agent.stream)):
-        resp = agent.invoke(prompt)
-        if resp is None:
-            return
-
-        if hasattr(resp, "__iter__") and not isinstance(resp, (str, bytes, dict)):
-            for item in resp:
-                yield str(item)
-            return
-
-        text = getattr(resp, "text", str(resp))
-        words = text.split(" ")
-        for i, w in enumerate(words):
-            yield w if i == 0 else " " + w
-        return
-
-    stream_gen = agent.stream(prompt)
-    if stream_gen is not None:
-        for chunk in stream_gen:
-            if chunk:
-                yield str(chunk)
-
-
+    full_text = "".join(full_text_chunks)
+    yield f"data: {json.dumps({'full_text': full_text, 'done': True}, ensure_ascii=False)}\n\n"
+    yield "data: [DONE]\n\n"

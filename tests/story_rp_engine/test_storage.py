@@ -1,8 +1,8 @@
 import pytest
+from google.adk.sessions import DatabaseSessionService, Session
 from story_rp_engine.core.types import (
     CharacterCardV2,
     CharacterCardV2Data,
-    ChatMessage,
     Lorebook,
     LorebookEntry,
 )
@@ -37,25 +37,6 @@ def test_character_not_found(tmp_path):
     assert store.get_character("nonexistent") is None
 
 
-def test_session_history(tmp_path):
-    store = EngineStore(storage_dir=str(tmp_path))
-    history = [
-        ChatMessage(role="user", content="Hi"),
-        ChatMessage(role="assistant", content="Hello!"),
-    ]
-    store.save_history("session_123", history)
-
-    loaded = store.get_history("session_123")
-    assert len(loaded) == 2
-    assert loaded[0].content == "Hi"
-    assert loaded[1].content == "Hello!"
-
-
-def test_session_history_empty_when_missing(tmp_path):
-    store = EngineStore(storage_dir=str(tmp_path))
-    assert store.get_history("missing_session") == []
-
-
 def test_lorebook_crud(tmp_path):
     store = EngineStore(storage_dir=str(tmp_path))
     lorebook = Lorebook(
@@ -82,22 +63,6 @@ def test_lorebook_crud(tmp_path):
     assert all_lore["arcane_lore"].name == "Arcane Lore"
 
     assert store.get_lorebook("nonexistent_lore") is None
-
-
-def test_session_history_append(tmp_path):
-    store = EngineStore(storage_dir=str(tmp_path))
-    initial = [ChatMessage(role="user", content="Turn 1")]
-    store.save_history("session_append", initial)
-
-    loaded = store.get_history("session_append")
-    assert len(loaded) == 1
-
-    updated = loaded + [ChatMessage(role="assistant", content="Response 1")]
-    store.save_history("session_append", updated)
-
-    reloaded = store.get_history("session_append")
-    assert len(reloaded) == 2
-    assert reloaded[1].content == "Response 1"
 
 
 def test_list_ignores_non_json_files(tmp_path):
@@ -135,7 +100,6 @@ def test_path_traversal_defense(tmp_path, bad_key):
         )
     )
     lorebook = Lorebook(name="Arcane", description="Lore", entries=[])
-    history = [ChatMessage(role="user", content="Hi")]
 
     # Verify all CRUD methods reject path traversal payloads
     with pytest.raises(ValueError, match="Invalid ID: path traversal characters not allowed"):
@@ -149,12 +113,6 @@ def test_path_traversal_defense(tmp_path, bad_key):
 
     with pytest.raises(ValueError, match="Invalid ID: path traversal characters not allowed"):
         store.get_lorebook(bad_key)
-
-    with pytest.raises(ValueError, match="Invalid ID: path traversal characters not allowed"):
-        store.save_history(bad_key, history)
-
-    with pytest.raises(ValueError, match="Invalid ID: path traversal characters not allowed"):
-        store.get_history(bad_key)
 
 
 def test_key_whitespace_stripping(tmp_path):
@@ -174,4 +132,57 @@ def test_key_whitespace_stripping(tmp_path):
     assert retrieved is not None
     assert retrieved.data.name == "Valerie"
 
+
+@pytest.mark.anyio
+async def test_store_session_service_lifecycle(tmp_path):
+    store = EngineStore(storage_dir=str(tmp_path))
+    session = await store.get_or_create_session(
+        app_name="rp_app",
+        user_id="user_123",
+        session_id="session_abc",
+        initial_state={"char_id": "lyra"},
+    )
+    assert isinstance(session, Session)
+    assert session.id == "session_abc"
+    assert session.state.get("char_id") == "lyra"
+
+    # Re-fetching returns the existing session
+    session_again = await store.get_or_create_session(
+        app_name="rp_app",
+        user_id="user_123",
+        session_id="session_abc",
+    )
+    assert session_again.id == "session_abc"
+    assert session_again.state.get("char_id") == "lyra"
+
+
+@pytest.mark.anyio
+async def test_database_session_service_default(tmp_path):
+    store = EngineStore(storage_dir=str(tmp_path))
+    assert isinstance(store.session_service, DatabaseSessionService)
+    session = await store.get_or_create_session(
+        app_name="test_app", user_id="User", session_id="sess_1"
+    )
+    assert session.id == "sess_1"
+    fetched = await store.session_service.get_session(
+        app_name="test_app", user_id="User", session_id="sess_1"
+    )
+    assert fetched is not None
+    assert fetched.id == "sess_1"
+    assert (tmp_path / "sessions.db").is_file()
+
+
+@pytest.mark.anyio
+async def test_database_session_service_custom_url(tmp_path):
+    db_file = tmp_path / "custom.db"
+    store = EngineStore(
+        storage_dir=str(tmp_path),
+        db_url=f"sqlite+aiosqlite:///{db_file}",
+    )
+    assert isinstance(store.session_service, DatabaseSessionService)
+    session = await store.get_or_create_session(
+        app_name="test_app", user_id="User", session_id="sess_custom"
+    )
+    assert session.id == "sess_custom"
+    assert db_file.is_file()
 

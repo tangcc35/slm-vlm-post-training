@@ -28,6 +28,8 @@ dependencies = [
     "pydantic>=2.13.5",
     "llama-cpp-python[server]>=0.3.35",
     "sse-starlette>=3.4.11",
+    "sqlalchemy>=2.0.0",
+    "aiosqlite>=0.20.0",
 ]
 
 [project.optional-dependencies]

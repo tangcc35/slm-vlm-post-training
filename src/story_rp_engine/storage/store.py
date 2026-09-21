@@ -1,7 +1,8 @@
 import json
 import os
-from typing import Dict, List, Optional
-from story_rp_engine.core.types import CharacterCardV2, ChatMessage, Lorebook
+from typing import Any, Dict, Optional
+from google.adk.sessions import BaseSessionService, DatabaseSessionService, Session
+from story_rp_engine.core.types import CharacterCardV2, Lorebook
 
 
 def _sanitize_key(key: str) -> str:
@@ -14,14 +15,45 @@ def _sanitize_key(key: str) -> str:
 
 
 class EngineStore:
-    def __init__(self, storage_dir: str = ".engine_data"):
+    def __init__(
+        self,
+        storage_dir: str = ".engine_data",
+        session_service: Optional[BaseSessionService] = None,
+        db_url: Optional[str] = None,
+    ):
         self.storage_dir = storage_dir
         self.char_dir = os.path.join(storage_dir, "characters")
         self.lorebooks_dir = os.path.join(storage_dir, "lorebooks")
-        self.sessions_dir = os.path.join(storage_dir, "sessions")
+        os.makedirs(self.storage_dir, exist_ok=True)
         os.makedirs(self.char_dir, exist_ok=True)
         os.makedirs(self.lorebooks_dir, exist_ok=True)
-        os.makedirs(self.sessions_dir, exist_ok=True)
+
+        if session_service is not None:
+            self.session_service = session_service
+        else:
+            resolved_db_url = db_url or f"sqlite+aiosqlite:///{os.path.abspath(os.path.join(storage_dir, 'sessions.db'))}"
+            self.session_service = DatabaseSessionService(db_url=resolved_db_url)
+
+    async def get_or_create_session(
+        self,
+        app_name: str,
+        user_id: str,
+        session_id: str,
+        initial_state: Optional[Dict[str, Any]] = None,
+    ) -> Session:
+        session_id = _sanitize_key(session_id)
+        user_id = _sanitize_key(user_id)
+        session = await self.session_service.get_session(
+            app_name=app_name, user_id=user_id, session_id=session_id
+        )
+        if session is None:
+            session = await self.session_service.create_session(
+                app_name=app_name,
+                user_id=user_id,
+                session_id=session_id,
+                state=initial_state or {},
+            )
+        return session
 
     def save_character(self, char_id: str, card: CharacterCardV2) -> None:
         char_id = _sanitize_key(char_id)
@@ -72,19 +104,3 @@ class EngineStore:
                 if lb:
                     results[lb_id] = lb
         return results
-
-    def save_history(self, session_id: str, messages: List[ChatMessage]) -> None:
-        session_id = _sanitize_key(session_id)
-        path = os.path.join(self.sessions_dir, f"{session_id}.json")
-        data = [msg.model_dump(mode="json") for msg in messages]
-        with open(path, "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=2)
-
-    def get_history(self, session_id: str) -> List[ChatMessage]:
-        session_id = _sanitize_key(session_id)
-        path = os.path.join(self.sessions_dir, f"{session_id}.json")
-        if not os.path.exists(path):
-            return []
-        with open(path, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        return [ChatMessage.model_validate(item) for item in data]

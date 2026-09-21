@@ -3,11 +3,12 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from story_rp_engine.core.agent_utils import (
-    extract_agent_response_text,
-    stream_agent_response,
+    execute_runner_turn,
+    format_sse_stream,
+    stream_runner_turn,
 )
-from story_rp_engine.core.types import CharacterCardV2, ChatMessage
-from story_rp_engine.rp.agent import build_rp_turn_prompt, create_rp_agent
+from story_rp_engine.core.types import CharacterCardV2
+from story_rp_engine.storage.store import _sanitize_key
 
 router = APIRouter(prefix="/api/v1", tags=["Roleplay"])
 
@@ -18,6 +19,7 @@ class RPChatRequest(BaseModel):
     message: str
     authors_note: Optional[str] = None
     user_name: Optional[str] = "User"
+    chunk_size: Optional[int] = 4
 
 
 @router.post("/characters")
@@ -50,79 +52,49 @@ def get_character(char_id: str, request: Request):
 
 
 @router.post("/rp/chat")
-def chat_rp(req: RPChatRequest, request: Request):
-    store = request.app.state.store
-    config = request.app.state.config
+async def chat_rp(req: RPChatRequest, request: Request):
+    registry = request.app.state.agent_registry
 
     try:
-        card = store.get_character(req.char_id)
+        _sanitize_key(req.session_id)
+        runner = registry.get_or_create_rp_runner(req.char_id)
     except ValueError as e:
+        if "not found" in str(e).lower():
+            raise HTTPException(status_code=404, detail="Character not found")
         raise HTTPException(status_code=400, detail=str(e))
 
-    if not card:
-        raise HTTPException(status_code=404, detail="Character not found")
-
-    try:
-        history = store.get_history(req.session_id)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-
-    agent = create_rp_agent(card, config, active_lore=[], user_name=req.user_name or "User")
-    prompt = build_rp_turn_prompt(history, req.message, authors_note=req.authors_note)
-    reply = extract_agent_response_text(agent.invoke(prompt))
-
-    updated_history = history + [
-        ChatMessage(role="user", content=req.message),
-        ChatMessage(role="assistant", content=reply),
-    ]
-    try:
-        store.save_history(req.session_id, updated_history)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+    reply = await execute_runner_turn(
+        runner,
+        user_id=req.user_name or "User",
+        session_id=req.session_id,
+        message=req.message,
+        state_delta={"authors_note": req.authors_note},
+    )
 
     return {"reply": reply, "session_id": req.session_id}
 
 
 @router.post("/rp/chat/stream")
-def chat_rp_stream(req: RPChatRequest, request: Request):
-    store = request.app.state.store
-    config = request.app.state.config
+async def chat_rp_stream(req: RPChatRequest, request: Request):
+    registry = request.app.state.agent_registry
 
     try:
-        card = store.get_character(req.char_id)
+        _sanitize_key(req.session_id)
+        runner = registry.get_or_create_rp_runner(req.char_id)
     except ValueError as e:
+        if "not found" in str(e).lower():
+            raise HTTPException(status_code=404, detail="Character not found")
         raise HTTPException(status_code=400, detail=str(e))
 
-    if not card:
-        raise HTTPException(status_code=404, detail="Character not found")
+    generator = stream_runner_turn(
+        runner,
+        user_id=req.user_name or "User",
+        session_id=req.session_id,
+        message=req.message,
+        state_delta={"authors_note": req.authors_note},
+    )
 
-    try:
-        history = store.get_history(req.session_id)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-
-    agent = create_rp_agent(card, config, active_lore=[], user_name=req.user_name or "User")
-    prompt = build_rp_turn_prompt(history, req.message, authors_note=req.authors_note)
-    generator = stream_agent_response(agent, prompt)
-
-
-    accumulated_chunks = []
-
-    def event_stream():
-        try:
-            for chunk in generator:
-                accumulated_chunks.append(chunk)
-                yield f"data: {chunk}\n\n"
-        finally:
-            complete_reply = "".join(accumulated_chunks).strip()
-            updated_history = history + [
-                ChatMessage(role="user", content=req.message),
-                ChatMessage(role="assistant", content=complete_reply),
-            ]
-            try:
-                store.save_history(req.session_id, updated_history)
-            except ValueError:
-                pass
-        yield "data: [DONE]\n\n"
-
-    return StreamingResponse(event_stream(), media_type="text/event-stream")
+    return StreamingResponse(
+        format_sse_stream(generator, chunk_size=req.chunk_size),
+        media_type="text/event-stream",
+    )

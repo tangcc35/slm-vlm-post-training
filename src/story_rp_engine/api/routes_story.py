@@ -1,32 +1,70 @@
-from fastapi import APIRouter, Request
+import uuid
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
+from google.adk.runners import Runner
 from story_rp_engine.core.agent_utils import (
-    extract_agent_response_text,
-    stream_agent_response,
+    execute_runner_turn,
+    format_sse_stream,
+    stream_runner_turn,
 )
 from story_rp_engine.core.types import StoryRequest
-from story_rp_engine.story.workflow import prepare_story_expansion
 
 router = APIRouter(prefix="/api/v1/story", tags=["Story Co-Pilot"])
 
 
+def _get_story_runner(request: Request) -> Runner:
+    runner = getattr(request.app.state, "runner", None)
+    if runner is not None:
+        return runner
+    registry = getattr(request.app.state, "agent_registry", None)
+    if registry is None:
+        raise HTTPException(status_code=500, detail="Agent registry not initialized")
+    runner = registry.get_story_runner()
+    request.app.state.runner = runner
+    return runner
+
+
 @router.post("/expand")
-def expand_story_endpoint(req: StoryRequest, request: Request):
-    config = request.app.state.config
-    writer, prompt = prepare_story_expansion(req, config)
-    expansion = extract_agent_response_text(writer.invoke(prompt))
+async def expand_story_endpoint(req: StoryRequest, request: Request):
+    runner = _get_story_runner(request)
+    state_delta = {
+        "premise": req.premise or "Not specified",
+        "genre": req.genre or "Fiction",
+        "tone": req.tone or "Balanced",
+        "current_text": req.current_text or "",
+        "instruction": req.instruction or "Expand the story based on the context.",
+    }
+    user_instruction = req.instruction or "Expand the story based on the context."
+    expansion = await execute_runner_turn(
+        runner,
+        user_id="User",
+        session_id=f"story_{uuid.uuid4().hex}",
+        message=user_instruction,
+        state_delta=state_delta,
+    )
     return {"expansion": expansion}
 
 
 @router.post("/expand/stream")
-def expand_story_stream(req: StoryRequest, request: Request):
-    config = request.app.state.config
-    writer, prompt = prepare_story_expansion(req, config)
-    generator = stream_agent_response(writer, prompt)
+async def expand_story_stream(req: StoryRequest, request: Request):
+    runner = _get_story_runner(request)
+    state_delta = {
+        "premise": req.premise or "Not specified",
+        "genre": req.genre or "Fiction",
+        "tone": req.tone or "Balanced",
+        "current_text": req.current_text or "",
+        "instruction": req.instruction or "Expand the story based on the context.",
+    }
+    user_instruction = req.instruction or "Expand the story based on the context."
+    generator = stream_runner_turn(
+        runner,
+        user_id="User",
+        session_id=f"story_{uuid.uuid4().hex}",
+        message=user_instruction,
+        state_delta=state_delta,
+    )
 
-    def event_stream():
-        for chunk in generator:
-            yield f"data: {chunk}\n\n"
-        yield "data: [DONE]\n\n"
-
-    return StreamingResponse(event_stream(), media_type="text/event-stream")
+    return StreamingResponse(
+        format_sse_stream(generator, chunk_size=req.chunk_size),
+        media_type="text/event-stream",
+    )

@@ -1,13 +1,15 @@
-from unittest.mock import MagicMock, patch
-from story_rp_engine.core.agent_utils import (
-    extract_agent_response_text,
-    stream_agent_response,
-)
+from google.adk import Workflow
+from google.adk.apps import App
+from google.adk.models.base_llm import BaseLlm
+from google.adk.models.llm_response import LlmResponse
+from google.adk.runners import Runner
+from google.adk.sessions import InMemorySessionService
+from google.genai import types
+import pytest
 from story_rp_engine.core.config import EngineConfig
-from story_rp_engine.core.types import StoryRequest
 from story_rp_engine.story.director_agent import create_director_agent
 from story_rp_engine.story.writer_agent import create_writer_agent
-from story_rp_engine.story.workflow import prepare_story_expansion
+from story_rp_engine.story.workflow import create_story_workflow
 
 
 def test_create_director_and_writer_agents():
@@ -16,140 +18,92 @@ def test_create_director_and_writer_agents():
     writer = create_writer_agent(config)
 
     assert director.name == "story_director"
-    assert "framing" in director.instruction.lower()
+    assert "{premise?}" in director.instruction
+    assert "{genre?}" in director.instruction
+    assert "{tone?}" in director.instruction
+    assert "{current_text?}" in director.instruction
+
     assert writer.name == "story_writer"
-    assert "prose" in writer.instruction.lower()
+    assert "{premise?}" in writer.instruction
+    assert "{genre?}" in writer.instruction
+    assert "{tone?}" in writer.instruction
+    assert "{current_text?}" in writer.instruction
 
 
-def test_expand_story_pipeline():
+def test_create_story_workflow_graph_structure():
     config = EngineConfig(model_name="ollama/llama3.1:8b")
-    request = StoryRequest(
-        premise="A detective arrives at a quiet harbor.",
-        current_text="Fog covered the docks.",
-        instruction="Describe his arrival and first impression.",
-        genre="Noir Mystery",
-        tone="Dark and brooding",
-    )
+    wf = create_story_workflow(config)
 
-    mock_director = MagicMock()
-    mock_director.invoke.return_value = "Focus on cold rain and solitary footsteps."
-    mock_writer = MagicMock()
-    mock_writer.invoke.return_value = "He stepped into the mist, collar turned against the damp chill."
+    assert isinstance(wf, Workflow)
+    assert wf.name == "story_workflow"
+    assert len(wf.graph.nodes) == 3  # __START__, story_director, story_writer
+    node_names = [n.name for n in wf.graph.nodes]
+    assert "story_director" in node_names
+    assert "story_writer" in node_names
 
-    with (
-        patch("story_rp_engine.story.workflow.create_director_agent", return_value=mock_director),
-        patch("story_rp_engine.story.workflow.create_writer_agent", return_value=mock_writer),
-    ):
-        writer, prompt = prepare_story_expansion(request, config)
-        prose = extract_agent_response_text(writer.invoke(prompt))
-        assert "mist" in prose
+    # Verify graph edge sequence: START -> director -> writer
+    edge_pairs = [(e.from_node.name, e.to_node.name) for e in wf.graph.edges]
+    assert ("__START__", "story_director") in edge_pairs
+    assert ("story_director", "story_writer") in edge_pairs
 
 
-def test_expand_story_prompt_assembly_and_framing_flow():
+def test_format_story_input_removed_from_workflow():
+    import story_rp_engine.story.workflow as wf_mod
+    assert not hasattr(wf_mod, "format_story_input")
+    assert not hasattr(wf_mod, "format_story_director_input")
+
+
+@pytest.mark.anyio
+async def test_session_state_injection_into_workflow_instructions():
     config = EngineConfig(model_name="ollama/llama3.1:8b")
-    request = StoryRequest(
-        premise="Spaceship approaching an unknown derelict.",
-        current_text="Sensors pinged with erratic signals.",
-        instruction="Detail docking procedure.",
-        genre="Sci-Fi Thriller",
-        tone="Tense and claustrophobic",
-    )
+    wf = create_story_workflow(config)
 
-    mock_director = MagicMock()
-    mock_director.invoke.return_value = "Emphasize silent mechanical groans and fluctuating air pressure."
-    mock_writer = MagicMock()
-    mock_writer.invoke.return_value = "The airlock clamped with a heavy shudder, echoing into silence."
+    captured_instructions = {}
 
-    with (
-        patch("story_rp_engine.story.workflow.create_director_agent", return_value=mock_director),
-        patch("story_rp_engine.story.workflow.create_writer_agent", return_value=mock_writer),
+    class MockCaptureLlm(BaseLlm):
+        model: str = "mock"
+        agent_name: str = ""
+
+        async def generate_content_async(self, llm_request, stream=False):
+            captured_instructions[self.agent_name] = llm_request.config.system_instruction
+            yield LlmResponse(
+                partial=False,
+                content=types.Content(parts=[types.Part.from_text(text=f"{self.agent_name} output")]),
+            )
+
+    for node in wf.graph.nodes:
+        if node.name in ["story_director", "story_writer"]:
+            node.model = MockCaptureLlm(agent_name=node.name)
+
+    app = App(name="story_app", root_agent=wf)
+    runner = Runner(app=app, session_service=InMemorySessionService(), auto_create_session=True)
+
+    state_delta = {
+        "premise": "A dragon sleeps in the cave.",
+        "genre": "Fantasy",
+        "tone": "Epic",
+        "current_text": "The torch flickers in the damp air.",
+        "instruction": "Wake the dragon.",
+    }
+    content = types.Content(role="user", parts=[types.Part.from_text(text="Wake the dragon.")])
+    async for _ in runner.run_async(
+        user_id="User",
+        session_id="test_story_state_injection",
+        new_message=content,
+        state_delta=state_delta,
     ):
-        writer, prompt = prepare_story_expansion(request, config)
-        prose = extract_agent_response_text(writer.invoke(prompt))
-        assert prose == "The airlock clamped with a heavy shudder, echoing into silence."
+        pass
 
-        # Verify director received the story details
-        director_prompt = mock_director.invoke.call_args[0][0]
-        assert "Premise: Spaceship approaching an unknown derelict." in director_prompt
-        assert "Genre: Sci-Fi Thriller" in director_prompt
-        assert "Tone: Tense and claustrophobic" in director_prompt
-        assert "Sensors pinged with erratic signals." in director_prompt
-        assert "Detail docking procedure." in director_prompt
+    director_inst = captured_instructions["story_director"]
+    assert "Premise: A dragon sleeps in the cave." in director_inst
+    assert "Genre: Fantasy" in director_inst
+    assert "Tone: Epic" in director_inst
+    assert "The torch flickers in the damp air." in director_inst
 
-        # Verify writer received director's framing
-        assert "Director's Guidance: Emphasize silent mechanical groans and fluctuating air pressure." in prompt
-        assert "Genre: Sci-Fi Thriller" in prompt
-        assert "Tone: Tense and claustrophobic" in prompt
-        assert "Detail docking procedure." in prompt
-
-
-def test_expand_story_with_response_objects_and_defaults():
-    config = EngineConfig(model_name="ollama/llama3.1:8b")
-    request = StoryRequest(
-        premise=None,
-        current_text="The tavern fell silent.",
-    )
-
-    mock_director = MagicMock()
-    mock_director.invoke.return_value = MagicMock(text="   Spotlight the hooded stranger in the corner.   ")
-
-    mock_writer = MagicMock()
-    mock_writer.invoke.return_value = MagicMock(text="   A lone figure raised an iron tankard, eyes gleaming in the firelight.   ")
-
-    with (
-        patch("story_rp_engine.story.workflow.create_director_agent", return_value=mock_director),
-        patch("story_rp_engine.story.workflow.create_writer_agent", return_value=mock_writer),
-    ):
-        writer, prompt = prepare_story_expansion(request, config)
-        prose = extract_agent_response_text(writer.invoke(prompt))
-        assert prose == "A lone figure raised an iron tankard, eyes gleaming in the firelight."
-
-
-def test_stream_expand_story_pipeline():
-    config = EngineConfig(model_name="ollama/llama3.1:8b")
-    request = StoryRequest(
-        premise="A detective arrives at a quiet harbor.",
-        current_text="Fog covered the docks.",
-        instruction="Describe his arrival and first impression.",
-        genre="Noir Mystery",
-        tone="Dark and brooding",
-    )
-
-    mock_director = MagicMock()
-    mock_director.invoke.return_value = "Focus on cold rain and solitary footsteps."
-
-    mock_writer = MagicMock()
-    mock_writer.invoke.return_value = "He stepped into the mist."
-
-    with (
-        patch("story_rp_engine.story.workflow.create_director_agent", return_value=mock_director),
-        patch("story_rp_engine.story.workflow.create_writer_agent", return_value=mock_writer),
-    ):
-        writer, prompt = prepare_story_expansion(request, config)
-        chunks = list(stream_agent_response(writer, prompt))
-        assert len(chunks) > 1
-        assert "".join(chunks) == "He stepped into the mist."
-
-
-def test_stream_expand_story_none_response():
-    config = EngineConfig(model_name="ollama/llama3.1:8b")
-    request = StoryRequest(
-        premise="Test",
-        current_text="...",
-    )
-
-    mock_director = MagicMock()
-    mock_director.invoke.return_value = "framing"
-
-    mock_writer = MagicMock()
-    mock_writer.invoke.return_value = None
-
-    with (
-        patch("story_rp_engine.story.workflow.create_director_agent", return_value=mock_director),
-        patch("story_rp_engine.story.workflow.create_writer_agent", return_value=mock_writer),
-    ):
-        writer, prompt = prepare_story_expansion(request, config)
-        chunks = list(stream_agent_response(writer, prompt))
-        assert chunks == []
+    writer_inst = captured_instructions["story_writer"]
+    assert "A dragon sleeps in the cave." in writer_inst
+    assert "Fantasy" in writer_inst
+    assert "Epic" in writer_inst
+    assert "The torch flickers in the damp air." in writer_inst
 
 
