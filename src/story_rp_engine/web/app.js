@@ -59,18 +59,19 @@ const AppDefinition = {
       },
 
       // =======================================================================
-      // Roleplay Tab Reactive Defaults & Stubs (Extended in Task 6)
+      // Roleplay Tab Reactive State (Task 6)
       // =======================================================================
+      rpSessionId: 'sess_' + Math.random().toString(36).substring(2, 10),
       rpCharId: '',
-      selectedGreetingIndex: 0,
-      rpSessionId: 'rp_session_1',
       rpUserName: 'User',
-      rpLorebookId: '',
       rpAuthorsNote: '',
+      rpLorebookId: '',
       rpChunkSize: 16,
       rpMessages: [],
-      rpInput: '',
+      selectedGreetingIndex: 0,
       isGeneratingRP: false,
+      rpAbortController: null,
+      rpInput: '',
 
       // =======================================================================
       // Story Co-Pilot Reactive Defaults & Stubs (Extended in Task 7)
@@ -227,15 +228,27 @@ const AppDefinition = {
       }
     },
 
-    renderMarkdown(content) {
-      if (
-        typeof window !== 'undefined' &&
-        window.marked &&
-        typeof window.marked.parse === 'function'
-      ) {
-        return window.marked.parse(content || '');
+    renderMarkdown(text) {
+      if (!text) return '';
+      try {
+        if (
+          typeof window !== 'undefined' &&
+          window.marked &&
+          typeof window.marked.parse === 'function'
+        ) {
+          return window.marked.parse(String(text));
+        }
+      } catch (err) {
+        console.warn('Markdown parsing error, using fallback:', err);
       }
-      return (content || '').replace(/\n/g, '<br>');
+      // Sanitized plain-text fallback with line breaks
+      const escaped = String(text)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+      return escaped.replace(/\n/g, '<br>');
     },
 
     // =========================================================================
@@ -830,22 +843,50 @@ const AppDefinition = {
     },
 
     // =========================================================================
-    // Roleplay Tab Defaults & Stubs (Extended in Task 6)
+    // Roleplay Tab Reactive Logic & SSE Streaming (Task 6)
     // =========================================================================
+    scrollRPChatToBottom() {
+      this.$nextTick(() => {
+        if (typeof document !== 'undefined') {
+          const feed = document.getElementById('rp-chat-feed');
+          if (feed) {
+            feed.scrollTop = feed.scrollHeight;
+          }
+        }
+      });
+    },
+
     onRPCharChange() {
       const char = this.characters.find((c) => c.char_id === this.rpCharId);
       this.selectedGreetingIndex = 0;
-      if (char && char.first_mes && this.rpMessages.length === 0) {
-        this.rpMessages.push({
-          role: 'assistant',
-          content: char.first_mes,
-          timestamp: new Date().toLocaleTimeString([], {
-            hour: '2-digit',
-            minute: '2-digit',
-          }),
-        });
+      if (char) {
+        const text = char.first_mes || '';
+        // If chat is empty, or only contains an initial assistant greeting, set/update greeting
+        if (this.rpMessages.length === 0) {
+          if (text) {
+            this.rpMessages.push({
+              role: 'assistant',
+              content: text,
+              timestamp: new Date().toLocaleTimeString([], {
+                hour: '2-digit',
+                minute: '2-digit',
+              }),
+            });
+          }
+        } else if (this.rpMessages.length === 1 && this.rpMessages[0].role === 'assistant') {
+          if (text) {
+            this.rpMessages[0].content = text;
+            this.rpMessages[0].timestamp = new Date().toLocaleTimeString([], {
+              hour: '2-digit',
+              minute: '2-digit',
+            });
+          } else {
+            this.rpMessages = [];
+          }
+        }
       }
       this.refreshIcons();
+      this.scrollRPChatToBottom();
     },
 
     onGreetingChange() {
@@ -859,77 +900,230 @@ const AppDefinition = {
         text =
           char.alternate_greetings[this.selectedGreetingIndex - 1] || text;
       }
-      if (this.rpMessages.length <= 1) {
-        this.rpMessages = [
-          {
+      if (this.rpMessages.length === 0) {
+        if (text) {
+          this.rpMessages.push({
             role: 'assistant',
             content: text,
             timestamp: new Date().toLocaleTimeString([], {
               hour: '2-digit',
               minute: '2-digit',
             }),
-          },
-        ];
+          });
+        }
+      } else if (this.rpMessages[0].role === 'assistant') {
+        this.rpMessages[0].content = text;
+        this.rpMessages[0].timestamp = new Date().toLocaleTimeString([], {
+          hour: '2-digit',
+          minute: '2-digit',
+        });
       }
       this.refreshIcons();
+      this.scrollRPChatToBottom();
     },
 
     newRPSession() {
-      this.rpSessionId = 'rp_' + Date.now().toString(36);
+      if (this.isGeneratingRP) {
+        this.stopGeneratingRP();
+      }
+      this.rpSessionId = 'sess_' + Math.random().toString(36).substring(2, 10);
       this.rpMessages = [];
       const char = this.characters.find((c) => c.char_id === this.rpCharId);
-      if (char && char.first_mes) {
-        this.rpMessages.push({
-          role: 'assistant',
-          content: char.first_mes,
-          timestamp: new Date().toLocaleTimeString([], {
-            hour: '2-digit',
-            minute: '2-digit',
-          }),
-        });
+      if (char) {
+        let text = char.first_mes || '';
+        if (
+          this.selectedGreetingIndex > 0 &&
+          Array.isArray(char.alternate_greetings)
+        ) {
+          text =
+            char.alternate_greetings[this.selectedGreetingIndex - 1] || text;
+        }
+        if (text) {
+          this.rpMessages.push({
+            role: 'assistant',
+            content: text,
+            timestamp: new Date().toLocaleTimeString([], {
+              hour: '2-digit',
+              minute: '2-digit',
+            }),
+          });
+        }
       }
       this.showToast('New roleplay session initialized.', 'info');
       this.refreshIcons();
+      this.scrollRPChatToBottom();
     },
 
-    clearRPSession() {
+    async clearRPSession() {
+      if (this.isGeneratingRP) {
+        this.stopGeneratingRP();
+      }
+      const sessionId = this.rpSessionId;
+      if (sessionId) {
+        try {
+          const res = await fetch(`/api/v1/rp/sessions/${encodeURIComponent(sessionId)}`, {
+            method: 'DELETE',
+          });
+          if (!res.ok) {
+            console.warn('DELETE session endpoint returned non-ok status:', res.status);
+          }
+        } catch (err) {
+          console.warn('Network error while deleting session:', err);
+        }
+      }
       this.rpMessages = [];
       this.showToast('Roleplay session cleared.', 'info');
       this.refreshIcons();
     },
 
-    copyMessage(content) {
-      if (typeof navigator !== 'undefined' && navigator.clipboard) {
-        navigator.clipboard.writeText(content || '').then(() => {
+    async copyMessage(text) {
+      const content = text || '';
+      try {
+        if (
+          typeof navigator !== 'undefined' &&
+          navigator.clipboard &&
+          typeof navigator.clipboard.writeText === 'function'
+        ) {
+          await navigator.clipboard.writeText(content);
           this.showToast('Message copied to clipboard.', 'info');
-        });
+          return;
+        }
+      } catch (err) {
+        console.warn('Clipboard API writeText failed, using fallback:', err);
+      }
+      // Fallback for non-secure contexts or restricted clipboard permissions
+      try {
+        const el = document.createElement('textarea');
+        el.value = content;
+        el.setAttribute('readonly', '');
+        el.style.position = 'fixed';
+        el.style.opacity = '0';
+        document.body.appendChild(el);
+        el.select();
+        document.execCommand('copy');
+        document.body.removeChild(el);
+        this.showToast('Message copied to clipboard.', 'info');
+      } catch (err) {
+        this.showToast('Failed to copy message to clipboard.', 'error');
       }
     },
 
-    regenerateTurn(idx) {
-      this.showToast('Regenerate reply will be active with stream runner.', 'info');
+    stopGeneratingRP() {
+      if (this.rpAbortController) {
+        try {
+          this.rpAbortController.abort();
+        } catch (_) {}
+        this.rpAbortController = null;
+      }
+      this.isGeneratingRP = false;
+      this.refreshIcons();
     },
 
-    deleteFromHere(idx) {
+    async deleteTurn(index) {
+      if (index === undefined || index === null || index < 0 || index >= this.rpMessages.length) {
+        return;
+      }
+      const sessionId = this.rpSessionId;
+      if (sessionId) {
+        try {
+          const res = await fetch(`/api/v1/rp/sessions/${encodeURIComponent(sessionId)}/turns/delete`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              turn_index: index,
+              truncate_subsequent: false,
+            }),
+          });
+          if (!res.ok) {
+            console.warn('Backend turn delete response not ok:', res.status);
+          }
+        } catch (err) {
+          console.warn('Failed to delete turn on backend:', err);
+        }
+      }
+      this.rpMessages.splice(index, 1);
+      this.showToast('Turn deleted.', 'info');
+      this.refreshIcons();
+    },
+
+    async deleteFromHere(index) {
+      if (index === undefined || index === null || index < 0 || index >= this.rpMessages.length) {
+        return;
+      }
       const confirmed =
         typeof confirm === 'function'
           ? confirm('Rewind and delete all messages from this turn forward?')
           : true;
-      if (confirmed) {
-        this.rpMessages.splice(idx);
-        this.showToast('Rewound chat history.', 'info');
-        this.refreshIcons();
-      }
-    },
+      if (!confirmed) return;
 
-    deleteTurn(idx) {
-      this.rpMessages.splice(idx, 1);
+      if (this.isGeneratingRP) {
+        this.stopGeneratingRP();
+      }
+
+      const sessionId = this.rpSessionId;
+      if (sessionId) {
+        try {
+          const res = await fetch(`/api/v1/rp/sessions/${encodeURIComponent(sessionId)}/turns/delete`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              turn_index: index,
+              truncate_subsequent: true,
+            }),
+          });
+          if (!res.ok) {
+            console.warn('Backend deleteFromHere response not ok:', res.status);
+          }
+        } catch (err) {
+          console.warn('Failed to rewind session on backend:', err);
+        }
+      }
+      this.rpMessages.splice(index);
+      this.showToast('Rewound chat history.', 'info');
       this.refreshIcons();
     },
 
-    sendRPMessage() {
-      if (!this.rpInput || !this.rpInput.trim() || !this.rpCharId) return;
-      const text = this.rpInput.trim();
+    async regenerateTurn(index) {
+      if (this.isGeneratingRP) return;
+      const targetIdx = typeof index === 'number' ? index : this.rpMessages.length - 1;
+      if (targetIdx < 0 || targetIdx >= this.rpMessages.length) return;
+
+      const targetMsg = this.rpMessages[targetIdx];
+      if (targetMsg.role !== 'assistant') {
+        this.showToast('Can only regenerate assistant replies.', 'info');
+        return;
+      }
+
+      // Find prior user prompt
+      let priorUserText = '';
+      for (let i = targetIdx - 1; i >= 0; i--) {
+        if (this.rpMessages[i].role === 'user') {
+          priorUserText = this.rpMessages[i].content;
+          break;
+        }
+      }
+
+      if (!priorUserText) {
+        this.showToast('No prior user message found to regenerate from.', 'error');
+        return;
+      }
+
+      // Delete assistant message from backend and frontend array
+      await this.deleteTurn(targetIdx);
+
+      // Trigger streaming generation from the prior user message
+      await this._streamAssistantReply(priorUserText);
+    },
+
+    async sendRPMessage() {
+      if (this.isGeneratingRP) return;
+      const text = (this.rpInput || '').trim();
+      if (!text) return;
+      if (!this.rpCharId) {
+        this.showToast('Please select a character first.', 'error');
+        return;
+      }
+
       this.rpInput = '';
       this.rpMessages.push({
         role: 'user',
@@ -939,11 +1133,141 @@ const AppDefinition = {
           minute: '2-digit',
         }),
       });
-      this.refreshIcons();
+
+      await this._streamAssistantReply(text);
     },
 
-    stopGeneratingRP() {
-      this.isGeneratingRP = false;
+    async _streamAssistantReply(promptText) {
+      const assistantMsg = {
+        role: 'assistant',
+        content: '',
+        timestamp: new Date().toLocaleTimeString([], {
+          hour: '2-digit',
+          minute: '2-digit',
+        }),
+      };
+      this.rpMessages.push(assistantMsg);
+      this.isGeneratingRP = true;
+      this.rpAbortController = new AbortController();
+      this.scrollRPChatToBottom();
+      this.refreshIcons();
+
+      if (!this.rpSessionId) {
+        this.rpSessionId = 'sess_' + Math.random().toString(36).substring(2, 10);
+      }
+
+      const payload = {
+        char_id: this.rpCharId,
+        session_id: this.rpSessionId,
+        message: promptText,
+        authors_note: this.rpAuthorsNote ? this.rpAuthorsNote.trim() : null,
+        user_name: this.rpUserName ? this.rpUserName.trim() : 'User',
+        chunk_size: Number(this.rpChunkSize) || 16,
+      };
+
+      try {
+        const res = await fetch('/api/v1/rp/chat/stream', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+          signal: this.rpAbortController.signal,
+        });
+
+        if (!res.ok) {
+          let errDetail = `Server returned HTTP ${res.status}`;
+          try {
+            const errJson = await res.json();
+            if (errJson.detail) errDetail = errJson.detail;
+          } catch (_) {}
+          throw new Error(errDetail);
+        }
+
+        if (!res.body) {
+          throw new Error('ReadableStream not supported on response');
+        }
+
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder('utf-8');
+        let buffer = '';
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          buffer = buffer.replace(/\r\n/g, '\n');
+
+          const events = buffer.split('\n\n');
+          buffer = events.pop();
+
+          for (const block of events) {
+            const trimmed = block.trim();
+            if (!trimmed) continue;
+            for (const line of trimmed.split('\n')) {
+              const l = line.trim();
+              if (l.startsWith('data:')) {
+                const rawData = l.slice(5).trim();
+                if (rawData === '[DONE]') {
+                  continue;
+                }
+                try {
+                  const data = JSON.parse(rawData);
+                  if (data.delta) {
+                    assistantMsg.content += data.delta;
+                    this.scrollRPChatToBottom();
+                  } else if (data.full_text && !assistantMsg.content) {
+                    assistantMsg.content = data.full_text;
+                    this.scrollRPChatToBottom();
+                  }
+                } catch (jsonErr) {
+                  // Ignore malformed chunk
+                }
+              }
+            }
+          }
+        }
+
+        // Flush any remaining buffered SSE lines
+        if (buffer && buffer.trim()) {
+          for (const line of buffer.trim().split('\n')) {
+            const l = line.trim();
+            if (l.startsWith('data:')) {
+              const rawData = l.slice(5).trim();
+              if (rawData !== '[DONE]') {
+                try {
+                  const data = JSON.parse(rawData);
+                  if (data.delta) {
+                    assistantMsg.content += data.delta;
+                  } else if (data.full_text && !assistantMsg.content) {
+                    assistantMsg.content = data.full_text;
+                  }
+                } catch (_) {}
+              }
+            }
+          }
+        }
+
+        if (!assistantMsg.content.trim()) {
+          assistantMsg.content = '*(No response)*';
+        }
+      } catch (err) {
+        if (err.name === 'AbortError') {
+          this.showToast('Generation stopped.', 'info');
+          if (!assistantMsg.content) {
+            assistantMsg.content = '*(Generation stopped)*';
+          }
+        } else {
+          console.error('Roleplay streaming error:', err);
+          this.showToast(err.message || 'Error generating roleplay response.', 'error');
+          if (!assistantMsg.content) {
+            assistantMsg.content = `*(Error: ${err.message || 'Failed to generate response'})*`;
+          }
+        }
+      } finally {
+        this.isGeneratingRP = false;
+        this.rpAbortController = null;
+        this.scrollRPChatToBottom();
+        this.refreshIcons();
+      }
     },
 
     // =========================================================================
