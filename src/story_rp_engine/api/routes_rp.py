@@ -2,6 +2,7 @@ import os
 from typing import Optional
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
 from story_rp_engine.core.agent_utils import (
     execute_runner_turn,
     format_sse_stream,
@@ -110,3 +111,77 @@ async def chat_rp_stream(req: RPChatRequest, request: Request):
         format_sse_stream(generator, chunk_size=req.chunk_size),
         media_type="text/event-stream",
     )
+
+
+class DeleteTurnRequest(BaseModel):
+    turn_index: int
+    truncate_subsequent: bool = False
+
+
+@router.get("/rp/sessions/{session_id}/turns")
+async def get_session_turns(session_id: str, request: Request):
+    try:
+        _sanitize_key(session_id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    session_service = request.app.state.session_service
+    session = await session_service.get_session(app_name="rp_app", user_id="User", session_id=session_id)
+    if not session or not session.events:
+        return {"turns": []}
+
+    turns = []
+    for idx, ev in enumerate(session.events):
+        text = ""
+        if ev.content and ev.content.parts:
+            text = "".join(p.text for p in ev.content.parts if getattr(p, "text", None))
+        role = getattr(ev.content, "role", "unknown") if ev.content else "system"
+        if text:
+            turns.append({"index": idx, "role": role, "text": text})
+    return {"turns": turns}
+
+
+@router.delete("/rp/sessions/{session_id}")
+async def clear_session(session_id: str, request: Request):
+    try:
+        _sanitize_key(session_id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    session_service = request.app.state.session_service
+    await session_service.delete_session(app_name="rp_app", user_id="User", session_id=session_id)
+    return {"status": "deleted", "session_id": session_id}
+
+
+@router.post("/rp/sessions/{session_id}/turns/delete")
+async def delete_session_turn(session_id: str, req: DeleteTurnRequest, request: Request):
+    try:
+        _sanitize_key(session_id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    session_service = request.app.state.session_service
+    session = await session_service.get_session(app_name="rp_app", user_id="User", session_id=session_id)
+    if not session:
+        return {"status": "ok", "remaining_turns": 0}
+
+    # Recreate session with pruned events
+    events = list(session.events)
+    if req.truncate_subsequent:
+        if req.turn_index >= 0:
+            events = events[:req.turn_index]
+        else:
+            events = []
+    else:
+        if 0 <= req.turn_index < len(events):
+            events.pop(req.turn_index)
+
+    await session_service.delete_session(app_name="rp_app", user_id="User", session_id=session_id)
+    new_session = await session_service.create_session(
+        app_name="rp_app",
+        user_id="User",
+        session_id=session_id,
+        state=session.state,
+    )
+    for ev in events:
+        await session_service.append_event(new_session, ev)
+
+    return {"status": "ok", "remaining_turns": len(events)}
+
