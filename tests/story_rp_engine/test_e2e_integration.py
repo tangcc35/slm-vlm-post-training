@@ -59,6 +59,7 @@ def test_full_engine_lifecycle(tmp_path):
         story_res = client.post(
             "/api/v1/story/expand",
             json={
+                "session_id": "sess_story_e2e",
                 "premise": "Surviving the high winter pass.",
                 "current_text": "Rowan tightened the straps on his pack.",
                 "instruction": "Describe the view from the pass.",
@@ -68,3 +69,4 @@ def test_full_engine_lifecycle(tmp_path):
         )
         assert story_res.status_code == 200
         assert "frozen valley" in story_res.json()["expansion"]
+        assert story_res.json()["session_id"] == "sess_story_e2e"

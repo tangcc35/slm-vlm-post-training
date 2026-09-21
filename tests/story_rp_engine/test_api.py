@@ -175,6 +175,7 @@ def test_story_expand_endpoint(tmp_path):
         res = client.post(
             "/api/v1/story/expand",
             json={
+                "session_id": "story_sess_1",
                 "premise": "A clockwork tower.",
                 "current_text": "Tick tock.",
                 "instruction": "Continue.",
@@ -183,15 +184,51 @@ def test_story_expand_endpoint(tmp_path):
             },
         )
         assert res.status_code == 200
-        assert res.json() == {"expansion": "The gears clicked into place."}
+        assert res.json() == {
+            "expansion": "The gears clicked into place.",
+            "session_id": "story_sess_1",
+        }
         assert mock_exec.called
         call_kwargs = mock_exec.call_args.kwargs
+        assert call_kwargs["session_id"] == "story_sess_1"
         assert call_kwargs["message"] == "Continue."
         assert call_kwargs["state_delta"]["premise"] == "A clockwork tower."
         assert call_kwargs["state_delta"]["genre"] == "Steampunk"
         assert call_kwargs["state_delta"]["tone"] == "Dark"
         assert call_kwargs["state_delta"]["current_text"] == "Tick tock."
         assert call_kwargs["state_delta"]["instruction"] == "Continue."
+
+
+def test_story_expand_endpoint_missing_session_id_fails(tmp_path):
+    store = EngineStore(storage_dir=str(tmp_path))
+    app = create_app(store=store, config=EngineConfig())
+    client = TestClient(app)
+
+    res = client.post(
+        "/api/v1/story/expand",
+        json={
+            "premise": "A clockwork tower.",
+            "current_text": "Tick tock.",
+        },
+    )
+    assert res.status_code == 422
+
+
+def test_story_expand_endpoint_empty_session_id_fails(tmp_path):
+    store = EngineStore(storage_dir=str(tmp_path))
+    app = create_app(store=store, config=EngineConfig())
+    client = TestClient(app)
+
+    res = client.post(
+        "/api/v1/story/expand",
+        json={
+            "session_id": "   ",
+            "premise": "A clockwork tower.",
+            "current_text": "Tick tock.",
+        },
+    )
+    assert res.status_code == 400
+    assert "session_id is required" in res.json()["detail"].lower()
 
 
 def test_story_expand_stream_endpoint(tmp_path):
@@ -210,6 +247,7 @@ def test_story_expand_stream_endpoint(tmp_path):
         res = client.post(
             "/api/v1/story/expand/stream",
             json={
+                "session_id": "story_sess_stream_1",
                 "premise": "Dawn at sea.",
                 "current_text": "Morning came.",
                 "instruction": "Describe the sun.",
@@ -217,6 +255,7 @@ def test_story_expand_stream_endpoint(tmp_path):
         )
         assert res.status_code == 200
         assert "text/event-stream" in res.headers["content-type"]
+        assert res.headers["x-session-id"] == "story_sess_stream_1"
         body = res.text
         # Batched 4 tokens then remaining 2 tokens
         assert 'data: {"delta": "The sun rose above"}\n\n' in body
@@ -225,6 +264,7 @@ def test_story_expand_stream_endpoint(tmp_path):
         assert "data: [DONE]\n\n" in body
         assert mock_stream_fn.called
         call_kwargs = mock_stream_fn.call_args.kwargs
+        assert call_kwargs["session_id"] == "story_sess_stream_1"
         assert call_kwargs["message"] == "Describe the sun."
         assert call_kwargs["state_delta"]["premise"] == "Dawn at sea."
         assert call_kwargs["state_delta"]["current_text"] == "Morning came."
@@ -247,12 +287,14 @@ def test_story_expand_stream_custom_chunk_size(tmp_path):
         res = client.post(
             "/api/v1/story/expand/stream",
             json={
+                "session_id": "story_sess_stream_2",
                 "current_text": "Morning came.",
                 "instruction": "Describe the sun.",
                 "chunk_size": 2,
             },
         )
         assert res.status_code == 200
+        assert res.headers["x-session-id"] == "story_sess_stream_2"
         body = res.text
         assert 'data: {"delta": "The sun"}\n\n' in body
         assert 'data: {"delta": " rose above"}\n\n' in body
@@ -593,13 +635,15 @@ async def test_native_runner_story_execution(tmp_path):
     res = client.post(
         "/api/v1/story/expand",
         json={
+            "session_id": "story_sess_inspect",
             "premise": "A journey north.",
             "current_text": "The wind howled.",
             "instruction": "Describe the frost.",
         },
     )
     assert res.status_code == 200
-    assert res.json() == {"expansion": "writer narrative"}
+    assert res.json()["expansion"] == "writer narrative"
+    assert res.json()["session_id"] == "story_sess_inspect"
     assert "Premise: A journey north." in captured["director"]
     assert "The wind howled." in captured["director"]
     assert "A journey north." in captured["writer"]
@@ -616,6 +660,7 @@ def test_story_expand_without_registry_errors(tmp_path):
     res = client.post(
         "/api/v1/story/expand",
         json={
+            "session_id": "test_sess",
             "premise": "A journey north.",
             "current_text": "The wind howled.",
             "instruction": "Describe the frost.",
@@ -635,6 +680,7 @@ def test_story_expand_stream_without_registry_errors(tmp_path):
     res = client.post(
         "/api/v1/story/expand/stream",
         json={
+            "session_id": "test_sess",
             "premise": "A journey north.",
             "current_text": "The wind howled.",
             "instruction": "Describe the frost.",
@@ -642,6 +688,53 @@ def test_story_expand_stream_without_registry_errors(tmp_path):
     )
     assert res.status_code == 500
     assert "agent registry not initialized" in res.json()["detail"].lower()
+
+
+def test_story_expand_multi_turn_stateful(tmp_path):
+    store = EngineStore(storage_dir=str(tmp_path))
+    app = create_app(store=store, config=EngineConfig())
+    client = TestClient(app)
+
+    session_ids_received = []
+
+    async def mock_execute(runner, user_id, session_id, message, state_delta):
+        session_ids_received.append((session_id, message, state_delta.get("current_text")))
+        return f"Continuation after {message}"
+
+    with patch(
+        "story_rp_engine.api.routes_story.execute_runner_turn",
+        side_effect=mock_execute,
+    ):
+        # Turn 1
+        res1 = client.post(
+            "/api/v1/story/expand",
+            json={
+                "session_id": "sess_story_chain",
+                "premise": "Trapped in the ice.",
+                "current_text": "The blizzard roared outside.",
+                "instruction": "Describe lighting a fire.",
+            },
+        )
+        assert res1.status_code == 200
+        assert res1.json()["session_id"] == "sess_story_chain"
+        assert res1.json()["expansion"] == "Continuation after Describe lighting a fire."
+
+        # Turn 2: Expanding/modifying using the same session_id
+        res2 = client.post(
+            "/api/v1/story/expand",
+            json={
+                "session_id": "sess_story_chain",
+                "current_text": "The blizzard roared outside.\nThe match caught, sparks flying.",
+                "instruction": "Now make the shadows on the wall shift ominously.",
+            },
+        )
+        assert res2.status_code == 200
+        assert res2.json()["session_id"] == "sess_story_chain"
+        assert res2.json()["expansion"] == "Continuation after Now make the shadows on the wall shift ominously."
+
+    assert len(session_ids_received) == 2
+    assert session_ids_received[0][0] == "sess_story_chain"
+    assert session_ids_received[1][0] == "sess_story_chain"
 
 
 @pytest.mark.anyio

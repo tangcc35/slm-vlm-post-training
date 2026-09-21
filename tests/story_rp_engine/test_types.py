@@ -44,7 +44,8 @@ def test_lorebook_and_entry():
     assert "archive" in lorebook.entries[0].keys
 
 def test_story_request_defaults():
-    req = StoryRequest(current_text="The wind howled.")
+    req = StoryRequest(session_id="story_sess_1", current_text="The wind howled.")
+    assert req.session_id == "story_sess_1"
     assert req.current_text == "The wind howled."
     assert req.genre == "Fiction"
     assert req.tone == "Balanced"
@@ -52,5 +53,14 @@ def test_story_request_defaults():
     assert req.chunk_size == 4
 
 def test_story_request_custom_chunk_size():
-    req = StoryRequest(current_text="The wind howled.", chunk_size=8)
+    req = StoryRequest(session_id="story_sess_1", current_text="The wind howled.", chunk_size=8)
+    assert req.session_id == "story_sess_1"
     assert req.chunk_size == 8
+
+def test_story_request_missing_session_id_raises():
+    with pytest.raises(ValidationError):
+        StoryRequest(current_text="The wind howled.")
+
+def test_story_request_empty_session_id_raises():
+    with pytest.raises(ValidationError):
+        StoryRequest(session_id="", current_text="The wind howled.")

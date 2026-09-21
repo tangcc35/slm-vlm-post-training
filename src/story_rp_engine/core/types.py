@@ -37,6 +37,7 @@ class ChatMessage(BaseModel):
     timestamp: datetime = Field(default_factory=datetime.utcnow)
 
 class StoryRequest(BaseModel):
+    session_id: str = Field(..., min_length=1, description="Session ID for tracking multi-turn story state.")
     premise: Optional[str] = None
     current_text: str = ""
     instruction: Optional[str] = "Continue the story naturally from the current point."

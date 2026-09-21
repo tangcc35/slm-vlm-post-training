@@ -1,4 +1,3 @@
-import uuid
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from google.adk.runners import Runner
@@ -26,6 +25,8 @@ def _get_story_runner(request: Request) -> Runner:
 
 @router.post("/expand")
 async def expand_story_endpoint(req: StoryRequest, request: Request):
+    if not req.session_id or not req.session_id.strip():
+        raise HTTPException(status_code=400, detail="session_id is required")
     runner = _get_story_runner(request)
     state_delta = {
         "premise": req.premise or "Not specified",
@@ -38,15 +39,17 @@ async def expand_story_endpoint(req: StoryRequest, request: Request):
     expansion = await execute_runner_turn(
         runner,
         user_id="User",
-        session_id=f"story_{uuid.uuid4().hex}",
+        session_id=req.session_id,
         message=user_instruction,
         state_delta=state_delta,
     )
-    return {"expansion": expansion}
+    return {"expansion": expansion, "session_id": req.session_id}
 
 
 @router.post("/expand/stream")
 async def expand_story_stream(req: StoryRequest, request: Request):
+    if not req.session_id or not req.session_id.strip():
+        raise HTTPException(status_code=400, detail="session_id is required")
     runner = _get_story_runner(request)
     state_delta = {
         "premise": req.premise or "Not specified",
@@ -59,7 +62,7 @@ async def expand_story_stream(req: StoryRequest, request: Request):
     generator = stream_runner_turn(
         runner,
         user_id="User",
-        session_id=f"story_{uuid.uuid4().hex}",
+        session_id=req.session_id,
         message=user_instruction,
         state_delta=state_delta,
     )
@@ -67,4 +70,5 @@ async def expand_story_stream(req: StoryRequest, request: Request):
     return StreamingResponse(
         format_sse_stream(generator, chunk_size=req.chunk_size),
         media_type="text/event-stream",
+        headers={"X-Session-ID": req.session_id},
     )
