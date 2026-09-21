@@ -867,6 +867,7 @@ const AppDefinition = {
             this.rpMessages.push({
               role: 'assistant',
               content: text,
+              isGreeting: true,
               timestamp: new Date().toLocaleTimeString([], {
                 hour: '2-digit',
                 minute: '2-digit',
@@ -876,6 +877,7 @@ const AppDefinition = {
         } else if (this.rpMessages.length === 1 && this.rpMessages[0].role === 'assistant') {
           if (text) {
             this.rpMessages[0].content = text;
+            this.rpMessages[0].isGreeting = true;
             this.rpMessages[0].timestamp = new Date().toLocaleTimeString([], {
               hour: '2-digit',
               minute: '2-digit',
@@ -905,14 +907,16 @@ const AppDefinition = {
           this.rpMessages.push({
             role: 'assistant',
             content: text,
+            isGreeting: true,
             timestamp: new Date().toLocaleTimeString([], {
               hour: '2-digit',
               minute: '2-digit',
             }),
           });
         }
-      } else if (this.rpMessages[0].role === 'assistant') {
+      } else if (this.rpMessages[0].role === 'assistant' && (this.rpMessages[0].isGreeting || this.rpMessages.length === 1)) {
         this.rpMessages[0].content = text;
+        this.rpMessages[0].isGreeting = true;
         this.rpMessages[0].timestamp = new Date().toLocaleTimeString([], {
           hour: '2-digit',
           minute: '2-digit',
@@ -942,6 +946,7 @@ const AppDefinition = {
           this.rpMessages.push({
             role: 'assistant',
             content: text,
+            isGreeting: true,
             timestamp: new Date().toLocaleTimeString([], {
               hour: '2-digit',
               minute: '2-digit',
@@ -1023,14 +1028,30 @@ const AppDefinition = {
       if (index === undefined || index === null || index < 0 || index >= this.rpMessages.length) {
         return;
       }
+
+      const hasGreeting = this.rpMessages.length > 0 && !!this.rpMessages[0].isGreeting;
+
+      // When deleting index 0 and it's the unpersisted greeting: client-side removal only
+      if (index === 0 && hasGreeting) {
+        this.rpMessages.splice(0, 1);
+        if (this.rpMessages.length === 0) {
+          await this.clearRPSession();
+        } else {
+          this.showToast('Turn deleted.', 'info');
+          this.refreshIcons();
+        }
+        return;
+      }
+
+      const backendIndex = hasGreeting ? index - 1 : index;
       const sessionId = this.rpSessionId;
-      if (sessionId) {
+      if (sessionId && backendIndex >= 0) {
         try {
           const res = await fetch(`/api/v1/rp/sessions/${encodeURIComponent(sessionId)}/turns/delete`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              turn_index: index,
+              turn_index: backendIndex,
               truncate_subsequent: false,
             }),
           });
@@ -1060,14 +1081,23 @@ const AppDefinition = {
         this.stopGeneratingRP();
       }
 
+      const hasGreeting = this.rpMessages.length > 0 && !!this.rpMessages[0].isGreeting;
+
+      // If rewinding from index 0, clear the whole session
+      if (index === 0) {
+        await this.clearRPSession();
+        return;
+      }
+
+      const backendIndex = hasGreeting ? index - 1 : index;
       const sessionId = this.rpSessionId;
-      if (sessionId) {
+      if (sessionId && backendIndex >= 0) {
         try {
           const res = await fetch(`/api/v1/rp/sessions/${encodeURIComponent(sessionId)}/turns/delete`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              turn_index: index,
+              turn_index: backendIndex,
               truncate_subsequent: true,
             }),
           });
@@ -1095,21 +1125,43 @@ const AppDefinition = {
       }
 
       // Find prior user prompt
+      let userIdx = -1;
       let priorUserText = '';
       for (let i = targetIdx - 1; i >= 0; i--) {
         if (this.rpMessages[i].role === 'user') {
+          userIdx = i;
           priorUserText = this.rpMessages[i].content;
           break;
         }
       }
 
-      if (!priorUserText) {
+      if (!priorUserText || userIdx === -1) {
         this.showToast('No prior user message found to regenerate from.', 'error');
         return;
       }
 
-      // Delete assistant message from backend and frontend array
-      await this.deleteTurn(targetIdx);
+      const hasGreeting = this.rpMessages.length > 0 && !!this.rpMessages[0].isGreeting;
+      const userBackendIndex = hasGreeting ? userIdx - 1 : userIdx;
+
+      // Rewind backend session to before the prior user message so re-sending it won't duplicate it in memory
+      const sessionId = this.rpSessionId;
+      if (sessionId && userBackendIndex >= 0) {
+        try {
+          await fetch(`/api/v1/rp/sessions/${encodeURIComponent(sessionId)}/turns/delete`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              turn_index: userBackendIndex,
+              truncate_subsequent: true,
+            }),
+          });
+        } catch (err) {
+          console.warn('Backend rewind for regenerate failed:', err);
+        }
+      }
+
+      // Remove the assistant message from the frontend array
+      this.rpMessages.splice(targetIdx, 1);
 
       // Trigger streaming generation from the prior user message
       await this._streamAssistantReply(priorUserText);

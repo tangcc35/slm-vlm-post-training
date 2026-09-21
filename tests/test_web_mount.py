@@ -41,6 +41,29 @@ def test_web_static_assets():
         "filteredLorebooks",
         "checkHealth",
         "toast",
+        # Roleplay workbench methods & state (Task 6)
+        "rpSessionId",
+        "rpCharId",
+        "rpUserName",
+        "rpAuthorsNote",
+        "rpLorebookId",
+        "rpChunkSize",
+        "rpMessages",
+        "selectedGreetingIndex",
+        "isGeneratingRP",
+        "rpAbortController",
+        "onRPCharChange",
+        "onGreetingChange",
+        "newRPSession",
+        "clearRPSession",
+        "sendRPMessage",
+        "stopGeneratingRP",
+        "deleteTurn",
+        "deleteFromHere",
+        "regenerateTurn",
+        "_streamAssistantReply",
+        "renderMarkdown",
+        "copyMessage",
     ]
     for kw in required_keywords:
         assert kw in resp_js.text, f"Expected {kw} in app.js"
@@ -123,4 +146,33 @@ def test_character_and_lorebook_api_flow(tmp_path):
     del_lb = client.delete(f"/api/v1/lorebooks/{lb_id}")
     assert del_lb.status_code == 200
     assert del_lb.json()["status"] == "deleted"
+
+
+def test_rp_session_and_turns_api_flow():
+    app = create_app()
+    client = TestClient(app)
+
+    session_id = "test_rp_turn_sess"
+
+    # 1. Delete turn on nonexistent session returns ok with 0 remaining turns
+    del_turn_resp = client.post(
+        f"/api/v1/rp/sessions/{session_id}/turns/delete",
+        json={"turn_index": 0, "truncate_subsequent": False},
+    )
+    assert del_turn_resp.status_code == 200
+    assert del_turn_resp.json()["status"] == "ok"
+
+    # 2. Rewind turn on session
+    rewind_resp = client.post(
+        f"/api/v1/rp/sessions/{session_id}/turns/delete",
+        json={"turn_index": 0, "truncate_subsequent": True},
+    )
+    assert rewind_resp.status_code == 200
+    assert rewind_resp.json()["status"] == "ok"
+
+    # 3. Clear session
+    clear_resp = client.delete(f"/api/v1/rp/sessions/{session_id}")
+    assert clear_resp.status_code == 200
+    assert clear_resp.json()["status"] == "deleted"
+
 
