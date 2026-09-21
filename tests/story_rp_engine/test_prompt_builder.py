@@ -1,12 +1,13 @@
 import pytest
-from story_rp_engine.core.types import CharacterCardV2, CharacterCardV2Data, LorebookEntry
+from story_rp_engine.core.types import CharacterCard, LorebookEntry
 from story_rp_engine.rp.prompt_builder import (
     build_rp_system_instruction,
     replace_macros,
 )
 
 def test_build_rp_system_instruction_macro_replacement():
-    data = CharacterCardV2Data(
+    card = CharacterCard(
+        char_id="aria",
         name="Aria",
         description="{{char}} is an elven scout.",
         personality="Brave",
@@ -14,7 +15,6 @@ def test_build_rp_system_instruction_macro_replacement():
         first_mes="Halt!",
         mes_example="<START>\n{{user}}: Hello\n{{char}}: Who are you?",
     )
-    card = CharacterCardV2(data=data)
     lore = [LorebookEntry(keys=["woods"], content="The Whispering Woods are ancient.")]
 
     instruction = build_rp_system_instruction(card, active_lore=lore, user_name="Alex")
@@ -26,7 +26,8 @@ def test_build_rp_system_instruction_macro_replacement():
 
 
 def test_build_rp_system_instruction_with_post_history_instructions():
-    data = CharacterCardV2Data(
+    card = CharacterCard(
+        char_id="seraphina",
         name="Seraphina",
         description="{{char}} is a scholar.",
         personality="Calm",
@@ -35,7 +36,6 @@ def test_build_rp_system_instruction_with_post_history_instructions():
         mes_example="",
         post_history_instructions="Maintain a polite tone with {{user}}.",
     )
-    card = CharacterCardV2(data=data)
 
     instruction = build_rp_system_instruction(card, active_lore=None, user_name="Morgan")
     assert "### Additional Directives\nMaintain a polite tone with Morgan." in instruction
@@ -44,7 +44,8 @@ def test_build_rp_system_instruction_with_post_history_instructions():
 
 
 def test_build_rp_system_instruction_default_user_name():
-    data = CharacterCardV2Data(
+    card = CharacterCard(
+        char_id="bob",
         name="Bob",
         description="Builder",
         personality="Helpful",
@@ -52,7 +53,6 @@ def test_build_rp_system_instruction_default_user_name():
         first_mes="Can we fix it?",
         mes_example="",
     )
-    card = CharacterCardV2(data=data)
 
     instruction = build_rp_system_instruction(card)
     assert "speak for User." in instruction

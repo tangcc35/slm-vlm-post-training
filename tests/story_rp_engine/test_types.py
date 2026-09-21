@@ -2,12 +2,12 @@ import pytest
 from pydantic import ValidationError
 from story_rp_engine.core.config import EngineConfig
 from story_rp_engine.core.types import (
-    CharacterCardV2,
-    CharacterCardV2Data,
+    CharacterCard,
     Lorebook,
     LorebookEntry,
     ChatMessage,
     StoryRequest,
+    RPChatRequest,
 )
 
 def test_engine_config_defaults():
@@ -16,8 +16,9 @@ def test_engine_config_defaults():
     assert config.temperature == 0.8
     assert config.max_tokens == 131072
 
-def test_character_card_v2_valid():
-    data = CharacterCardV2Data(
+def test_character_card_valid():
+    card = CharacterCard(
+        char_id="seraphina",
         name="Seraphina",
         description="A quiet archivist",
         personality="Cautious, observant",
@@ -25,17 +26,23 @@ def test_character_card_v2_valid():
         first_mes="Welcome to the archives. Please keep your voice down.",
         mes_example="<START>\n{{user}}: What is this place?\n{{char}}: It is memory preserved.",
     )
-    card = CharacterCardV2(data=data)
-    assert card.spec == "chara_card_v2"
-    assert card.spec_version == "2.0"
-    assert card.data.name == "Seraphina"
+    assert card.char_id == "seraphina"
+    assert card.name == "Seraphina"
+    assert card.description == "A quiet archivist"
+    assert card.personality == "Cautious, observant"
+    assert card.scenario == "An ancient library after hours"
+    assert card.first_mes == "Welcome to the archives. Please keep your voice down."
+    assert card.mes_example == "<START>\n{{user}}: What is this place?\n{{char}}: It is memory preserved."
+    assert card.alternate_greetings == []
+    assert card.tags == []
 
-def test_character_card_v2_invalid_spec():
-    data = CharacterCardV2Data(
-        name="A", description="B", personality="C", scenario="D", first_mes="E", mes_example="F"
-    )
+def test_character_card_missing_char_id_raises():
     with pytest.raises(ValidationError):
-        CharacterCardV2(spec="invalid_spec", data=data)
+        CharacterCard.model_validate({"name": "Elena"})
+
+def test_character_card_missing_name_raises():
+    with pytest.raises(ValidationError):
+        CharacterCard.model_validate({"char_id": "elena"})
 
 def test_lorebook_and_entry():
     entry = LorebookEntry(keys=["archive", "library"], content="The Archives were founded in 1420.")
@@ -64,3 +71,12 @@ def test_story_request_missing_session_id_raises():
 def test_story_request_empty_session_id_raises():
     with pytest.raises(ValidationError):
         StoryRequest(session_id="", current_text="The wind howled.")
+
+def test_rp_chat_request_defaults():
+    req = RPChatRequest(char_id="elena", session_id="s1", message="Hello")
+    assert req.char_id == "elena"
+    assert req.session_id == "s1"
+    assert req.message == "Hello"
+    assert req.user_name == "User"
+    assert req.chunk_size == 4
+    assert req.authors_note is None

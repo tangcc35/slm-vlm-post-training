@@ -5,7 +5,7 @@ from google.adk.runners import Runner
 from google.adk import Workflow
 from story_rp_engine.core.config import EngineConfig
 from story_rp_engine.storage.store import EngineStore
-from story_rp_engine.core.types import CharacterCardV2, Lorebook
+from story_rp_engine.core.types import CharacterCard, Lorebook
 from story_rp_engine.rp.agent import create_rp_agent
 
 
@@ -23,7 +23,7 @@ class AgentRegistry:
     def get_or_create_rp_agent(
         self,
         char_id: str,
-        card: Optional[CharacterCardV2] = None,
+        card: Optional[CharacterCard] = None,
         lorebook: Optional[Lorebook] = None,
     ) -> LlmAgent:
         if char_id in self._rp_agents:

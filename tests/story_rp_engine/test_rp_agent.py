@@ -1,10 +1,11 @@
 from story_rp_engine.core.config import EngineConfig
-from story_rp_engine.core.types import CharacterCardV2, CharacterCardV2Data, Lorebook, LorebookEntry
+from story_rp_engine.core.types import CharacterCard, Lorebook, LorebookEntry
 from story_rp_engine.rp.agent import create_rp_agent
 
 
 def test_create_rp_agent():
-    data = CharacterCardV2Data(
+    card = CharacterCard(
+        char_id="theron",
         name="Theron",
         description="Paladin",
         personality="Noble",
@@ -12,7 +13,6 @@ def test_create_rp_agent():
         first_mes="Stand firm!",
         mes_example="",
     )
-    card = CharacterCardV2(data=data)
     config = EngineConfig(model_name="ollama/llama3.1:8b")
 
     agent = create_rp_agent(card, config, user_name="Traveler")
@@ -24,7 +24,8 @@ def test_create_rp_agent():
 
 
 def test_create_rp_agent_with_lore():
-    data = CharacterCardV2Data(
+    card = CharacterCard(
+        char_id="theron",
         name="Theron",
         description="Paladin",
         personality="Noble",
@@ -32,7 +33,6 @@ def test_create_rp_agent_with_lore():
         first_mes="Stand firm!",
         mes_example="",
     )
-    card = CharacterCardV2(data=data)
     config = EngineConfig(model_name="ollama/llama3.1:8b")
     lorebook = Lorebook(
         name="chivalry",

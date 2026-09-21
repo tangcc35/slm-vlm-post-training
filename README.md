@@ -399,21 +399,18 @@ Store and retrieve Character Card V2 JSON definitions with `{{char}}` and `{{use
 
 - **Create / Update Character:**
   ```bash
-  curl -X POST "http://localhost:8000/api/v1/characters?char_id=elena" \
+  curl -X POST "http://localhost:8000/api/v1/characters" \
       -H "Content-Type: application/json" \
       -d '{
-        "spec": "chara_card_v2",
-        "spec_version": "2.0",
-        "data": {
-          "name": "Elena",
-          "description": "An intrepid archaeologist exploring ancient ruins.",
-          "personality": "Curious, witty, and cautious.",
-          "scenario": "Elena is trapped in a hidden chamber with {{user}}.",
-          "first_mes": "Watch your step! These pressure plates are ancient.",
-          "mes_example": "<START>\n{{user}}: What is that?\n{{char}}: An artifact older than the dynasty.",
-          "system_prompt": "Stay in character as Elena.",
-          "post_history_instructions": "Keep answers descriptive."
-        }
+        "char_id": "elena",
+        "name": "Elena",
+        "description": "An intrepid archaeologist exploring ancient ruins.",
+        "personality": "Curious, witty, and cautious.",
+        "scenario": "Elena is trapped in a hidden chamber with {{user}}.",
+        "first_mes": "Watch your step! These pressure plates are ancient.",
+        "mes_example": "<START>\n{{user}}: What is that?\n{{char}}: An artifact older than the dynasty.",
+        "system_prompt": "Stay in character as Elena.",
+        "post_history_instructions": "Keep answers descriptive."
       }'
   ```
 

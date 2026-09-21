@@ -2,7 +2,7 @@ import json
 import os
 from typing import Any, Dict, Optional
 from google.adk.sessions import BaseSessionService, DatabaseSessionService, Session
-from story_rp_engine.core.types import CharacterCardV2, Lorebook
+from story_rp_engine.core.types import CharacterCard, Lorebook
 
 
 def _sanitize_key(key: str) -> str:
@@ -55,22 +55,22 @@ class EngineStore:
             )
         return session
 
-    def save_character(self, char_id: str, card: CharacterCardV2) -> None:
+    def save_character(self, char_id: str, card: CharacterCard) -> None:
         char_id = _sanitize_key(char_id)
         path = os.path.join(self.char_dir, f"{char_id}.json")
         with open(path, "w", encoding="utf-8") as f:
             f.write(card.model_dump_json(indent=2))
 
-    def get_character(self, char_id: str) -> Optional[CharacterCardV2]:
+    def get_character(self, char_id: str) -> Optional[CharacterCard]:
         char_id = _sanitize_key(char_id)
         path = os.path.join(self.char_dir, f"{char_id}.json")
         if not os.path.exists(path):
             return None
         with open(path, "r", encoding="utf-8") as f:
             data = json.load(f)
-        return CharacterCardV2.model_validate(data)
+        return CharacterCard.model_validate(data)
 
-    def list_characters(self) -> Dict[str, CharacterCardV2]:
+    def list_characters(self) -> Dict[str, CharacterCard]:
         results = {}
         for filename in os.listdir(self.char_dir):
             if filename.endswith(".json"):

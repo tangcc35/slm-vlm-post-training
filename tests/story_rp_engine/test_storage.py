@@ -1,8 +1,7 @@
 import pytest
 from google.adk.sessions import DatabaseSessionService, Session
 from story_rp_engine.core.types import (
-    CharacterCardV2,
-    CharacterCardV2Data,
+    CharacterCard,
     Lorebook,
     LorebookEntry,
 )
@@ -11,25 +10,24 @@ from story_rp_engine.storage.store import EngineStore
 
 def test_character_crud(tmp_path):
     store = EngineStore(storage_dir=str(tmp_path))
-    card = CharacterCardV2(
-        data=CharacterCardV2Data(
-            name="Valerie",
-            description="Alchemist",
-            personality="Witty",
-            scenario="Shop",
-            first_mes="Can I help you?",
-            mes_example="",
-        )
+    card = CharacterCard(
+        char_id="valerie_1",
+        name="Valerie",
+        description="Alchemist",
+        personality="Witty",
+        scenario="Shop",
+        first_mes="Can I help you?",
+        mes_example="",
     )
     store.save_character("valerie_1", card)
 
     retrieved = store.get_character("valerie_1")
     assert retrieved is not None
-    assert retrieved.data.name == "Valerie"
+    assert retrieved.name == "Valerie"
 
     all_chars = store.list_characters()
     assert "valerie_1" in all_chars
-    assert all_chars["valerie_1"].data.name == "Valerie"
+    assert all_chars["valerie_1"].name == "Valerie"
 
 
 def test_character_not_found(tmp_path):
@@ -89,15 +87,14 @@ def test_list_ignores_non_json_files(tmp_path):
 )
 def test_path_traversal_defense(tmp_path, bad_key):
     store = EngineStore(storage_dir=str(tmp_path))
-    card = CharacterCardV2(
-        data=CharacterCardV2Data(
-            name="Valerie",
-            description="Alchemist",
-            personality="Witty",
-            scenario="Shop",
-            first_mes="Can I help you?",
-            mes_example="",
-        )
+    card = CharacterCard(
+        char_id="valerie",
+        name="Valerie",
+        description="Alchemist",
+        personality="Witty",
+        scenario="Shop",
+        first_mes="Can I help you?",
+        mes_example="",
     )
     lorebook = Lorebook(name="Arcane", description="Lore", entries=[])
 
@@ -117,20 +114,19 @@ def test_path_traversal_defense(tmp_path, bad_key):
 
 def test_key_whitespace_stripping(tmp_path):
     store = EngineStore(storage_dir=str(tmp_path))
-    card = CharacterCardV2(
-        data=CharacterCardV2Data(
-            name="Valerie",
-            description="Alchemist",
-            personality="Witty",
-            scenario="Shop",
-            first_mes="Can I help you?",
-            mes_example="",
-        )
+    card = CharacterCard(
+        char_id="valerie",
+        name="Valerie",
+        description="Alchemist",
+        personality="Witty",
+        scenario="Shop",
+        first_mes="Can I help you?",
+        mes_example="",
     )
     store.save_character("  valerie_padded  ", card)
     retrieved = store.get_character("valerie_padded")
     assert retrieved is not None
-    assert retrieved.data.name == "Valerie"
+    assert retrieved.name == "Valerie"
 
 
 @pytest.mark.anyio

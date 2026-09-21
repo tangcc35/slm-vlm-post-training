@@ -18,18 +18,15 @@ def test_full_engine_lifecycle(tmp_path):
 
     # 2. Register character card
     card_json = {
-        "spec": "chara_card_v2",
-        "spec_version": "2.0",
-        "data": {
-            "name": "Rowan",
-            "description": "A seasoned frontier guide.",
-            "personality": "Gruff but reliable.",
-            "scenario": "A mountain pass in winter.",
-            "first_mes": "Pack your gear tight.",
-            "mes_example": "{{user}}: How far?\n{{char}}: Two days, if the snow holds.",
-        },
+        "char_id": "rowan",
+        "name": "Rowan",
+        "description": "A seasoned frontier guide.",
+        "personality": "Gruff but reliable.",
+        "scenario": "A mountain pass in winter.",
+        "first_mes": "Pack your gear tight.",
+        "mes_example": "{{user}}: How far?\n{{char}}: Two days, if the snow holds.",
     }
-    save_res = client.post("/api/v1/characters?char_id=rowan", json=card_json)
+    save_res = client.post("/api/v1/characters", json=card_json)
     assert save_res.status_code == 200
 
     # 3. Conversational RP turn

@@ -4,7 +4,7 @@ from google.adk.agents import LlmAgent
 from story_rp_engine.core.config import EngineConfig
 from story_rp_engine.storage.store import EngineStore
 from story_rp_engine.core.agent_registry import AgentRegistry
-from story_rp_engine.core.types import CharacterCardV2, CharacterCardV2Data, Lorebook, LorebookEntry
+from story_rp_engine.core.types import CharacterCard, Lorebook, LorebookEntry
 
 
 def test_agent_registry_instantiates_agent_only_once(tmp_path):
@@ -12,15 +12,14 @@ def test_agent_registry_instantiates_agent_only_once(tmp_path):
     config = EngineConfig(model_name="ollama/llama3.1:8b")
     registry = AgentRegistry(config=config, store=store)
 
-    card = CharacterCardV2(
-        data=CharacterCardV2Data(
-            name="Seraphina",
-            description="High Priestess",
-            personality="Serene",
-            scenario="Temple",
-            first_mes="Blessings upon you.",
-            mes_example="",
-        )
+    card = CharacterCard(
+        char_id="seraphina",
+        name="Seraphina",
+        description="High Priestess",
+        personality="Serene",
+        scenario="Temple",
+        first_mes="Blessings upon you.",
+        mes_example="",
     )
     store.save_character("seraphina", card)
 
@@ -47,15 +46,14 @@ def test_agent_registry_with_explicit_card_and_lorebook(tmp_path):
     config = EngineConfig(model_name="ollama/llama3.1:8b")
     registry = AgentRegistry(config=config, store=store)
 
-    card = CharacterCardV2(
-        data=CharacterCardV2Data(
-            name="Gareth",
-            description="Knight",
-            personality="Brave",
-            scenario="Battlefield",
-            first_mes="Charge!",
-            mes_example="",
-        )
+    card = CharacterCard(
+        char_id="gareth",
+        name="Gareth",
+        description="Knight",
+        personality="Brave",
+        scenario="Battlefield",
+        first_mes="Charge!",
+        mes_example="",
     )
     lorebook = Lorebook(name="weapons", entries=[LorebookEntry(keys=["sword"], content="Holy sword")])
 
@@ -90,15 +88,14 @@ def test_agent_registry_rp_runner_caching(tmp_path):
     config = EngineConfig(model_name="ollama/llama3.1:8b")
     registry = AgentRegistry(config=config, store=store)
 
-    card = CharacterCardV2(
-        data=CharacterCardV2Data(
-            name="Seraphina",
-            description="High Priestess",
-            personality="Serene",
-            scenario="Temple",
-            first_mes="Blessings upon you.",
-            mes_example="",
-        )
+    card = CharacterCard(
+        char_id="seraphina",
+        name="Seraphina",
+        description="High Priestess",
+        personality="Serene",
+        scenario="Temple",
+        first_mes="Blessings upon you.",
+        mes_example="",
     )
     store.save_character("seraphina", card)
 
@@ -130,15 +127,14 @@ def test_agent_registry_register_rp_agent_invalidates_runner(tmp_path):
     config = EngineConfig(model_name="ollama/llama3.1:8b")
     registry = AgentRegistry(config=config, store=store)
 
-    card = CharacterCardV2(
-        data=CharacterCardV2Data(
-            name="Seraphina",
-            description="Priestess",
-            personality="Serene",
-            scenario="Temple",
-            first_mes="Blessings.",
-            mes_example="",
-        )
+    card = CharacterCard(
+        char_id="seraphina",
+        name="Seraphina",
+        description="Priestess",
+        personality="Serene",
+        scenario="Temple",
+        first_mes="Blessings.",
+        mes_example="",
     )
     store.save_character("seraphina", card)
 

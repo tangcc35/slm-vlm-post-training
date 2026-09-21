@@ -1,35 +1,28 @@
 from typing import Optional
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
 from story_rp_engine.core.agent_utils import (
     execute_runner_turn,
     format_sse_stream,
     stream_runner_turn,
 )
-from story_rp_engine.core.types import CharacterCardV2
+from story_rp_engine.core.types import CharacterCard, RPChatRequest
 from story_rp_engine.storage.store import _sanitize_key
 
 router = APIRouter(prefix="/api/v1", tags=["Roleplay"])
 
 
-class RPChatRequest(BaseModel):
-    char_id: str
-    session_id: str
-    message: str
-    authors_note: Optional[str] = None
-    user_name: Optional[str] = "User"
-    chunk_size: Optional[int] = 4
-
-
 @router.post("/characters")
-def save_character(char_id: str, card: CharacterCardV2, request: Request):
+def save_character(card: CharacterCard, request: Request):
+    if not card.char_id:
+        raise HTTPException(status_code=400, detail="char_id is required in request body")
     store = request.app.state.store
     try:
-        store.save_character(char_id, card)
+        store.save_character(card.char_id, card)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    return {"status": "saved", "char_id": char_id}
+    return {"status": "saved", "char_id": card.char_id}
+
 
 
 @router.get("/characters")

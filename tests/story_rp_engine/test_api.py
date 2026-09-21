@@ -3,7 +3,7 @@ from fastapi.testclient import TestClient
 from unittest.mock import AsyncMock, MagicMock, patch
 from story_rp_engine.api.app import create_app
 from story_rp_engine.core.config import EngineConfig
-from story_rp_engine.core.types import CharacterCardV2, CharacterCardV2Data
+from story_rp_engine.core.types import CharacterCard
 from story_rp_engine.storage.store import EngineStore
 
 
@@ -21,31 +21,67 @@ def test_character_endpoints(tmp_path):
     client = TestClient(app)
 
     payload = {
-        "spec": "chara_card_v2",
-        "spec_version": "2.0",
-        "data": {
-            "name": "Lyra",
-            "description": "Minstrel",
-            "personality": "Cheerful",
-            "scenario": "Tavern",
-            "first_mes": "Care for a song?",
-            "mes_example": "",
-        },
+        "char_id": "lyra",
+        "name": "Lyra",
+        "description": "Minstrel",
+        "personality": "Cheerful",
+        "scenario": "Tavern",
+        "first_mes": "Care for a song?",
+        "mes_example": "",
     }
     # Create character
-    res = client.post("/api/v1/characters?char_id=lyra", json=payload)
+    res = client.post("/api/v1/characters", json=payload)
     assert res.status_code == 200
     assert res.json() == {"status": "saved", "char_id": "lyra"}
 
     # Get character
     res = client.get("/api/v1/characters/lyra")
     assert res.status_code == 200
-    assert res.json()["data"]["name"] == "Lyra"
+    assert res.json()["name"] == "Lyra"
 
     # List characters
     res = client.get("/api/v1/characters")
     assert res.status_code == 200
     assert "lyra" in res.json()
+
+
+def test_character_save_in_body(tmp_path):
+    store = EngineStore(storage_dir=str(tmp_path))
+    app = create_app(store=store, config=EngineConfig())
+    client = TestClient(app)
+
+    card_data = {
+        "char_id": "elena",
+        "name": "Elena",
+        "description": "Scholar",
+        "personality": "Witty",
+        "scenario": "Cavern",
+        "first_mes": "Watch your step!",
+        "mes_example": "",
+    }
+
+    # 1. Flat character card with char_id in body, fixed URL
+    res = client.post("/api/v1/characters", json=card_data)
+    assert res.status_code == 200
+    assert res.json() == {"status": "saved", "char_id": "elena"}
+
+    res_get = client.get("/api/v1/characters/elena")
+    assert res_get.status_code == 200
+    assert res_get.json()["name"] == "Elena"
+
+    # 2. Missing char_id should fail with 400 or 422
+    incomplete = {**card_data}
+    incomplete.pop("char_id")
+    res_missing = client.post("/api/v1/characters", json=incomplete)
+    assert res_missing.status_code in (400, 422)
+
+    # 3. Path traversal in char_id inside body rejected with 400
+    res_traversal = client.post(
+        "/api/v1/characters",
+        json={**card_data, "char_id": "../../evil"},
+    )
+    assert res_traversal.status_code == 400
+
 
 
 def test_character_not_found(tmp_path):
@@ -65,18 +101,15 @@ def test_rp_chat_endpoint(tmp_path):
 
     # Pre-populate character
     client.post(
-        "/api/v1/characters?char_id=lyra",
+        "/api/v1/characters",
         json={
-            "spec": "chara_card_v2",
-            "spec_version": "2.0",
-            "data": {
-                "name": "Lyra",
-                "description": "A",
-                "personality": "B",
-                "scenario": "C",
-                "first_mes": "D",
-                "mes_example": "",
-            },
+            "char_id": "lyra",
+            "name": "Lyra",
+            "description": "A",
+            "personality": "B",
+            "scenario": "C",
+            "first_mes": "D",
+            "mes_example": "",
         },
     )
 
@@ -122,18 +155,15 @@ def test_rp_chat_stream_endpoint(tmp_path):
 
     # Pre-populate character
     client.post(
-        "/api/v1/characters?char_id=lyra",
+        "/api/v1/characters",
         json={
-            "spec": "chara_card_v2",
-            "spec_version": "2.0",
-            "data": {
-                "name": "Lyra",
-                "description": "A",
-                "personality": "B",
-                "scenario": "C",
-                "first_mes": "D",
-                "mes_example": "",
-            },
+            "char_id": "lyra",
+            "name": "Lyra",
+            "description": "A",
+            "personality": "B",
+            "scenario": "C",
+            "first_mes": "D",
+            "mes_example": "",
         },
     )
 
@@ -309,18 +339,15 @@ def test_rp_chat_authors_note_and_custom_user(tmp_path):
     client = TestClient(app)
 
     client.post(
-        "/api/v1/characters?char_id=lyra",
+        "/api/v1/characters",
         json={
-            "spec": "chara_card_v2",
-            "spec_version": "2.0",
-            "data": {
-                "name": "Lyra",
-                "description": "A",
-                "personality": "B",
-                "scenario": "C",
-                "first_mes": "D",
-                "mes_example": "",
-            },
+            "char_id": "lyra",
+            "name": "Lyra",
+            "description": "A",
+            "personality": "B",
+            "scenario": "C",
+            "first_mes": "D",
+            "mes_example": "",
         },
     )
 
@@ -372,20 +399,17 @@ def test_path_traversal_characters_rejected_400(tmp_path):
     client = TestClient(app)
 
     card_payload = {
-        "spec": "chara_card_v2",
-        "spec_version": "2.0",
-        "data": {
-            "name": "Evil",
-            "description": "desc",
-            "personality": "bad",
-            "scenario": "hack",
-            "first_mes": "pwn",
-            "mes_example": "",
-        },
+        "char_id": "../../evil",
+        "name": "Evil",
+        "description": "desc",
+        "personality": "bad",
+        "scenario": "hack",
+        "first_mes": "pwn",
+        "mes_example": "",
     }
 
-    # Path traversal in save_character query param
-    res_save = client.post("/api/v1/characters?char_id=../../evil", json=card_payload)
+    # Path traversal in save_character body
+    res_save = client.post("/api/v1/characters", json=card_payload)
     assert res_save.status_code == 400
     assert "Invalid ID: path traversal characters not allowed" in res_save.json()["detail"]
 
@@ -402,18 +426,15 @@ def test_path_traversal_rp_chat_rejected_400(tmp_path):
     client = TestClient(app)
 
     card_payload = {
-        "spec": "chara_card_v2",
-        "spec_version": "2.0",
-        "data": {
-            "name": "Valid",
-            "description": "a",
-            "personality": "b",
-            "scenario": "c",
-            "first_mes": "d",
-            "mes_example": "",
-        },
+        "char_id": "valid_char",
+        "name": "Valid",
+        "description": "a",
+        "personality": "b",
+        "scenario": "c",
+        "first_mes": "d",
+        "mes_example": "",
     }
-    client.post("/api/v1/characters?char_id=valid_char", json=card_payload)
+    client.post("/api/v1/characters", json=card_payload)
 
     # Bad char_id in chat
     res1 = client.post(
@@ -446,18 +467,15 @@ def test_path_traversal_rp_chat_stream_rejected_400(tmp_path):
     client = TestClient(app)
 
     card_payload = {
-        "spec": "chara_card_v2",
-        "spec_version": "2.0",
-        "data": {
-            "name": "Valid",
-            "description": "a",
-            "personality": "b",
-            "scenario": "c",
-            "first_mes": "d",
-            "mes_example": "",
-        },
+        "char_id": "valid_char",
+        "name": "Valid",
+        "description": "a",
+        "personality": "b",
+        "scenario": "c",
+        "first_mes": "d",
+        "mes_example": "",
     }
-    client.post("/api/v1/characters?char_id=valid_char", json=card_payload)
+    client.post("/api/v1/characters", json=card_payload)
 
     # Bad char_id in stream
     res1 = client.post(
@@ -490,10 +508,14 @@ async def test_native_runner_chat_execution(tmp_path):
     app = create_app(store=store, config=EngineConfig())
 
     # Pre-register character
-    card = CharacterCardV2(
-        data=CharacterCardV2Data(
-            name="Lyra", description="A", personality="B", scenario="C", first_mes="D", mes_example=""
-        )
+    card = CharacterCard(
+        char_id="lyra",
+        name="Lyra",
+        description="A",
+        personality="B",
+        scenario="C",
+        first_mes="D",
+        mes_example="",
     )
     store.save_character("lyra", card)
 
@@ -543,10 +565,14 @@ async def test_native_runner_stream_execution(tmp_path):
     store = EngineStore(storage_dir=str(tmp_path))
     app = create_app(store=store, config=EngineConfig())
 
-    card = CharacterCardV2(
-        data=CharacterCardV2Data(
-            name="Lyra", description="A", personality="B", scenario="C", first_mes="D", mes_example=""
-        )
+    card = CharacterCard(
+        char_id="lyra",
+        name="Lyra",
+        description="A",
+        personality="B",
+        scenario="C",
+        first_mes="D",
+        mes_example="",
     )
     store.save_character("lyra", card)
 
