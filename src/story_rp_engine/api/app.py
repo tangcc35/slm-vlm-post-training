@@ -6,6 +6,7 @@ from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from story_rp_engine.api.routes_lorebook import router as lorebook_router
 from story_rp_engine.api.routes_rp import router as rp_router
 from story_rp_engine.api.routes_story import router as story_router
 from story_rp_engine.core.agent_registry import AgentRegistry
@@ -106,6 +107,7 @@ def create_app(
 
     app.include_router(rp_router)
     app.include_router(story_router)
+    app.include_router(lorebook_router)
 
     @app.get("/health")
     def health():

@@ -1,3 +1,4 @@
+import os
 from typing import Optional
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
@@ -42,6 +43,24 @@ def get_character(char_id: str, request: Request):
     if not card:
         raise HTTPException(status_code=404, detail="Character not found")
     return card
+
+
+@router.delete("/characters/{char_id}")
+def delete_character(char_id: str, request: Request):
+    store = request.app.state.store
+    registry = getattr(request.app.state, "agent_registry", None)
+    try:
+        clean_id = _sanitize_key(char_id)
+        path = os.path.join(store.char_dir, f"{clean_id}.json")
+        if not os.path.exists(path):
+            raise HTTPException(status_code=404, detail="Character not found")
+        os.remove(path)
+        if registry:
+            registry._rp_agents.pop(clean_id, None)
+            registry._rp_runners.pop(clean_id, None)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return {"status": "deleted", "char_id": clean_id}
 
 
 @router.post("/rp/chat")
