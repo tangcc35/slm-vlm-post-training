@@ -506,6 +506,16 @@
 
             <div class="flex items-center space-x-2">
               <button
+                @click="clearStoryText"
+                :disabled="!storyCurrentText"
+                :class="storyCurrentText ? 'text-neutral-300 hover:text-rose-400 hover:bg-neutral-800' : 'opacity-30 cursor-not-allowed text-neutral-600'"
+                class="flex items-center space-x-1 px-2.5 py-1 rounded border border-neutral-800 transition text-[11px]"
+                title="Clear canvas text">
+                <i data-lucide="trash-2" class="w-3 h-3"></i>
+                <span>Clear</span>
+              </button>
+
+              <button
                 @click="undoLastExpansion"
                 :disabled="!canUndo"
                 :class="canUndo ? 'text-neutral-300 hover:text-white hover:bg-neutral-800' : 'opacity-30 cursor-not-allowed text-neutral-600'"

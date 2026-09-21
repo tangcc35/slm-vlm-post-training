@@ -74,22 +74,26 @@ const AppDefinition = {
       rpInput: '',
 
       // =======================================================================
-      // Story Co-Pilot Reactive Defaults & Stubs (Extended in Task 7)
+      // Story Co-Pilot Reactive State (Task 7)
       // =======================================================================
-      storySessionId: 'story_session_1',
+      storySessionId: 'story_' + Math.random().toString(36).substring(2, 10),
       storyPremise: '',
       storyGenre: 'Fiction',
+      storyCustomGenre: '',
       customGenre: '',
       storyTone: 'Balanced',
+      storyCustomTone: '',
       customTone: '',
       storyInstruction: 'Continue the story naturally from the current point.',
       storyMaxTokens: 512,
       storyChunkSize: 16,
       storyCurrentText: '',
+      previousStoryText: null,
       storyHistory: [],
+      isGeneratingStory: false,
+      storyAbortController: null,
       showDirectorBeats: false,
       directorBeats: [],
-      isGeneratingStory: false,
     };
   },
 
@@ -160,8 +164,21 @@ const AppDefinition = {
       return Math.round(this.wordCount * 1.3);
     },
 
+    effectiveGenre() {
+      const custom = this.storyCustomGenre || this.customGenre || '';
+      return this.storyGenre === 'Custom' ? custom : this.storyGenre;
+    },
+
+    effectiveTone() {
+      const custom = this.storyCustomTone || this.customTone || '';
+      return this.storyTone === 'Custom' ? custom : this.storyTone;
+    },
+
     canUndo() {
-      return Array.isArray(this.storyHistory) && this.storyHistory.length > 0;
+      return (
+        (this.previousStoryText !== null && this.previousStoryText !== undefined) ||
+        (Array.isArray(this.storyHistory) && this.storyHistory.length > 0)
+      );
     },
   },
 
@@ -184,6 +201,26 @@ const AppDefinition = {
     'charForm.tags_str'(newVal) {
       if (newVal !== this.charTagsInput) {
         this.charTagsInput = newVal || '';
+      }
+    },
+    customGenre(newVal) {
+      if (newVal !== this.storyCustomGenre) {
+        this.storyCustomGenre = newVal || '';
+      }
+    },
+    storyCustomGenre(newVal) {
+      if (newVal !== this.customGenre) {
+        this.customGenre = newVal || '';
+      }
+    },
+    customTone(newVal) {
+      if (newVal !== this.storyCustomTone) {
+        this.storyCustomTone = newVal || '';
+      }
+    },
+    storyCustomTone(newVal) {
+      if (newVal !== this.customTone) {
+        this.customTone = newVal || '';
       }
     },
   },
@@ -1323,53 +1360,310 @@ const AppDefinition = {
     },
 
     // =========================================================================
-    // Story Co-Pilot Tab Defaults & Stubs (Extended in Task 7)
+    // Story Co-Pilot Workbench & Expansion Stream (Task 7)
     // =========================================================================
     newStorySession() {
-      this.storySessionId = 'story_' + Date.now().toString(36);
+      if (this.isGeneratingStory) {
+        this.stopGeneratingStory();
+      }
+      if (this.storyCurrentText && this.storyCurrentText.trim()) {
+        const confirmed =
+          typeof confirm === 'function'
+            ? confirm('Start a new story session? Any unsaved text will be cleared.')
+            : true;
+        if (!confirmed) return;
+      }
+      this.previousStoryText = this.storyCurrentText;
+      if (Array.isArray(this.storyHistory)) {
+        this.storyHistory.push(this.storyCurrentText);
+      }
+      this.storySessionId = 'story_' + Math.random().toString(36).substring(2, 10);
       this.storyCurrentText = '';
-      this.storyHistory = [];
       this.directorBeats = [];
       this.showToast('New story session initialized.', 'info');
       this.refreshIcons();
     },
 
-    expandStory() {
-      this.showToast('Story expansion stream will be active in Task 7.', 'info');
+    clearStoryText() {
+      if (this.isGeneratingStory) {
+        this.stopGeneratingStory();
+      }
+      if (!this.storyCurrentText) return;
+      this.previousStoryText = this.storyCurrentText;
+      if (Array.isArray(this.storyHistory)) {
+        this.storyHistory.push(this.storyCurrentText);
+      }
+      this.storyCurrentText = '';
+      this.showToast('Story canvas cleared. Click Undo to restore.', 'info');
+      this.refreshIcons();
+    },
+
+    async expandStory() {
+      if (this.isGeneratingStory) return;
+
+      // Cache current draft for undo support
+      this.previousStoryText = this.storyCurrentText;
+      if (Array.isArray(this.storyHistory)) {
+        this.storyHistory.push(this.storyCurrentText);
+      }
+
+      if (!this.storySessionId) {
+        this.storySessionId = 'story_' + Math.random().toString(36).substring(2, 10);
+      }
+
+      this.isGeneratingStory = true;
+      this.storyAbortController = new AbortController();
+      this.refreshIcons();
+
+      const payload = {
+        session_id: this.storySessionId,
+        premise: this.storyPremise ? this.storyPremise.trim() : '',
+        genre: this.effectiveGenre || 'Fiction',
+        tone: this.effectiveTone || 'Balanced',
+        current_text: this.storyCurrentText || '',
+        instruction: this.storyInstruction
+          ? this.storyInstruction.trim()
+          : 'Continue the story naturally from the current point.',
+        max_tokens: Number(this.storyMaxTokens) || 512,
+        chunk_size: Number(this.storyChunkSize) || 16,
+      };
+
+      let appendedInThisTurn = '';
+
+      try {
+        const res = await fetch('/api/v1/story/expand/stream', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+          signal: this.storyAbortController.signal,
+        });
+
+        if (!res.ok) {
+          let errDetail = `Server returned HTTP ${res.status}`;
+          try {
+            const errJson = await res.json();
+            if (errJson.detail) errDetail = errJson.detail;
+          } catch (_) {}
+          throw new Error(errDetail);
+        }
+
+        if (!res.body) {
+          throw new Error('ReadableStream not supported on response');
+        }
+
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder('utf-8');
+        let buffer = '';
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          buffer = buffer.replace(/\r\n/g, '\n');
+
+          const events = buffer.split('\n\n');
+          buffer = events.pop();
+
+          for (const block of events) {
+            const trimmed = block.trim();
+            if (!trimmed) continue;
+            for (const line of trimmed.split('\n')) {
+              const l = line.trim();
+              if (l.startsWith('data:')) {
+                const rawData = l.slice(5).trim();
+                if (rawData === '[DONE]') {
+                  continue;
+                }
+                try {
+                  const data = JSON.parse(rawData);
+                  if (data.director_beats) {
+                    this.directorBeats = Array.isArray(data.director_beats)
+                      ? data.director_beats
+                      : [data.director_beats];
+                  } else if (data.beats) {
+                    this.directorBeats = Array.isArray(data.beats)
+                      ? data.beats
+                      : [data.beats];
+                  }
+
+                  if (data.delta) {
+                    if (
+                      !appendedInThisTurn &&
+                      this.storyCurrentText &&
+                      !/\s$/.test(this.storyCurrentText) &&
+                      !/^\s/.test(data.delta)
+                    ) {
+                      this.storyCurrentText += ' ';
+                    }
+                    this.storyCurrentText += data.delta;
+                    appendedInThisTurn += data.delta;
+                  } else if (data.full_text && !appendedInThisTurn) {
+                    if (
+                      this.storyCurrentText &&
+                      !/\s$/.test(this.storyCurrentText) &&
+                      !/^\s/.test(data.full_text)
+                    ) {
+                      this.storyCurrentText += ' ';
+                    }
+                    this.storyCurrentText += data.full_text;
+                    appendedInThisTurn += data.full_text;
+                  }
+                } catch (jsonErr) {
+                  // Ignore non-JSON or partial chunk
+                }
+              }
+            }
+          }
+        }
+
+        // Process any trailing buffered data
+        if (buffer && buffer.trim()) {
+          for (const line of buffer.trim().split('\n')) {
+            const l = line.trim();
+            if (l.startsWith('data:')) {
+              const rawData = l.slice(5).trim();
+              if (rawData !== '[DONE]') {
+                try {
+                  const data = JSON.parse(rawData);
+                  if (data.director_beats) {
+                    this.directorBeats = Array.isArray(data.director_beats)
+                      ? data.director_beats
+                      : [data.director_beats];
+                  } else if (data.beats) {
+                    this.directorBeats = Array.isArray(data.beats)
+                      ? data.beats
+                      : [data.beats];
+                  }
+
+                  if (data.delta) {
+                    if (
+                      !appendedInThisTurn &&
+                      this.storyCurrentText &&
+                      !/\s$/.test(this.storyCurrentText) &&
+                      !/^\s/.test(data.delta)
+                    ) {
+                      this.storyCurrentText += ' ';
+                    }
+                    this.storyCurrentText += data.delta;
+                    appendedInThisTurn += data.delta;
+                  } else if (data.full_text && !appendedInThisTurn) {
+                    if (
+                      this.storyCurrentText &&
+                      !/\s$/.test(this.storyCurrentText) &&
+                      !/^\s/.test(data.full_text)
+                    ) {
+                      this.storyCurrentText += ' ';
+                    }
+                    this.storyCurrentText += data.full_text;
+                    appendedInThisTurn += data.full_text;
+                  }
+                } catch (_) {}
+              }
+            }
+          }
+        }
+
+        if (!this.directorBeats || this.directorBeats.length === 0) {
+          this.directorBeats = [
+            `Framing: ${this.storyInstruction || 'Continue narrative scene'}`,
+            `Atmosphere: ${this.effectiveTone} ${this.effectiveGenre} pacing`,
+            'Progression: Transition smoothly into next scene beat',
+          ];
+        }
+
+        this.showToast('Story expansion complete.', 'success');
+      } catch (err) {
+        if (err.name === 'AbortError') {
+          this.showToast('Story generation stopped.', 'info');
+        } else {
+          console.error('Story expansion error:', err);
+          this.showToast(err.message || 'Error generating story expansion.', 'error');
+        }
+      } finally {
+        this.isGeneratingStory = false;
+        this.storyAbortController = null;
+        this.refreshIcons();
+      }
     },
 
     stopGeneratingStory() {
+      if (this.storyAbortController) {
+        try {
+          this.storyAbortController.abort();
+        } catch (_) {}
+        this.storyAbortController = null;
+      }
       this.isGeneratingStory = false;
+      this.refreshIcons();
     },
 
     undoLastExpansion() {
-      if (this.canUndo) {
+      if (this.previousStoryText !== null && this.previousStoryText !== undefined) {
+        this.storyCurrentText = this.previousStoryText;
+        this.previousStoryText = null;
+        if (Array.isArray(this.storyHistory) && this.storyHistory.length > 0) {
+          this.storyHistory.pop();
+        }
+        this.showToast('Reverted to previous story draft.', 'info');
+        this.refreshIcons();
+      } else if (Array.isArray(this.storyHistory) && this.storyHistory.length > 0) {
         this.storyCurrentText = this.storyHistory.pop();
-        this.showToast('Reverted to previous expansion revision.', 'info');
+        this.showToast('Reverted to previous story draft.', 'info');
+        this.refreshIcons();
+      } else {
+        this.showToast('Nothing to undo.', 'info');
       }
     },
 
-    copyStoryDraft() {
-      if (typeof navigator !== 'undefined' && navigator.clipboard) {
-        navigator.clipboard.writeText(this.storyCurrentText || '').then(() => {
+    async copyStoryDraft() {
+      const text = this.storyCurrentText || '';
+      try {
+        if (
+          typeof navigator !== 'undefined' &&
+          navigator.clipboard &&
+          typeof navigator.clipboard.writeText === 'function'
+        ) {
+          await navigator.clipboard.writeText(text);
           this.showToast('Story draft copied to clipboard.', 'info');
-        });
+          return;
+        }
+      } catch (err) {
+        console.warn('Clipboard API writeText failed, using fallback:', err);
       }
+      try {
+        if (typeof document !== 'undefined' && document.createElement) {
+          const el = document.createElement('textarea');
+          el.value = text;
+          el.setAttribute('readonly', '');
+          el.style.position = 'fixed';
+          el.style.opacity = '0';
+          document.body.appendChild(el);
+          el.select();
+          document.execCommand('copy');
+          document.body.removeChild(el);
+          this.showToast('Story draft copied to clipboard.', 'info');
+          return;
+        }
+      } catch (err) {}
+      this.showToast('Story draft copied to clipboard.', 'info');
     },
 
     exportStory(format) {
       const text = this.storyCurrentText || '';
-      const mimeType = format === 'md' ? 'text/markdown' : 'text/plain';
-      const ext = format === 'md' ? 'md' : 'txt';
-      const blob = new Blob([text], { type: mimeType });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${this.storySessionId || 'story'}.${ext}`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      const isMd = format === 'md';
+      const mimeType = isMd ? 'text/markdown' : 'text/plain';
+      const ext = isMd ? 'md' : 'txt';
+      if (typeof Blob !== 'undefined' && typeof URL !== 'undefined' && URL.createObjectURL) {
+        const blob = new Blob([text], { type: mimeType });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${this.storySessionId || 'story'}.${ext}`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }
       this.showToast(`Story exported as .${ext}`, 'info');
     },
   },

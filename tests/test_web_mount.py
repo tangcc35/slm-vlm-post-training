@@ -1,3 +1,4 @@
+from unittest.mock import patch
 from fastapi.testclient import TestClient
 from story_rp_engine.api.app import create_app
 from story_rp_engine.core.config import EngineConfig
@@ -64,6 +65,34 @@ def test_web_static_assets():
         "_streamAssistantReply",
         "renderMarkdown",
         "copyMessage",
+        # Story Co-Pilot workbench methods & state (Task 7)
+        "storySessionId",
+        "storyPremise",
+        "storyGenre",
+        "storyCustomGenre",
+        "storyTone",
+        "storyCustomTone",
+        "storyInstruction",
+        "storyMaxTokens",
+        "storyChunkSize",
+        "storyCurrentText",
+        "previousStoryText",
+        "isGeneratingStory",
+        "storyAbortController",
+        "showDirectorBeats",
+        "directorBeats",
+        "wordCount",
+        "estimatedTokens",
+        "effectiveGenre",
+        "effectiveTone",
+        "canUndo",
+        "newStorySession",
+        "clearStoryText",
+        "expandStory",
+        "stopGeneratingStory",
+        "undoLastExpansion",
+        "copyStoryDraft",
+        "exportStory",
     ]
     for kw in required_keywords:
         assert kw in resp_js.text, f"Expected {kw} in app.js"
@@ -174,5 +203,70 @@ def test_rp_session_and_turns_api_flow():
     clear_resp = client.delete(f"/api/v1/rp/sessions/{session_id}")
     assert clear_resp.status_code == 200
     assert clear_resp.json()["status"] == "deleted"
+
+
+def test_story_co_pilot_api_flow(tmp_path):
+    config = EngineConfig(storage_dir=str(tmp_path / "engine_data"))
+    store = EngineStore(storage_dir=config.storage_dir)
+    app = create_app(store=store, config=config)
+    client = TestClient(app)
+
+    session_id = "test_story_expansion_sess"
+
+    # 1. Expand story non-streaming
+    async def mock_execute(runner, user_id, session_id, message, state_delta):
+        return "The silver mist drifted silently across the hollow."
+
+    with patch(
+        "story_rp_engine.api.routes_story.execute_runner_turn",
+        side_effect=mock_execute,
+    ):
+        res = client.post(
+            "/api/v1/story/expand",
+            json={
+                "session_id": session_id,
+                "premise": "A hidden realm at the edge of twilight.",
+                "genre": "Fantasy",
+                "tone": "Mysterious",
+                "current_text": "Night fell over the hills.",
+                "instruction": "Describe the eerie mist rising.",
+                "max_tokens": 256,
+                "chunk_size": 16,
+            },
+        )
+        assert res.status_code == 200
+        data = res.json()
+        assert data["session_id"] == session_id
+        assert "silver mist" in data["expansion"]
+
+    # 2. Expand story streaming
+    async def mock_stream(runner, user_id, session_id, message, state_delta):
+        yield "The silver "
+        yield "mist settled."
+
+    with patch(
+        "story_rp_engine.api.routes_story.stream_runner_turn",
+        side_effect=mock_stream,
+    ):
+        stream_res = client.post(
+            "/api/v1/story/expand/stream",
+            json={
+                "session_id": session_id,
+                "premise": "A hidden realm at the edge of twilight.",
+                "genre": "Fantasy",
+                "tone": "Mysterious",
+                "current_text": "Night fell over the hills.",
+                "instruction": "Describe the eerie mist rising.",
+                "max_tokens": 256,
+                "chunk_size": 1,
+            },
+        )
+        assert stream_res.status_code == 200
+        assert "text/event-stream" in stream_res.headers.get("content-type", "")
+        body = stream_res.text
+        assert "data:" in body
+        assert "silver" in body
+        assert "[DONE]" in body
+
 
 
