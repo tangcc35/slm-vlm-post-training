@@ -156,10 +156,8 @@ def test_rp_chat_stream_endpoint(tmp_path):
         assert res.status_code == 200
         assert "text/event-stream" in res.headers["content-type"]
         body = res.text
-        assert "data: Here\n\n" in body
-        assert "data:  is\n\n" in body
-        assert "data:  a\n\n" in body
-        assert "data:  tune.\n\n" in body
+        assert 'data: {"delta": "Here is a tune."}\n\n' in body
+        assert 'data: {"full_text": "Here is a tune.", "done": true}\n\n' in body
         assert "data: [DONE]\n\n" in body
         assert mock_stream_fn.called
 
@@ -172,24 +170,28 @@ def test_story_expand_endpoint(tmp_path):
     with patch(
         "story_rp_engine.api.routes_story.execute_runner_turn",
         new_callable=AsyncMock,
-        return_value="The ship docked at dawn.",
+        return_value="The gears clicked into place.",
     ) as mock_exec:
         res = client.post(
             "/api/v1/story/expand",
             json={
-                "premise": "A voyage across the sea.",
-                "current_text": "The waves were calm.",
-                "instruction": "Describe docking.",
+                "premise": "A clockwork tower.",
+                "current_text": "Tick tock.",
+                "instruction": "Continue.",
+                "genre": "Steampunk",
+                "tone": "Dark",
             },
         )
         assert res.status_code == 200
-        assert res.json() == {"expansion": "The ship docked at dawn."}
+        assert res.json() == {"expansion": "The gears clicked into place."}
         assert mock_exec.called
         call_kwargs = mock_exec.call_args.kwargs
-        assert call_kwargs["message"] == "Describe docking."
-        assert call_kwargs["state_delta"]["premise"] == "A voyage across the sea."
-        assert call_kwargs["state_delta"]["current_text"] == "The waves were calm."
-        assert call_kwargs["state_delta"]["instruction"] == "Describe docking."
+        assert call_kwargs["message"] == "Continue."
+        assert call_kwargs["state_delta"]["premise"] == "A clockwork tower."
+        assert call_kwargs["state_delta"]["genre"] == "Steampunk"
+        assert call_kwargs["state_delta"]["tone"] == "Dark"
+        assert call_kwargs["state_delta"]["current_text"] == "Tick tock."
+        assert call_kwargs["state_delta"]["instruction"] == "Continue."
 
 
 def test_story_expand_stream_endpoint(tmp_path):
@@ -216,12 +218,10 @@ def test_story_expand_stream_endpoint(tmp_path):
         assert res.status_code == 200
         assert "text/event-stream" in res.headers["content-type"]
         body = res.text
-        assert "data: The\n\n" in body
-        assert "data:  sun\n\n" in body
-        assert "data:  rose\n\n" in body
-        assert "data:  above\n\n" in body
-        assert "data:  the\n\n" in body
-        assert "data:  horizon.\n\n" in body
+        # Batched 4 tokens then remaining 2 tokens
+        assert 'data: {"delta": "The sun rose above"}\n\n' in body
+        assert 'data: {"delta": " the horizon."}\n\n' in body
+        assert 'data: {"full_text": "The sun rose above the horizon.", "done": true}\n\n' in body
         assert "data: [DONE]\n\n" in body
         assert mock_stream_fn.called
         call_kwargs = mock_stream_fn.call_args.kwargs
@@ -229,6 +229,36 @@ def test_story_expand_stream_endpoint(tmp_path):
         assert call_kwargs["state_delta"]["premise"] == "Dawn at sea."
         assert call_kwargs["state_delta"]["current_text"] == "Morning came."
         assert call_kwargs["state_delta"]["instruction"] == "Describe the sun."
+
+
+def test_story_expand_stream_custom_chunk_size(tmp_path):
+    store = EngineStore(storage_dir=str(tmp_path))
+    app = create_app(store=store, config=EngineConfig())
+    client = TestClient(app)
+
+    async def mock_stream(*args, **kwargs):
+        for chunk in ["The", " sun", " rose", " above", " the", " horizon."]:
+            yield chunk
+
+    with patch(
+        "story_rp_engine.api.routes_story.stream_runner_turn",
+        side_effect=mock_stream,
+    ):
+        res = client.post(
+            "/api/v1/story/expand/stream",
+            json={
+                "current_text": "Morning came.",
+                "instruction": "Describe the sun.",
+                "chunk_size": 2,
+            },
+        )
+        assert res.status_code == 200
+        body = res.text
+        assert 'data: {"delta": "The sun"}\n\n' in body
+        assert 'data: {"delta": " rose above"}\n\n' in body
+        assert 'data: {"delta": " the horizon."}\n\n' in body
+        assert 'data: {"full_text": "The sun rose above the horizon.", "done": true}\n\n' in body
+        assert "data: [DONE]\n\n" in body
 
 
 def test_rp_chat_authors_note_and_custom_user(tmp_path):
@@ -520,8 +550,8 @@ async def test_native_runner_stream_execution(tmp_path):
     assert res.status_code == 200
     assert "text/event-stream" in res.headers["content-type"]
     body = res.text
-    assert "data: A lovely\n\n" in body
-    assert "data:  song\n\n" in body
+    assert 'data: {"delta": "A lovely song"}\n\n' in body
+    assert 'data: {"full_text": "A lovely song", "done": true}\n\n' in body
     assert "data: [DONE]\n\n" in body
 
     session = await app.state.session_service.get_session(

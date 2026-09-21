@@ -4,6 +4,7 @@ from fastapi.responses import StreamingResponse
 from google.adk.runners import Runner
 from story_rp_engine.core.agent_utils import (
     execute_runner_turn,
+    format_sse_stream,
     stream_runner_turn,
 )
 from story_rp_engine.core.types import StoryRequest
@@ -63,9 +64,7 @@ async def expand_story_stream(req: StoryRequest, request: Request):
         state_delta=state_delta,
     )
 
-    async def event_stream():
-        async for chunk in generator:
-            yield f"data: {chunk}\n\n"
-        yield "data: [DONE]\n\n"
-
-    return StreamingResponse(event_stream(), media_type="text/event-stream")
+    return StreamingResponse(
+        format_sse_stream(generator, chunk_size=req.chunk_size),
+        media_type="text/event-stream",
+    )

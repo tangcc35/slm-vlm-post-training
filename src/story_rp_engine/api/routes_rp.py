@@ -4,6 +4,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from story_rp_engine.core.agent_utils import (
     execute_runner_turn,
+    format_sse_stream,
     stream_runner_turn,
 )
 from story_rp_engine.core.types import CharacterCardV2
@@ -18,6 +19,7 @@ class RPChatRequest(BaseModel):
     message: str
     authors_note: Optional[str] = None
     user_name: Optional[str] = "User"
+    chunk_size: Optional[int] = 4
 
 
 @router.post("/characters")
@@ -92,9 +94,7 @@ async def chat_rp_stream(req: RPChatRequest, request: Request):
         state_delta={"authors_note": req.authors_note},
     )
 
-    async def event_stream():
-        async for chunk in generator:
-            yield f"data: {chunk}\n\n"
-        yield "data: [DONE]\n\n"
-
-    return StreamingResponse(event_stream(), media_type="text/event-stream")
+    return StreamingResponse(
+        format_sse_stream(generator, chunk_size=req.chunk_size),
+        media_type="text/event-stream",
+    )

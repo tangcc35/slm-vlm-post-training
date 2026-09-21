@@ -1,3 +1,4 @@
+import json
 from typing import Any, AsyncIterator, Optional
 from google.adk.agents.run_config import RunConfig, StreamingMode
 from google.adk.runners import Runner
@@ -95,3 +96,33 @@ async def stream_runner_turn(
                 words = text.split(" ")
                 for i, w in enumerate(words):
                     yield w if i == 0 else " " + w
+
+
+async def format_sse_stream(
+    generator: AsyncIterator[str],
+    chunk_size: Optional[int] = 4,
+) -> AsyncIterator[str]:
+    """Buffers string chunks, yielding structured SSE JSON deltas and a final complete text."""
+    buffer = []
+    full_text_chunks = []
+    chunk_threshold = max(1, chunk_size or 4)
+
+    async for chunk in generator:
+        if not chunk:
+            continue
+        buffer.append(chunk)
+        full_text_chunks.append(chunk)
+
+        if len(buffer) >= chunk_threshold or "\n" in chunk:
+            combined = "".join(buffer)
+            yield f"data: {json.dumps({'delta': combined}, ensure_ascii=False)}\n\n"
+            buffer.clear()
+
+    if buffer:
+        combined = "".join(buffer)
+        yield f"data: {json.dumps({'delta': combined}, ensure_ascii=False)}\n\n"
+        buffer.clear()
+
+    full_text = "".join(full_text_chunks)
+    yield f"data: {json.dumps({'full_text': full_text, 'done': True}, ensure_ascii=False)}\n\n"
+    yield "data: [DONE]\n\n"

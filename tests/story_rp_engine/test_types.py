@@ -14,7 +14,7 @@ def test_engine_config_defaults():
     config = EngineConfig()
     assert config.model_name == "ollama/llama3.1:8b"
     assert config.temperature == 0.8
-    assert config.max_tokens == 512
+    assert config.max_tokens == 131072
 
 def test_character_card_v2_valid():
     data = CharacterCardV2Data(
@@ -49,3 +49,8 @@ def test_story_request_defaults():
     assert req.genre == "Fiction"
     assert req.tone == "Balanced"
     assert req.max_tokens == 512
+    assert req.chunk_size == 4
+
+def test_story_request_custom_chunk_size():
+    req = StoryRequest(current_text="The wind howled.", chunk_size=8)
+    assert req.chunk_size == 8
