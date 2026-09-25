@@ -4,15 +4,15 @@ from pydantic import BaseModel, Field
 
 class EngineConfig(BaseModel):
     model_name: str = Field(
-        default_factory=lambda: os.getenv("STORY_RP_MODEL", os.getenv("MODEL_NAME", "ollama/llama3.1:8b")),
+        default_factory=lambda: os.getenv("STORY_RP_MODEL", "ollama/llama3.1:8b"),
         description="Model identifier for LiteLLM",
     )
     api_base: Optional[str] = Field(
-        default_factory=lambda: os.getenv("STORY_RP_API_BASE", os.getenv("API_BASE")),
+        default_factory=lambda: os.getenv("STORY_RP_API_BASE"),
         description="Custom endpoint URL e.g. http://localhost:11434",
     )
     api_key: Optional[str] = Field(
-        default_factory=lambda: os.getenv("STORY_RP_API_KEY", os.getenv("OPENAI_API_KEY")),
+        default_factory=lambda: os.getenv("STORY_RP_API_KEY"),
         description="API key if required (e.g. for Gemini/OpenAI)",
     )
     temperature: float = Field(
@@ -37,4 +37,19 @@ class EngineConfig(BaseModel):
     db_url: Optional[str] = Field(
         default_factory=lambda: os.getenv("STORY_RP_DB_URL"),
         description="Database connection URL for ADK DatabaseSessionService",
+    )
+    phoenix_enabled: bool = Field(
+        default_factory=lambda: os.getenv("PHOENIX_ENABLED", "0").lower() in ("1", "true", "yes"),
+        description="Whether to enable Arize Phoenix OpenTelemetry tracing",
+    )
+    phoenix_endpoint: str = Field(
+        default_factory=lambda: os.getenv(
+            "PHOENIX_COLLECTOR_ENDPOINT",
+            f"http://{'127.0.0.1' if os.getenv('PHOENIX_HOST') in ('0.0.0.0', None, '') else os.getenv('PHOENIX_HOST')}:{os.getenv('PHOENIX_PORT', '6006')}/v1/traces",
+        ),
+        description="Arize Phoenix OTLP collector endpoint",
+    )
+    phoenix_project_name: str = Field(
+        default_factory=lambda: os.getenv("PHOENIX_PROJECT_NAME", "story-rp-engine"),
+        description="Arize Phoenix project name",
     )

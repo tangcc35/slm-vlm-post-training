@@ -96,6 +96,14 @@ def create_app(
         )
 
     resolved_config = config or EngineConfig()
+    if resolved_config.phoenix_enabled:
+        from phoenix.otel import register
+        register(
+            project_name=resolved_config.phoenix_project_name,
+            endpoint=resolved_config.phoenix_endpoint,
+            auto_instrument=True,
+        )
+
     resolved_store = store or EngineStore(
         storage_dir=resolved_config.storage_dir,
         db_url=resolved_config.db_url,

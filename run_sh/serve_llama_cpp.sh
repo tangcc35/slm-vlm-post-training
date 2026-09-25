@@ -1,110 +1,32 @@
 #!/usr/bin/env bash
 set -e
+cd "$(dirname "$0")/.."
+[ -f .env ] && set -a && . ./.env && set +a
 
-# Determine repository root and load .env if present
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+trap 'kill $(jobs -p) 2>/dev/null' EXIT
 
-if [ -f "$ROOT_DIR/.env" ]; then
-    echo "Loading environment variables from $ROOT_DIR/.env"
-    set -a
-    # shellcheck disable=SC1091
-    . "$ROOT_DIR/.env"
-    set +a
-fi
+# 1. Start llama.cpp model server
+MODEL_ALIAS="${STORY_RP_MODEL:-qwen3.5-2b}"
+MODEL_ALIAS="${MODEL_ALIAS#*/}"
 
-cd "$ROOT_DIR"
-
-# Model Server Configuration
-DEFAULT_MODEL="outputs/Qwen3.5-2B-Uncensored-HauhauCS-Aggressive/Qwen3.5-2B-Uncensored-HauhauCS-Aggressive-Q8_0.gguf"
-MODEL_PATH="${LLAMA_MODEL_PATH:-$DEFAULT_MODEL}"
-LLAMA_HOST="${LLAMA_HOST:-127.0.0.1}"
-LLAMA_PORT="${LLAMA_PORT:-8001}"
-N_GPU_LAYERS="${N_GPU_LAYERS:--1}" # -1 offloads all layers to GPU
-N_CTX="${N_CTX:-4096}"
-MODEL_ALIAS="${MODEL_ALIAS:-qwen3.5-2b}"
-
-# Backend API Configuration
-APP_HOST="${HOST:-0.0.0.0}"
-APP_PORT="${PORT:-8000}"
-
-if [ ! -f "$MODEL_PATH" ]; then
-    echo "Error: Model file not found at: $MODEL_PATH"
-    echo "Available GGUF models in outputs/Qwen3.5-2B-Uncensored-HauhauCS-Aggressive/:"
-    ls -lh outputs/Qwen3.5-2B-Uncensored-HauhauCS-Aggressive/*.gguf
-    exit 1
-fi
-
-echo "==============================================================="
-echo "  [1/2] Starting llama.cpp Local Model Server in Background   "
-echo "==============================================================="
-echo "Model:       $MODEL_PATH"
-echo "Alias:       $MODEL_ALIAS"
-echo "GPU Layers:  $N_GPU_LAYERS"
-echo "Context:     $N_CTX"
-echo "Endpoint:    http://${LLAMA_HOST}:${LLAMA_PORT}/v1"
-echo "==============================================================="
-
-# Launch llama_cpp.server in the background
-uv run python -m llama_cpp.server \
-    --model "$MODEL_PATH" \
+HOST="${LLAMA_HOST:-127.0.0.1}" PORT="${LLAMA_PORT:-8001}" uv run python -m llama_cpp.server \
+    --model "${LLAMA_MODEL_PATH:-outputs/Qwen3.5-2B-Uncensored-HauhauCS-Aggressive/Qwen3.5-2B-Uncensored-HauhauCS-Aggressive-Q8_0.gguf}" \
     --model_alias "$MODEL_ALIAS" \
-    --host "$LLAMA_HOST" \
-    --port "$LLAMA_PORT" \
-    --n_gpu_layers "$N_GPU_LAYERS" \
-    --n_ctx "$N_CTX" &
-LLAMA_PID=$!
+    --host "${LLAMA_HOST:-127.0.0.1}" \
+    --port "${LLAMA_PORT:-8001}" \
+    --n_gpu_layers "${N_GPU_LAYERS:--1}" \
+    --n_ctx "${N_CTX:-4096}" &
 
-# Trap signals to ensure the background model server is terminated on exit
-cleanup() {
-    echo ""
-    echo "Shutting down model server (PID $LLAMA_PID)..."
-    kill "$LLAMA_PID" 2>/dev/null || true
-    wait "$LLAMA_PID" 2>/dev/null || true
-    echo "Done."
-}
-trap cleanup EXIT INT TERM
-
-# Wait for the model server to initialize and respond
-echo "Waiting for llama.cpp server to be ready on port $LLAMA_PORT..."
-MAX_RETRIES=30
-SERVER_READY=0
-i=1
-while [ "$i" -le "$MAX_RETRIES" ]; do
-    if curl -s "http://${LLAMA_HOST}:${LLAMA_PORT}/v1/models" >/dev/null 2>&1; then
-        echo ">>> llama.cpp model server is ready!"
-        SERVER_READY=1
-        break
-    fi
-    if ! kill -0 "$LLAMA_PID" 2>/dev/null; then
-        echo "Error: llama_cpp server exited unexpectedly."
-        exit 1
-    fi
+until curl -s "http://${LLAMA_HOST:-127.0.0.1}:${LLAMA_PORT:-8001}/v1/models" >/dev/null 2>&1; do
     sleep 1
-    i=$((i + 1))
 done
 
-if [ "$SERVER_READY" -ne 1 ]; then
-    echo "Error: Timed out waiting for llama.cpp server to be ready."
-    exit 1
-fi
+# 2. Start Arize Phoenix Observability (if enabled)
+[ "${PHOENIX_ENABLED:-true}" = "true" ] && PHOENIX_HOST="${PHOENIX_HOST:-0.0.0.0}" PHOENIX_PORT="${PHOENIX_PORT:-6006}" phoenix serve &
 
-echo ""
-echo "==============================================================="
-echo "  [2/2] Starting Dual-Mode Story & Roleplay Backend API        "
-echo "==============================================================="
-echo "Backend:     http://${APP_HOST}:${APP_PORT}"
-echo "API Docs:    http://${APP_HOST}:${APP_PORT}/docs"
-echo "Health:      http://${APP_HOST}:${APP_PORT}/health"
-echo "Connected:   http://${LLAMA_HOST}:${LLAMA_PORT}/v1 (Model: openai/$MODEL_ALIAS)"
-echo "==============================================================="
-
-export STORY_RP_MODEL="openai/$MODEL_ALIAS"
-export STORY_RP_API_BASE="http://${LLAMA_HOST}:${LLAMA_PORT}/v1"
-
-# Run FastAPI backend in the foreground
+# 3. Start Backend API
 uv run python -m uvicorn story_rp_engine.api.app:create_app \
     --factory \
-    --host "$APP_HOST" \
-    --port "$APP_PORT" \
+    --host "${HOST:-0.0.0.0}" \
+    --port "${PORT:-8000}" \
     --reload
