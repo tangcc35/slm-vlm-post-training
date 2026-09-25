@@ -18,8 +18,8 @@ cd "$ROOT_DIR"
 # Server configuration with defaults
 HOST="${HOST:-0.0.0.0}"
 PORT="${PORT:-8000}"
-STORY_RP_MODEL="${STORY_RP_MODEL:-${MODEL_NAME:-ollama/llama3.1:8b}}"
-STORY_RP_API_BASE="${STORY_RP_API_BASE:-${API_BASE:-http://localhost:11434}}"
+STORY_RP_MODEL="${STORY_RP_MODEL:-ollama/llama3.1:8b}"
+STORY_RP_API_BASE="${STORY_RP_API_BASE:-http://localhost:11434}"
 
 echo "***************************************************************"
 echo "  Starting Dual-Mode Story & Roleplay Engine Backend Server    "

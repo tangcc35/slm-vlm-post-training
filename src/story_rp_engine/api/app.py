@@ -1,11 +1,14 @@
 import logging
 import os
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import AsyncIterator, Optional
 from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
+from story_rp_engine.api.routes_lorebook import router as lorebook_router
 from story_rp_engine.api.routes_rp import router as rp_router
 from story_rp_engine.api.routes_story import router as story_router
 from story_rp_engine.core.agent_registry import AgentRegistry
@@ -93,6 +96,14 @@ def create_app(
         )
 
     resolved_config = config or EngineConfig()
+    if resolved_config.phoenix_enabled:
+        from phoenix.otel import register
+        register(
+            project_name=resolved_config.phoenix_project_name,
+            endpoint=resolved_config.phoenix_endpoint,
+            auto_instrument=True,
+        )
+
     resolved_store = store or EngineStore(
         storage_dir=resolved_config.storage_dir,
         db_url=resolved_config.db_url,
@@ -106,9 +117,14 @@ def create_app(
 
     app.include_router(rp_router)
     app.include_router(story_router)
+    app.include_router(lorebook_router)
 
     @app.get("/health")
     def health():
         return {"status": "ok"}
+
+    web_dir = Path(__file__).parent.parent / "web"
+    if web_dir.exists():
+        app.mount("/", StaticFiles(directory=str(web_dir), html=True), name="web_ui")
 
     return app

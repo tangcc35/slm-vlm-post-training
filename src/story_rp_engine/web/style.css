@@ -1,0 +1,118 @@
+/* Story & Roleplay Workbench - Style Polish */
+
+[v-cloak] {
+  display: none !important;
+}
+
+/* Custom Dark-Mode Scrollbars */
+::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+
+::-webkit-scrollbar-track {
+  background: #0a0a0a;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #262626;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #404040;
+}
+
+/* Firefox scrollbar */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #262626 #0a0a0a;
+}
+
+/* Blinking Cursor for Streaming Canvas */
+@keyframes blink {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
+}
+
+.cursor-blink {
+  display: inline-block;
+  color: #6366f1;
+  font-weight: 700;
+  animation: blink 0.9s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Monospace text & code blocks */
+.font-mono-code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+}
+
+/* Prose formatting inside chat bubbles and preview */
+.prose-dark {
+  color: #e5e5e5;
+  line-height: 1.65;
+  font-size: 0.95rem;
+}
+
+.prose-dark p {
+  margin-bottom: 0.75rem;
+}
+
+.prose-dark p:last-child {
+  margin-bottom: 0;
+}
+
+.prose-dark em,
+.prose-dark i {
+  color: #a3a3a3;
+  font-style: italic;
+}
+
+.prose-dark strong,
+.prose-dark b {
+  color: #f5f5f5;
+  font-weight: 600;
+}
+
+.prose-dark pre {
+  background: #171717;
+  border: 1px solid #262626;
+  border-radius: 0.375rem;
+  padding: 0.75rem 1rem;
+  overflow-x: auto;
+  margin: 0.5rem 0;
+}
+
+.prose-dark code {
+  background: #1f1f1f;
+  padding: 0.15rem 0.35rem;
+  border-radius: 0.25rem;
+  font-size: 0.85em;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.prose-dark blockquote {
+  border-left: 3px solid #6366f1;
+  padding-left: 0.75rem;
+  margin: 0.5rem 0;
+  color: #a3a3a3;
+  font-style: italic;
+}
+
+/* Smooth input focus states */
+input:focus,
+textarea:focus,
+select:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.35);
+  border-color: #6366f1 !important;
+}
+
+/* Accordion transition helper */
+.accordion-content {
+  transition: max-height 0.3s ease, opacity 0.3s ease;
+}

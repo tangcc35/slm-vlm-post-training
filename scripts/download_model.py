@@ -2,17 +2,16 @@
 """Downloads Hugging Face models into the outputs directory using credentials from .env.
 
 Usage:
-    # Run with defaults (downloads the example Qwen3.5-2B model to outputs/)
-    python scripts/download_model.py
+    # Run with defaults (downloads Qwen3.5-9B Q8_0 GGUF to outputs/)
+    uv run python scripts/download_model.py
 
-    # Download a specific model repository or Hugging Face URL
-    python scripts/download_model.py --model "https://huggingface.co/HauhauCS/Qwen3.5-2B-Uncensored-HauhauCS-Aggressive"
+    # Download directly into outputs/ without a nested folder
+    uv run python scripts/download_model.py --output-dir outputs
 
-    # Download only a specific file pattern (e.g., a specific GGUF quant or safetensors)
-    python scripts/download_model.py --pattern "*Q4_K_M*"
-
-    # Specify custom output path
-    python scripts/download_model.py --output-dir "outputs/custom_model_dir"
+    # Download by specifying the model repository and specific file
+    uv run python scripts/download_model.py \
+        --model "DavidAU/Qwen3.5-9B-The-Defiant-Fable-Uncensored-Heretic-NEO-IMATRIX-MAX-MTP-GGUF" \
+        --pattern "Qwen3.5-9B-The-Defiant-Fable-Uncnr-Heretic-NEO-MAX-Q8_0.gguf"
 """
 
 import argparse
@@ -26,7 +25,8 @@ from huggingface_hub import snapshot_download
 # =====================================================================
 # DEFAULT CONFIGURATION
 # =====================================================================
-DEFAULT_MODEL = "https://huggingface.co/HauhauCS/Qwen3.5-2B-Uncensored-HauhauCS-Aggressive"
+DEFAULT_MODEL = "https://huggingface.co/DavidAU/Qwen3.5-9B-The-Defiant-Fable-Uncensored-Heretic-NEO-IMATRIX-MAX-MTP-GGUF"
+DEFAULT_PATTERN = ["Qwen3.5-9B-The-Defiant-Fable-Uncnr-Heretic-NEO-MAX-Q8_0.gguf"]
 DEFAULT_OUTPUT_BASE = "outputs"
 DEFAULT_ENV_FILE = ".env"
 # =====================================================================
@@ -60,18 +60,36 @@ def load_env(env_path: Path | str = DEFAULT_ENV_FILE) -> dict[str, str]:
     return loaded
 
 
-def normalize_repo_id(model_input: str) -> str:
-    """Extracts the Hugging Face repo ID ('author/model') from a URL or repo ID string."""
+def normalize_repo_id(model_input: str) -> tuple[str, str | None]:
+    """Extracts the Hugging Face repo ID ('author/model') and any embedded filename from URL or input."""
     model_input = model_input.strip()
+
+    # Handle URLs
     if model_input.startswith("http://") or model_input.startswith("https://"):
         path = urlparse(model_input).path.strip("/")
-        # Remove any leading tree/main, blob/main, etc. if someone pasted a deep link
-        path = re.sub(r"^(tree|blob)/[^/]+/", "", path)
+        # Check for deep link to a specific file: e.g. /blob/main/<file> or /tree/main/<file>
+        m = re.match(r"^([^/]+/[^/]+)/(?:blob|tree)/[^/]+/(.+)$", path)
+        if m:
+            return m.group(1), m.group(2)
         parts = path.split("/")
         if len(parts) >= 2:
-            return f"{parts[0]}/{parts[1]}"
-        return path
-    return model_input
+            return f"{parts[0]}/{parts[1]}", None
+        return path, None
+
+    parts = model_input.split("/")
+    # e.g., author/repo/filename.gguf
+    if len(parts) == 3:
+        return f"{parts[0]}/{parts[1]}", parts[2]
+    # e.g., repo/filename.gguf (missing author prefix)
+    elif len(parts) == 2 and any(parts[1].endswith(ext) for ext in [".gguf", ".safetensors", ".bin", ".json"]):
+        repo_name = parts[0]
+        if "Qwen3.5-9B-The-Defiant-Fable" in repo_name and not repo_name.startswith("DavidAU/"):
+            repo_id = f"DavidAU/{repo_name}"
+        else:
+            repo_id = repo_name
+        return repo_id, parts[1]
+
+    return model_input, None
 
 
 def download_hf_model(
@@ -82,6 +100,14 @@ def download_hf_model(
     env_path: str = DEFAULT_ENV_FILE,
 ) -> Path:
     """Loads environment variables, authenticates with HF_TOKEN, and downloads model."""
+    # Fast transfer using hf_transfer if installed
+    if "HF_HUB_ENABLE_HF_TRANSFER" not in os.environ:
+        try:
+            import hf_transfer  # noqa: F401
+            os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "1"
+        except ImportError:
+            pass
+
     env_vars = load_env(env_path)
     hf_token = os.environ.get("HF_TOKEN") or os.environ.get("HUGGING_FACE_HUB_TOKEN")
 
@@ -91,7 +117,15 @@ def download_hf_model(
     else:
         print("[WARN] No HF_TOKEN found in .env or environment; proceeding as anonymous/public access.")
 
-    repo_id = normalize_repo_id(model_input)
+    repo_id, extracted_pattern = normalize_repo_id(model_input)
+    if extracted_pattern:
+        if allow_patterns is None:
+            allow_patterns = [extracted_pattern]
+        elif isinstance(allow_patterns, list) and extracted_pattern not in allow_patterns:
+            allow_patterns.append(extracted_pattern)
+        elif isinstance(allow_patterns, str) and extracted_pattern != allow_patterns:
+            allow_patterns = [allow_patterns, extracted_pattern]
+
     model_folder_name = repo_id.split("/")[-1]
 
     if output_dir:
@@ -131,7 +165,7 @@ def parse_args():
         "--model",
         type=str,
         default=DEFAULT_MODEL,
-        help=f"Hugging Face model repository ID or URL (default: '{DEFAULT_MODEL}')",
+        help=f"Hugging Face model repository ID, URL, or model/file path (default: '{DEFAULT_MODEL}')",
     )
     parser.add_argument(
         "-o",
@@ -145,8 +179,8 @@ def parse_args():
         "--pattern",
         type=str,
         nargs="+",
-        default=None,
-        help="Optional glob pattern(s) to restrict download (e.g. '*Q4_K_M*' or '*.safetensors')",
+        default=DEFAULT_PATTERN,
+        help=f"Optional glob pattern(s) to restrict download (default: {DEFAULT_PATTERN})",
     )
     parser.add_argument(
         "--ignore",

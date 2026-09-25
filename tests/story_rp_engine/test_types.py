@@ -57,7 +57,7 @@ def test_story_request_defaults():
     assert req.genre == "Fiction"
     assert req.tone == "Balanced"
     assert req.max_tokens == 512
-    assert req.chunk_size == 4
+    assert req.chunk_size == 16
 
 def test_story_request_custom_chunk_size():
     req = StoryRequest(session_id="story_sess_1", current_text="The wind howled.", chunk_size=8)
@@ -78,5 +78,5 @@ def test_rp_chat_request_defaults():
     assert req.session_id == "s1"
     assert req.message == "Hello"
     assert req.user_name == "User"
-    assert req.chunk_size == 4
+    assert req.chunk_size == 16
     assert req.authors_note is None
