@@ -73,7 +73,6 @@ def test_web_static_assets():
         "storyTone",
         "storyCustomTone",
         "storyInstruction",
-        "storyMaxTokens",
         "storyChunkSize",
         "storyCurrentText",
         "previousStoryText",

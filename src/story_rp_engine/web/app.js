@@ -85,7 +85,6 @@ const AppDefinition = {
       storyCustomTone: '',
       customTone: '',
       storyInstruction: 'Continue the story naturally from the current point.',
-      storyMaxTokens: 512,
       storyChunkSize: 16,
       storyCurrentText: '',
       previousStoryText: null,
@@ -1429,7 +1428,6 @@ const AppDefinition = {
         instruction: this.storyInstruction
           ? this.storyInstruction.trim()
           : 'Continue the story naturally from the current point.',
-        max_tokens: Number(this.storyMaxTokens) || 512,
         chunk_size: Number(this.storyChunkSize) || 16,
       };
 
