@@ -88,7 +88,7 @@ Validate the Story Co-Pilot skill and workflow engine:
 
 ```bash
 # 1. Run agent skills validation for story-copilot
-uv run pytest tests/test_agent_skills.py -k "story_copilot" -v
+uv run pytest tests/test_agent_skills.py -k "story-copilot" -v
 
 # 2. Run all story workflow graph and agent tests
 uv run pytest tests/story_rp_engine/test_story_workflow.py -v
