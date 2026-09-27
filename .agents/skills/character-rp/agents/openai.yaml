@@ -1,0 +1,4 @@
+interface:
+  display_name: "Character Card & Lorebook RP"
+  short_description: "Character Card V2 parsing, dynamic lorebook keywords, and prompt macro injection."
+  default_prompt: "Use $character-rp to configure character cards, lorebooks, or roleplay prompt templates."
