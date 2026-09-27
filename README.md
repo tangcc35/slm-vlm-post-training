@@ -34,6 +34,15 @@ Designed from the ground up to train on consumer GPUs with **≤ 8GB VRAM** via 
 
 ```text
 slm-vlm-post-training/
+├── .agents/
+│   └── skills/                      # Agent skills framework (agentskills.io standard)
+│       ├── unsloth-sft/             # SFT training, conversational datasets & QLoRA
+│       ├── grpo-reasoning-rl/       # GRPO RL, XML format, reward functions & KL tuning
+│       ├── model-export-gguf/       # LoRA merging, GGUF quantization & Ollama serving
+│       ├── character-rp/            # Character Card V2, lorebook & macro interpolation
+│       ├── story-copilot/           # ADK 2.0 Director/Writer workflow & narrative graph
+│       ├── story-rp-backend/        # FastAPI routes, SSE streaming, SQLite & Phoenix
+│       └── story-rp-frontend/       # Dual-mode UI, SSE readers, character modals
 ├── configs/
 │   ├── sft/
 │   │   ├── smoke_test.yaml          # Fast 2-step SFT sanity check
@@ -120,6 +129,8 @@ The test suite covers:
 - Reward registry, dispatch, and standard scoring functions (XML regex, exact match, process-sandboxed code execution with timeout protection).
 - SFT and GRPO training runners (parameter forwarding, response masking, VRAM metrics tracking).
 - Export pipeline (LoRA weights, 16-bit merged, 4-bit merged, GGUF quantization).
+- Dual-mode Story & Roleplay Engine (Character Card V2, lorebook keyword retrieval, ADK workflow graph, SSE streaming, SQLite persistence).
+- Agent skills framework validation (frontmatter schema, progressive disclosure references, `openai.yaml` metadata).
 
 ---
 
@@ -583,6 +594,42 @@ When training on 8GB VRAM consumer GPUs (e.g., RTX 3070, RTX 4060, laptop GPUs):
 | `training.max_prompt_length` | `256` (GRPO) | Keeps prompt KV cache minimal during multi-generation rollouts. |
 | `training.max_completion_length` | `256` - `512` | Restricts reasoning token sampling buffer. |
 | `training.num_generations` | `2` to `4` (GRPO) | Balances policy group advantage estimation with memory usage. |
+
+---
+
+## Agent Skills Framework
+
+This repository provides an automated, domain-specific **Agent Skills Framework** following the [agentskills.io](https://agentskills.io) standard, located in [`.agents/skills/`](.agents/skills/). AI coding agents (Antigravity, Claude Code, Cursor, OpenAI Codex) automatically discover and activate these modular skills to maintain architectural consistency, safety constraints, and idiomatic patterns across both the post-training pipeline and the story/RP engine.
+
+### Progressive Disclosure Architecture
+
+To maximize context-window efficiency and token economics, the skill framework adheres to a 3-tier progressive disclosure model:
+
+1. **Discovery (Level 1 - System Prompt):** Lightweight YAML frontmatter (`name`, `description`) in `SKILL.md` is registered on agent startup (~50–100 tokens per skill), allowing the agent to know *when* to invoke each skill without consuming context.
+2. **Workflow & Instructions (Level 2 - Task Context):** When an agent encounters a relevant domain task, it reads `SKILL.md` (~1,000–2,000 tokens), which contains step-by-step procedures, rules, decision trees, and verification checklists.
+3. **Deep References (Level 3 - On-Demand):** High-density technical references, API schemas, and code recipes in `references/*.md` (~2,000–5,000 tokens) are loaded strictly when needed for deep debugging or complex implementations.
+
+Each skill also includes an `agents/openai.yaml` definition for seamless multi-platform compatibility across OpenAI and Codex tooling.
+
+### Available Skills
+
+| Skill | Directory | Core Capabilities |
+|---|---|---|
+| **unsloth-sft** | [`.agents/skills/unsloth-sft/`](.agents/skills/unsloth-sft/) | SFT instruction fine-tuning, responses-only loss masking, ShareGPT/HF conversational formats, 4-bit QLoRA memory budgeting (≤8GB VRAM), and training YAML recipe configuration. |
+| **grpo-reasoning-rl** | [`.agents/skills/grpo-reasoning-rl/`](.agents/skills/grpo-reasoning-rl/) | Group Relative Policy Optimization (GRPO), prompt-only dataset formatting, custom `@register_reward` scoring functions (XML format, exact match, code execution), and KL divergence monitoring. |
+| **model-export-gguf** | [`.agents/skills/model-export-gguf/`](.agents/skills/model-export-gguf/) | Standalone LoRA adapter export, 16-bit / 4-bit merged checkpoints, GGUF quantization (`q4_k_m`, `q8_0`, `f16`), Ollama `Modelfile` generation, and local `llama.cpp` inference testing. |
+| **character-rp** | [`.agents/skills/character-rp/`](.agents/skills/character-rp/) | Character Card V2 JSON specification, `{{char}}`/`{{user}}` macro interpolation, dynamic keyword-triggered lorebook retrieval via ADK `before_model_callback`, and Author's Note steering. |
+| **story-copilot** | [`.agents/skills/story-copilot/`](.agents/skills/story-copilot/) | Google ADK 2.0 declarative multi-agent workflow graph, Story Director planning agent, Story Writer prose generation agent, session state tracking, and narrative pacing guidance. |
+| **story-rp-backend** | [`.agents/skills/story-rp-backend/`](.agents/skills/story-rp-backend/) | FastAPI REST endpoints, Server-Sent Events (SSE) streaming with chunk buffering, SQLite `DatabaseSessionService`, LiteLLM provider routing, and Phoenix OpenTelemetry tracing. |
+| **story-rp-frontend** | [`.agents/skills/story-rp-frontend/`](.agents/skills/story-rp-frontend/) | Vanilla ES6+ dual-mode web interface (`src/story_rp_engine/web/`), SSE client streaming readers (`fetch` + `ReadableStream`), Markdown rendering, Character Card JSON import modal, and responsive layout. |
+
+### Verifying Agent Skills
+
+The framework includes automated pytest validation enforcing frontmatter validity, directory structure, reference link resolution, and `openai.yaml` schema compliance:
+
+```bash
+uv run pytest tests/test_agent_skills.py -v
+```
 
 ---
 
