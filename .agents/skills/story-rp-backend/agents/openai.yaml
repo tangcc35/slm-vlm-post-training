@@ -1,0 +1,4 @@
+interface:
+  display_name: "Story & RP Backend Engine"
+  short_description: "FastAPI REST API, SSE streaming, SQLite persistence, and LiteLLM model routing."
+  default_prompt: "Use $story-rp-backend to develop, test, or troubleshoot the FastAPI backend service."
