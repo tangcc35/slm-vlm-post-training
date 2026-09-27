@@ -79,8 +79,8 @@ def test_reference_links_resolve(skill_name):
     with open(skill_md_path, "r", encoding="utf-8") as f:
         content = f.read()
 
-    # Find all reference links pointing to references/
-    ref_matches = re.findall(r"`?references/([a-zA-Z0-9_-]+\.md)`?", content)
+    # Find all reference links pointing to references/ (supports backticks, markdown links, etc.)
+    ref_matches = re.findall(r"references/([a-zA-Z0-9_-]+\.md)", content)
     assert len(ref_matches) > 0, f"Skill {skill_name} must reference at least one guide in references/"
 
     for ref_file in ref_matches:
