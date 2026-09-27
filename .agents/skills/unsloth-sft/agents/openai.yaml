@@ -1,0 +1,4 @@
+interface:
+  display_name: "Unsloth SFT Post-Training"
+  short_description: "Supervised fine-tuning with Unsloth, QLoRA, and responses-only loss masking."
+  default_prompt: "Use $unsloth-sft to configure, run, or debug supervised fine-tuning with Unsloth."
