@@ -1,0 +1,4 @@
+interface:
+  display_name: "Story Co-Pilot Workflow"
+  short_description: "Google ADK 2.0 Director and Writer collaborative storytelling pipeline."
+  default_prompt: "Use $story-copilot to build, configure, or tune the Director/Writer story generation workflow."
