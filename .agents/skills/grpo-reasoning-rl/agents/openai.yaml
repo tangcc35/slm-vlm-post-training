@@ -1,0 +1,4 @@
+interface:
+  display_name: "GRPO Reasoning RL"
+  short_description: "Group Relative Policy Optimization with Unsloth and custom reward verifiers."
+  default_prompt: "Use $grpo-reasoning-rl to implement or tune GRPO online reinforcement learning workflows."
