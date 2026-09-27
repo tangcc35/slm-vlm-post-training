@@ -1,0 +1,4 @@
+interface:
+  display_name: "Model Export & GGUF Quantization"
+  short_description: "Merge LoRA adapters and export quantized GGUF models for llama.cpp and Ollama."
+  default_prompt: "Use $model-export-gguf to merge adapters or export models to GGUF format."
