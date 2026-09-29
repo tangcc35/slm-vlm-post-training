@@ -27,8 +27,11 @@ flowchart TD
   - `STORY_RP_MODEL`: Model identifier (e.g., `ollama/llama3.1:8b`, `vllm/meta-llama/Meta-Llama-3.1-8B-Instruct`).
   - `STORY_RP_API_BASE`: Endpoint URL for local LLM or OpenAI-compatible server (e.g., `http://localhost:11434`).
   - `STORY_RP_API_KEY`: API key if required (auto-defaults to `"local"` if OpenAI-compatible base URL is supplied).
+  - `STORY_RP_COMPACTION_ENABLED`: Enable ADK context compaction (`1`/`true`/`yes`, default enabled).
+  - `STORY_RP_COMPACTION_TOKEN_THRESHOLD` & `STORY_RP_COMPACTION_EVENT_RETENTION_SIZE`: Token-based safety net compaction parameters.
+  - `STORY_RP_COMPACTION_INTERVAL` & `STORY_RP_COMPACTION_OVERLAP_SIZE`: Sliding-window turn-based compaction parameters.
 - Initialize the model provider via `story_rp_engine.core.model_provider.get_adk_model`.
-- Consult `references/database-session-storage.md` for LiteLLM failover chaining and multi-model router setup.
+- Consult `references/database-session-storage.md` for LiteLLM failover chaining, multi-model router setup, and context compaction mechanics.
 
 ### 2. Implement & Validate REST Endpoints
 - Implement routes across modular routers mounted on `/api/v1`:
@@ -39,11 +42,12 @@ flowchart TD
 - Intercept Pydantic validation errors with `validation_exception_handler` to return structured HTTP 400 responses.
 - Consult `references/api-endpoints-and-sse.md` for complete endpoint schemas and status codes.
 
-### 3. Wire DatabaseSessionService Persistence
+### 3. Wire DatabaseSessionService Persistence & Context Compaction
 - Persist multi-turn conversation events and state deltas using Google ADK's `DatabaseSessionService` backed by `aiosqlite`.
 - Structure storage directory at `.engine_data/` containing `characters/`, `lorebooks/`, and `sessions.db`.
-- Extract message turns via `get_session` and handle turn deletion or history rewind via the atomic session re-creation pattern.
-- Consult `references/database-session-storage.md` for SQLite tables (`sessions`, `events`, `app_states`, `user_states`) and async CRUD patterns.
+- Configure hybrid context compaction using `EventsCompactionConfig` with explicit `LlmEventSummarizer(llm=model)` on `App` (enabling both token-based safety net and sliding-window periodic compression).
+- Extract message turns via `get_session` and surface compaction events with `role: "compaction"` and `is_compaction: true`. Handle turn deletion or history rewind via the atomic session re-creation pattern.
+- Consult `references/database-session-storage.md` for SQLite tables (`sessions`, `events`, `app_states`, `user_states`), context compaction lifecycle, and async CRUD patterns.
 
 ### 4. Stream Tokens via Server-Sent Events (SSE)
 - Expose streaming endpoints (`/api/v1/rp/chat/stream` and `/api/v1/story/expand/stream`) using Starlette `StreamingResponse(media_type="text/event-stream")`.
@@ -81,6 +85,8 @@ flowchart TD
    - Model warmup during FastAPI lifespan must be non-blocking and error-tolerant. If the model server is cold or offline, log a warning and continue app startup rather than crashing the server. Honor `STORY_RP_SKIP_WARMUP=1`.
 7. **Terminal Node Output Filtering**:
    - In multi-agent story workflows, intermediate directorial memos from `story_director` must never be emitted over user-facing SSE streams. Only stream tokens from the terminal `story_writer` node.
+8. **Explicit Summarizer for Graph Workflows**:
+   - In ADK 2.x, when attaching `EventsCompactionConfig` to `App`, graph workflows (`root_agent=Workflow`) do not possess a single default canonical model and will raise `ValueError: No LlmAgent model available` if `summarizer` is omitted. Always instantiate an explicit `LlmEventSummarizer(llm=get_adk_model(config))` for both single agents and workflows.
 
 ---
 

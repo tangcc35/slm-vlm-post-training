@@ -258,3 +258,32 @@ The workflow is exposed via FastAPI routes in `src/story_rp_engine/api/routes_st
 - **Response**: `StreamingResponse(content, media_type="text/event-stream")`
 - **Headers**: `X-Session-ID: <session_id>`
 - **Chunk Format**: SSE events formatted as `data: {"text": "..."}\n\n`
+
+---
+
+## Context Compaction in Multi-Agent Workflows
+
+In multi-scene story expansions, conversation and state history can quickly exhaust the LLM's context window. The Story Co-Pilot workflow leverages ADK 2.x context compaction configured on `App(name="story_app", root_agent=workflow, events_compaction_config=...)`.
+
+### Explicit Summarizer Requirement
+Because `root_agent` is a `Workflow` (which does not have a single canonical LLM), ADK cannot auto-resolve an agent model. The engine explicitly provides an `LlmEventSummarizer`:
+
+```python
+from google.adk.apps.app import EventsCompactionConfig
+from google.adk.apps.llm_event_summarizer import LlmEventSummarizer
+from story_rp_engine.core.model_provider import get_adk_model
+
+model = get_adk_model(config)
+summarizer = LlmEventSummarizer(llm=model, prompt_template=config.compaction_prompt_template)
+
+compaction_cfg = EventsCompactionConfig(
+    token_threshold=config.compaction_token_threshold,
+    event_retention_size=config.compaction_event_retention_size,
+    compaction_interval=config.compaction_interval,
+    overlap_size=config.compaction_overlap_size,
+    summarizer=summarizer,
+)
+```
+
+This ensures both token-threshold safety triggers and sliding-window periodic turn summaries operate seamlessly during extended multi-scene story generation.
+
