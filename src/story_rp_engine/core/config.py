@@ -53,3 +53,35 @@ class EngineConfig(BaseModel):
         default_factory=lambda: os.getenv("PHOENIX_PROJECT_NAME", "story-rp-engine"),
         description="Arize Phoenix project name",
     )
+    compaction_enabled: bool = Field(
+        default_factory=lambda: os.getenv("STORY_RP_COMPACTION_ENABLED", "1").lower() in ("1", "true", "yes"),
+        description="Whether ADK context compaction is enabled for agent and workflow sessions",
+    )
+    compaction_token_threshold: Optional[int] = Field(
+        default_factory=lambda: int(os.getenv("STORY_RP_COMPACTION_TOKEN_THRESHOLD", "4000"))
+        if os.getenv("STORY_RP_COMPACTION_TOKEN_THRESHOLD") not in (None, "")
+        else 4000,
+        description="Token limit that triggers compaction before model invocations",
+    )
+    compaction_event_retention_size: Optional[int] = Field(
+        default_factory=lambda: int(os.getenv("STORY_RP_COMPACTION_EVENT_RETENTION_SIZE", "5"))
+        if os.getenv("STORY_RP_COMPACTION_EVENT_RETENTION_SIZE") not in (None, "")
+        else 5,
+        description="Number of recent raw events kept intact when token threshold compaction occurs",
+    )
+    compaction_interval: Optional[int] = Field(
+        default_factory=lambda: int(os.getenv("STORY_RP_COMPACTION_INTERVAL", "10"))
+        if os.getenv("STORY_RP_COMPACTION_INTERVAL") not in (None, "")
+        else 10,
+        description="Number of turns between sliding window compactions",
+    )
+    compaction_overlap_size: Optional[int] = Field(
+        default_factory=lambda: int(os.getenv("STORY_RP_COMPACTION_OVERLAP_SIZE", "2"))
+        if os.getenv("STORY_RP_COMPACTION_OVERLAP_SIZE") not in (None, "")
+        else 2,
+        description="Number of prior turns to retain as overlapping context in sliding window compactions",
+    )
+    compaction_prompt_template: Optional[str] = Field(
+        default_factory=lambda: os.getenv("STORY_RP_COMPACTION_PROMPT_TEMPLATE") or None,
+        description="Optional custom summarizer prompt template containing {conversation_history}",
+    )

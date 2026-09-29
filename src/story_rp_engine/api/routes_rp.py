@@ -132,11 +132,22 @@ async def get_session_turns(session_id: str, request: Request):
     turns = []
     for idx, ev in enumerate(session.events):
         text = ""
-        if ev.content and ev.content.parts:
+        is_compaction = bool(ev.actions and ev.actions.compaction)
+        if is_compaction and ev.actions.compaction.compacted_content:
+            parts = getattr(ev.actions.compaction.compacted_content, "parts", None) or []
+            text = "".join(p.text for p in parts if getattr(p, "text", None))
+            role = "compaction"
+        elif ev.content and ev.content.parts:
             text = "".join(p.text for p in ev.content.parts if getattr(p, "text", None))
-        role = getattr(ev.content, "role", "unknown") if ev.content else "system"
+            role = getattr(ev.content, "role", "unknown") if ev.content else "system"
+        else:
+            role = "system"
+
         if text:
-            turns.append({"index": idx, "role": role, "text": text})
+            turn_data = {"index": idx, "role": role, "text": text}
+            if is_compaction:
+                turn_data["is_compaction"] = True
+            turns.append(turn_data)
     return {"turns": turns}
 
 
