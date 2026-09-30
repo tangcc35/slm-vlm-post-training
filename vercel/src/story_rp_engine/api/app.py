@@ -108,12 +108,15 @@ def create_app(
 
     resolved_config = config or EngineConfig()
     if resolved_config.phoenix_enabled:
-        from phoenix.otel import register
-        register(
-            project_name=resolved_config.phoenix_project_name,
-            endpoint=resolved_config.phoenix_endpoint,
-            auto_instrument=True,
-        )
+        try:
+            from phoenix.otel import register
+            register(
+                project_name=resolved_config.phoenix_project_name,
+                endpoint=resolved_config.phoenix_endpoint,
+                auto_instrument=True,
+            )
+        except ImportError:
+            logger.warning("PHOENIX_ENABLED is true, but phoenix is not installed. Skipping OpenTelemetry registration.")
 
     resolved_store = store or EngineStore(
         storage_dir=resolved_config.storage_dir,

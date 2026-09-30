@@ -19,7 +19,7 @@ for candidate in (
 # Serverless environment defaults
 os.environ.setdefault("STORY_RP_STORAGE_DIR", "/tmp/.engine_data")
 os.environ.setdefault("STORY_RP_SKIP_WARMUP", "1")
-os.environ.setdefault("PHOENIX_ENABLED", "0")
+os.environ["PHOENIX_ENABLED"] = "0"
 
 from story_rp_engine.api.app import create_app
 
