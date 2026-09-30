@@ -259,3 +259,47 @@ Traces capture:
 - End-to-end request durations for `/api/v1/rp/chat` and `/api/v1/story/expand`.
 - ADK multi-agent workflow DAG execution spans (`story_director` -> `story_writer`).
 - LiteLLM token usage, prompt payloads, and generation latency.
+
+---
+
+## 6. Context Compaction and Event Lifecycle
+
+Google ADK 2.x context compaction reduces session memory footprint while maintaining crucial narrative and conversation continuity.
+
+```mermaid
+flowchart TD
+    Turn["User Invocations (Turns)"] --> Eval{"Pre-call: Tokens > Threshold?"}
+    Eval -- Yes --> TokenComp["Token Compaction: Summarize older turns, keep event_retention_size raw events"]
+    Eval -- No --> LLMCall["Execute LLM Turn"]
+    LLMCall --> PostCheck{"Post-invocation: Turns >= compaction_interval?"}
+    PostCheck -- Yes --> WindowComp["Sliding-Window Compaction: Summarize interval, retain overlap_size"]
+    PostCheck -- No --> Append["Append model event to DatabaseSessionService"]
+    TokenComp --> LLMCall
+    WindowComp --> StoreDB["Append Event(actions=compaction) to sessions.db"]
+```
+
+### 6.1 Compaction Configuration
+Compaction is configured on `App` via `EventsCompactionConfig`:
+
+```python
+from google.adk.apps.app import EventsCompactionConfig
+from google.adk.apps.llm_event_summarizer import LlmEventSummarizer
+from story_rp_engine.core.model_provider import get_adk_model
+
+model = get_adk_model(config)
+summarizer = LlmEventSummarizer(llm=model, prompt_template=config.compaction_prompt_template)
+
+compaction_config = EventsCompactionConfig(
+    token_threshold=config.compaction_token_threshold,        # e.g. 4000
+    event_retention_size=config.compaction_event_retention_size, # e.g. 5
+    compaction_interval=config.compaction_interval,          # e.g. 10
+    overlap_size=config.compaction_overlap_size,              # e.g. 2
+    summarizer=summarizer,
+)
+```
+
+### 6.2 SQLite Persistence Semantics
+- **No Event Loss**: In SQLite storage, raw user prompts and assistant outputs are **not deleted**. Compaction is append-only: an `Event` with an `EventCompaction` action (`start_timestamp`, `end_timestamp`, `compacted_content`) is appended to the session.
+- **In-Memory Prompt Assembly**: When constructing contents for subsequent LLM turns (`google.adk.flows.llm_flows.contents._get_contents`), ADK automatically checks compaction ranges, excludes raw events covered by the compaction window, and substitutes the compacted summary event.
+- **Turn Inspection Visibility**: In `GET /api/v1/rp/sessions/{session_id}/turns`, compaction events are surfaced with `role: "compaction"` and `is_compaction: true`, providing clients full transparency into the compacted history.
+

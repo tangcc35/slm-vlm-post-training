@@ -14,6 +14,7 @@ from story_rp_engine.api.routes_story import router as story_router
 from story_rp_engine.core.agent_registry import AgentRegistry
 from story_rp_engine.core.agent_utils import execute_runner_turn
 from story_rp_engine.core.config import EngineConfig
+from story_rp_engine.core.model_provider import is_gemini_model, is_remote_model
 from story_rp_engine.storage.store import EngineStore
 
 logger = logging.getLogger("story_rp_engine.api")
@@ -22,6 +23,16 @@ logger = logging.getLogger("story_rp_engine.api")
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     skip_warmup = os.getenv("STORY_RP_SKIP_WARMUP", "0").lower() in ("1", "true")
+    config = getattr(app.state, "config", None)
+    if config is not None and is_remote_model(config):
+        skip_warmup = True
+        logger.info("Skipping model warmup for remote model (%s).", config.model_name)
+    elif config is None:
+        env_model = os.getenv("STORY_RP_MODEL", "")
+        if env_model and is_gemini_model(env_model):
+            skip_warmup = True
+            logger.info("Skipping model warmup for remote model (%s).", env_model)
+
     runner = getattr(app.state, "runner", None)
     if runner is not None and not skip_warmup:
         try:

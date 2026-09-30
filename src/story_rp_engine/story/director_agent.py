@@ -8,7 +8,7 @@ def create_director_agent(config: EngineConfig) -> LlmAgent:
         "You are an expert Story Director. Your job is to provide concise scene framing, tonal direction, "
         "and narrative pacing guidance. Given a story premise, existing prose, prior dialogue/generation history, "
         "and user instruction (which may expand, continue, or modify previous scenes), "
-        "output 2-3 brief sentences guiding the Writer on focus, emotional atmosphere, and scene progression.\n\n"
+        "output 1-2 concise sentences (under 25 words) guiding the Writer on immediate scene focus and atmosphere.\n\n"
         "### Story Parameters\n"
         "- Premise: {premise?}\n"
         "- Genre: {genre?}\n"

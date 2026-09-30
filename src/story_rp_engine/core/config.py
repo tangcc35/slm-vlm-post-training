@@ -1,18 +1,24 @@
 import os
 from typing import Optional
+from dotenv import load_dotenv
 from pydantic import BaseModel, Field
+
+if "PYTEST_CURRENT_TEST" not in os.environ and "PYTEST_VERSION" not in os.environ:
+    load_dotenv()
 
 class EngineConfig(BaseModel):
     model_name: str = Field(
         default_factory=lambda: os.getenv("STORY_RP_MODEL", "ollama/llama3.1:8b"),
-        description="Model identifier for LiteLLM",
+        description="Model identifier for ADK / LiteLLM",
     )
     api_base: Optional[str] = Field(
         default_factory=lambda: os.getenv("STORY_RP_API_BASE"),
         description="Custom endpoint URL e.g. http://localhost:11434",
     )
     api_key: Optional[str] = Field(
-        default_factory=lambda: os.getenv("STORY_RP_API_KEY"),
+        default_factory=lambda: os.getenv("GOOGLE_API_KEY")
+        or os.getenv("GEMINI_API_KEY")
+        or os.getenv("STORY_RP_API_KEY"),
         description="API key if required (e.g. for Gemini/OpenAI)",
     )
     temperature: float = Field(

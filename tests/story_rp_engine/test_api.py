@@ -185,6 +185,8 @@ def test_rp_chat_stream_endpoint(tmp_path):
         )
         assert res.status_code == 200
         assert "text/event-stream" in res.headers["content-type"]
+        assert res.headers["cache-control"] == "no-cache"
+        assert res.headers["x-accel-buffering"] == "no"
         body = res.text
         assert 'data: {"delta": "Here is a tune."}\n\n' in body
         assert 'data: {"full_text": "Here is a tune.", "done": true}\n\n' in body
@@ -343,6 +345,8 @@ def test_story_expand_stream_custom_chunk_size(tmp_path):
         )
         assert res.status_code == 200
         assert res.headers["x-session-id"] == "story_sess_stream_2"
+        assert res.headers["cache-control"] == "no-cache"
+        assert res.headers["x-accel-buffering"] == "no"
         body = res.text
         assert 'data: {"delta": "The sun"}\n\n' in body
         assert 'data: {"delta": " rose above"}\n\n' in body
@@ -809,5 +813,14 @@ async def test_lifespan_warmup_skipped_via_env(tmp_path, monkeypatch):
         assert not mock_turn.called
 
 
+@pytest.mark.anyio
+async def test_lifespan_warmup_skipped_for_remote_gemini(tmp_path):
+    store = EngineStore(storage_dir=str(tmp_path))
+    config = EngineConfig(model_name="gemini-flash-latest")
+    app = create_app(store=store, config=config)
 
-
+    with patch("story_rp_engine.api.app.execute_runner_turn", new_callable=AsyncMock) as mock_turn:
+        from story_rp_engine.api.app import lifespan
+        async with lifespan(app):
+            pass
+        assert not mock_turn.called

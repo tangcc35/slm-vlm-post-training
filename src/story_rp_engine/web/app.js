@@ -66,7 +66,7 @@ const AppDefinition = {
       rpUserName: 'User',
       rpAuthorsNote: '',
       rpLorebookId: '',
-      rpChunkSize: 16,
+      rpChunkSize: 1,
       rpMessages: [],
       selectedGreetingIndex: 0,
       isGeneratingRP: false,
@@ -85,7 +85,7 @@ const AppDefinition = {
       storyCustomTone: '',
       customTone: '',
       storyInstruction: 'Continue the story naturally from the current point.',
-      storyChunkSize: 16,
+      storyChunkSize: 1,
       storyCurrentText: '',
       previousStoryText: null,
       storyHistory: [],
@@ -1255,7 +1255,7 @@ const AppDefinition = {
         message: promptText,
         authors_note: this.rpAuthorsNote ? this.rpAuthorsNote.trim() : null,
         user_name: this.rpUserName ? this.rpUserName.trim() : 'User',
-        chunk_size: Number(this.rpChunkSize) || 16,
+        chunk_size: Number(this.rpChunkSize) || 1,
       };
 
       try {
@@ -1428,7 +1428,7 @@ const AppDefinition = {
         instruction: this.storyInstruction
           ? this.storyInstruction.trim()
           : 'Continue the story naturally from the current point.',
-        chunk_size: Number(this.storyChunkSize) || 16,
+        chunk_size: Number(this.storyChunkSize) || 1,
       };
 
       let appendedInThisTurn = '';

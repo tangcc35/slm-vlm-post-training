@@ -25,6 +25,7 @@ Designed from the ground up to train on consumer GPUs with **≤ 8GB VRAM** via 
 ### Dual-Mode Story & Roleplay Engine (Google ADK 2.0)
 - **Story Co-Pilot Workflow:** Graph-based multi-agent pipeline where a **Story Director** plans pacing and tone guidance and a **Story Writer** crafts seamless literary continuations.
 - **Character Card V2 Roleplay:** Native character card parsing, `{{char}}`/`{{user}}` macro interpolation, dynamic keyword-triggered lorebook retrieval via ADK `before_model_callback`, and author's note steering.
+- **Context Compaction (Google ADK):** Hybrid token-based safety net and sliding-window turn compaction (`EventsCompactionConfig` + `LlmEventSummarizer`) for automatic context compression across both single RP agents and multi-agent story workflows, keeping context footprint bounded while preserving recent raw interactions.
 - **Production-Ready FastAPI Server:** Server-Sent Events (SSE) streaming with configurable chunk buffering, database session persistence (`DatabaseSessionService` with SQLite/aiosqlite), and multi-provider LLM support via **LiteLLM**.
 - **Modern Python Tooling:** Fast, reproducible environments managed via `uv` and Python 3.11.
 
@@ -381,6 +382,12 @@ Configure model backends, endpoints, and storage through environment variables o
 | `STORY_RP_STORAGE_DIR` | `.engine_data` | Directory path for persisted character cards, lorebooks, and sessions. |
 | `STORY_RP_DB_URL` | SQLite in storage dir | SQLAlchemy database URL for ADK session persistence (e.g., `sqlite+aiosqlite:///...`). |
 | `STORY_RP_SKIP_WARMUP` | `0` | Set to `1` or `true` to skip model inference warmup on startup. |
+| `STORY_RP_COMPACTION_ENABLED` | `1` | Enable ADK context compaction (`1`/`true`/`yes` to enable, `0`/`false` to disable). |
+| `STORY_RP_COMPACTION_TOKEN_THRESHOLD` | `4000` | Token limit triggering pre-invocation tail-retention context compaction. |
+| `STORY_RP_COMPACTION_EVENT_RETENTION_SIZE` | `5` | Number of recent raw events kept intact when token compaction triggers. |
+| `STORY_RP_COMPACTION_INTERVAL` | `10` | Number of conversational turns between sliding-window compactions. |
+| `STORY_RP_COMPACTION_OVERLAP_SIZE` | `2` | Number of prior turns to retain as overlapping context in sliding-window summaries. |
+| `STORY_RP_COMPACTION_PROMPT_TEMPLATE` | None | Optional custom summarizer prompt template containing `{conversation_history}`. |
 
 ### Running the API Server
 
@@ -494,6 +501,38 @@ Collaborative narrative generation using the declarative two-agent pipeline (`st
         "instruction": "Describe the moment Vance inserts the key and the heavy gear mechanism begins to turn.",
         "chunk_size": 4
       }'
+  ```
+
+#### 4. Session History, Compaction & Turn Management
+
+- **Get Session Turns & Compaction Summaries (`GET /api/v1/rp/sessions/{session_id}/turns`):**
+  Inspect conversation turns, including automatically generated context compaction summaries (`role: "compaction"`, `is_compaction: true`):
+  ```bash
+  curl http://localhost:8000/api/v1/rp/sessions/session_101/turns
+  # Response:
+  # {
+  #   "turns": [
+  #     {"index": 0, "role": "compaction", "text": "Compacted conversation summary...", "is_compaction": true},
+  #     {"index": 1, "role": "user", "text": "What should we do next?"},
+  #     {"index": 2, "role": "model", "text": "Let us check the corridor."}
+  #   ]
+  # }
+  ```
+
+- **Delete Single Turn or Rewind History (`POST /api/v1/rp/sessions/{session_id}/turns/delete`):**
+  Atomically delete a specific turn or truncate/rewind all turns subsequent to an index:
+  ```bash
+  curl -X POST http://localhost:8000/api/v1/rp/sessions/session_101/turns/delete \
+      -H "Content-Type: application/json" \
+      -d '{
+        "turn_index": 2,
+        "truncate_subsequent": false
+      }'
+  ```
+
+- **Clear Entire Session (`DELETE /api/v1/rp/sessions/{session_id}`):**
+  ```bash
+  curl -X DELETE http://localhost:8000/api/v1/rp/sessions/session_101
   ```
 
 ### Connecting Fine-Tuned SLMs to the Story & RP Engine
