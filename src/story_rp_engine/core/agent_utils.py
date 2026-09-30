@@ -106,6 +106,7 @@ async def format_sse_stream(
     buffer = []
     full_text_chunks = []
     chunk_threshold = max(1, chunk_size or 4)
+    buffered_tokens = 0
 
     async for chunk in generator:
         if not chunk:
@@ -113,10 +114,15 @@ async def format_sse_stream(
         buffer.append(chunk)
         full_text_chunks.append(chunk)
 
-        if len(buffer) >= chunk_threshold or "\n" in chunk:
+        words = chunk.strip().split()
+        chunk_tokens = len(words) if words else 1
+        buffered_tokens += chunk_tokens
+
+        if chunk_threshold <= 1 or buffered_tokens >= chunk_threshold or len(buffer) >= chunk_threshold or "\n" in chunk:
             combined = "".join(buffer)
             yield f"data: {json.dumps({'delta': combined}, ensure_ascii=False)}\n\n"
             buffer.clear()
+            buffered_tokens = 0
 
     if buffer:
         combined = "".join(buffer)

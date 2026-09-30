@@ -201,7 +201,7 @@
           <div class="space-y-1.5 pt-2 border-t border-neutral-800">
             <div class="flex items-center justify-between text-xs">
               <span class="text-neutral-300">SSE Chunk Size</span>
-              <span class="font-mono text-indigo-400 font-semibold">{{ rpChunkSize }} tokens</span>
+              <span class="font-mono text-indigo-400 font-semibold">{{ rpChunkSize }} {{ rpChunkSize === 1 ? 'token (Instant)' : 'tokens' }}</span>
             </div>
             <input
               type="range"
@@ -210,9 +210,9 @@
               v-model.number="rpChunkSize"
               class="w-full accent-indigo-500 h-1.5 bg-neutral-800 rounded-lg cursor-pointer">
             <div class="flex justify-between text-[10px] text-neutral-500">
-              <span>1 (Instant)</span>
-              <span>16 (Balanced)</span>
-              <span>64 (Batch)</span>
+              <span :class="rpChunkSize === 1 ? 'text-indigo-400 font-semibold' : ''">1 (Instant)</span>
+              <span :class="rpChunkSize === 16 ? 'text-indigo-400 font-semibold' : ''">16 (Balanced)</span>
+              <span :class="rpChunkSize === 64 ? 'text-indigo-400 font-semibold' : ''">64 (Batch)</span>
             </div>
           </div>
         </aside>
@@ -443,7 +443,7 @@
           <div class="space-y-1.5 pt-2 border-t border-neutral-800">
             <div class="flex items-center justify-between text-xs">
               <span class="text-neutral-300">Stream Chunk Size</span>
-              <span class="font-mono text-indigo-400 font-semibold">{{ storyChunkSize }} tokens</span>
+              <span class="font-mono text-indigo-400 font-semibold">{{ storyChunkSize }} {{ storyChunkSize === 1 ? 'token (Instant)' : 'tokens' }}</span>
             </div>
             <input
               type="range"
@@ -452,9 +452,9 @@
               v-model.number="storyChunkSize"
               class="w-full accent-indigo-500 h-1.5 bg-neutral-800 rounded-lg cursor-pointer">
             <div class="flex justify-between text-[10px] text-neutral-500">
-              <span>1 (Instant)</span>
-              <span>16 (Balanced)</span>
-              <span>64 (Batch)</span>
+              <span :class="storyChunkSize === 1 ? 'text-indigo-400 font-semibold' : ''">1 (Instant)</span>
+              <span :class="storyChunkSize === 16 ? 'text-indigo-400 font-semibold' : ''">16 (Balanced)</span>
+              <span :class="storyChunkSize === 64 ? 'text-indigo-400 font-semibold' : ''">64 (Batch)</span>
             </div>
           </div>
 

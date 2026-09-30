@@ -185,6 +185,8 @@ def test_rp_chat_stream_endpoint(tmp_path):
         )
         assert res.status_code == 200
         assert "text/event-stream" in res.headers["content-type"]
+        assert res.headers["cache-control"] == "no-cache"
+        assert res.headers["x-accel-buffering"] == "no"
         body = res.text
         assert 'data: {"delta": "Here is a tune."}\n\n' in body
         assert 'data: {"full_text": "Here is a tune.", "done": true}\n\n' in body
@@ -343,6 +345,8 @@ def test_story_expand_stream_custom_chunk_size(tmp_path):
         )
         assert res.status_code == 200
         assert res.headers["x-session-id"] == "story_sess_stream_2"
+        assert res.headers["cache-control"] == "no-cache"
+        assert res.headers["x-accel-buffering"] == "no"
         body = res.text
         assert 'data: {"delta": "The sun"}\n\n' in body
         assert 'data: {"delta": " rose above"}\n\n' in body
