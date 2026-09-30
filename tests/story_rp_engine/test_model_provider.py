@@ -88,3 +88,59 @@ def test_get_adk_model_fallback_handling(monkeypatch):
         assert "model_name" in call_records[0]
         assert "model" in call_records[1]
 
+
+def test_get_adk_model_gemini_native(monkeypatch):
+    from google.adk.models.google_llm import Gemini
+    monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    monkeypatch.delenv("LITELLM_API_BASE", raising=False)
+
+    config = EngineConfig(model_name="gemini-flash-latest", api_key="test-gemini-key")
+    model = get_adk_model(config)
+
+    assert isinstance(model, Gemini)
+    assert model.model == "gemini-flash-latest"
+    assert model.retry_options is not None
+    assert model.retry_options.attempts == 2
+    assert os.environ.get("GOOGLE_API_KEY") == "test-gemini-key"
+
+
+def test_get_adk_model_gemini_prefix_normalization(monkeypatch):
+    from google.adk.models.google_llm import Gemini
+    monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+
+    config = EngineConfig(model_name="gemini/gemini-2.5-flash")
+    model = get_adk_model(config)
+
+    assert isinstance(model, Gemini)
+    assert model.model == "gemini-2.5-flash"
+
+
+def test_get_adk_model_gemini_google_prefix_normalization(monkeypatch):
+    from google.adk.models.google_llm import Gemini
+    monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+
+    config = EngineConfig(model_name="google/gemini-2.0-flash")
+    model = get_adk_model(config)
+
+    assert isinstance(model, Gemini)
+    assert model.model == "gemini-2.0-flash"
+
+
+def test_engine_config_api_key_resolution_google_and_gemini_keys(monkeypatch):
+    monkeypatch.delenv("STORY_RP_API_KEY", raising=False)
+    monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+
+    monkeypatch.setenv("GOOGLE_API_KEY", "google-key-123")
+    cfg1 = EngineConfig()
+    assert cfg1.api_key == "google-key-123"
+
+    monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
+    monkeypatch.setenv("GEMINI_API_KEY", "gemini-key-456")
+    cfg2 = EngineConfig()
+    assert cfg2.api_key == "gemini-key-456"
+
+
