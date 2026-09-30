@@ -8,6 +8,32 @@ from google.genai import types
 from story_rp_engine.core.config import EngineConfig
 
 
+def is_gemini_model(model_name: str) -> bool:
+    """Checks whether the specified model identifier represents a Google Gemini model."""
+    clean_model = model_name.strip()
+    for prefix in ("gemini/", "google/"):
+        if clean_model.startswith(prefix):
+            clean_model = clean_model[len(prefix):]
+            break
+    return clean_model.startswith("gemini")
+
+
+def is_remote_model(config: EngineConfig) -> bool:
+    """Determines if the model runs via a remote cloud API where local server warmup is unnecessary."""
+    if is_gemini_model(config.model_name):
+        return True
+    model = config.model_name.lower()
+    if model.startswith(("anthropic/", "vertex_ai/", "groq/", "azure/")):
+        return True
+    if model.startswith("openai/"):
+        if not config.api_base or not ("localhost" in config.api_base or "127.0.0.1" in config.api_base):
+            return True
+        return False
+    if model.startswith("ollama/"):
+        return False
+    return False
+
+
 def get_adk_model(config: EngineConfig) -> BaseLlm:
     """Instantiates and configures a Google ADK model wrapper (Gemini or LiteLlm)."""
     api_key = config.api_key
@@ -20,7 +46,7 @@ def get_adk_model(config: EngineConfig) -> BaseLlm:
             clean_model = clean_model[len(prefix):]
             break
 
-    is_gemini = clean_model.startswith("gemini")
+    is_gemini = is_gemini_model(model_name)
 
     if is_gemini:
         if api_key:

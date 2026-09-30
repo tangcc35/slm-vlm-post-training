@@ -809,5 +809,14 @@ async def test_lifespan_warmup_skipped_via_env(tmp_path, monkeypatch):
         assert not mock_turn.called
 
 
+@pytest.mark.anyio
+async def test_lifespan_warmup_skipped_for_remote_gemini(tmp_path):
+    store = EngineStore(storage_dir=str(tmp_path))
+    config = EngineConfig(model_name="gemini-flash-latest")
+    app = create_app(store=store, config=config)
 
-
+    with patch("story_rp_engine.api.app.execute_runner_turn", new_callable=AsyncMock) as mock_turn:
+        from story_rp_engine.api.app import lifespan
+        async with lifespan(app):
+            pass
+        assert not mock_turn.called

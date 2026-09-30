@@ -144,3 +144,29 @@ def test_engine_config_api_key_resolution_google_and_gemini_keys(monkeypatch):
     assert cfg2.api_key == "gemini-key-456"
 
 
+def test_is_gemini_model():
+    from story_rp_engine.core.model_provider import is_gemini_model
+    assert is_gemini_model("gemini-flash-latest")
+    assert is_gemini_model("gemini-2.5-flash")
+    assert is_gemini_model("gemini/gemini-2.5-pro")
+    assert is_gemini_model("google/gemini-2.0-flash")
+    assert not is_gemini_model("ollama/llama3.1:8b")
+    assert not is_gemini_model("openai/qwen3.5-2b")
+
+
+def test_is_remote_model():
+    from story_rp_engine.core.model_provider import is_remote_model
+    # Gemini models are remote
+    assert is_remote_model(EngineConfig(model_name="gemini-flash-latest"))
+    assert is_remote_model(EngineConfig(model_name="google/gemini-2.5-flash"))
+    # Cloud providers are remote
+    assert is_remote_model(EngineConfig(model_name="anthropic/claude-3-5-sonnet"))
+    assert is_remote_model(EngineConfig(model_name="vertex_ai/gemini-1.5-flash"))
+    assert is_remote_model(EngineConfig(model_name="openai/gpt-4o"))
+    # Local providers are not remote
+    assert not is_remote_model(EngineConfig(model_name="ollama/llama3.1:8b"))
+    assert not is_remote_model(EngineConfig(model_name="openai/qwen3.5-2b", api_base="http://127.0.0.1:8001/v1"))
+    assert not is_remote_model(EngineConfig(model_name="openai/custom", api_base="http://localhost:8080/v1"))
+
+
+
