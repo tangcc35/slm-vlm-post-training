@@ -23,4 +23,29 @@ os.environ["PHOENIX_ENABLED"] = "0"
 
 from story_rp_engine.api.app import create_app
 
-app = create_app()
+base_app = create_app()
+
+
+class VercelPathMiddleware:
+    """Restores the original request path if Vercel internal rewrites rewrite the path to the entrypoint filename."""
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] == "http":
+            path = scope.get("path", "")
+            if path in ("/api/index.py", "/api/index", "/api"):
+                headers = dict(scope.get("headers", []))
+                raw_matched = headers.get(b"x-matched-path", b"").decode("utf-8")
+                raw_forwarded = headers.get(b"x-forwarded-uri", b"").decode("utf-8")
+                raw_vercel_path = headers.get(b"x-vercel-matched-path", b"").decode("utf-8")
+                orig_path = raw_matched or raw_forwarded or raw_vercel_path or "/"
+                if orig_path not in ("/api/index.py", "/api/index", "/api"):
+                    scope["path"] = orig_path.split("?")[0]
+                else:
+                    scope["path"] = "/"
+        await self.app(scope, receive, send)
+
+
+app = VercelPathMiddleware(base_app)
