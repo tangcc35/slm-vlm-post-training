@@ -15,12 +15,12 @@ router = APIRouter(prefix="/api/v1", tags=["Roleplay"])
 
 
 @router.post("/characters")
-def save_character(card: CharacterCard, request: Request):
+async def save_character(card: CharacterCard, request: Request):
     if not card.char_id:
         raise HTTPException(status_code=400, detail="char_id is required in request body")
     store = request.app.state.store
     try:
-        store.save_character(card.char_id, card)
+        await store.save_character(card.char_id, card)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     return {"status": "saved", "char_id": card.char_id}
@@ -28,16 +28,16 @@ def save_character(card: CharacterCard, request: Request):
 
 
 @router.get("/characters")
-def list_characters(request: Request):
+async def list_characters(request: Request):
     store = request.app.state.store
-    return store.list_characters()
+    return await store.list_characters()
 
 
 @router.get("/characters/{char_id}")
-def get_character(char_id: str, request: Request):
+async def get_character(char_id: str, request: Request):
     store = request.app.state.store
     try:
-        card = store.get_character(char_id)
+        card = await store.get_character(char_id)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -47,18 +47,17 @@ def get_character(char_id: str, request: Request):
 
 
 @router.delete("/characters/{char_id}")
-def delete_character(char_id: str, request: Request):
+async def delete_character(char_id: str, request: Request):
     store = request.app.state.store
     registry = getattr(request.app.state, "agent_registry", None)
     try:
         clean_id = _sanitize_key(char_id)
-        path = os.path.join(store.char_dir, f"{clean_id}.json")
-        if not os.path.exists(path):
-            raise HTTPException(status_code=404, detail="Character not found")
-        os.remove(path)
+        await store.delete_character(clean_id)
         if registry:
             registry._rp_agents.pop(clean_id, None)
             registry._rp_runners.pop(clean_id, None)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Character not found")
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     return {"status": "deleted", "char_id": clean_id}
@@ -70,7 +69,7 @@ async def chat_rp(req: RPChatRequest, request: Request):
 
     try:
         _sanitize_key(req.session_id)
-        runner = registry.get_or_create_rp_runner(req.char_id)
+        runner = await registry.get_or_create_rp_runner_async(req.char_id)
     except ValueError as e:
         if "not found" in str(e).lower():
             raise HTTPException(status_code=404, detail="Character not found")
@@ -93,7 +92,7 @@ async def chat_rp_stream(req: RPChatRequest, request: Request):
 
     try:
         _sanitize_key(req.session_id)
-        runner = registry.get_or_create_rp_runner(req.char_id)
+        runner = await registry.get_or_create_rp_runner_async(req.char_id)
     except ValueError as e:
         if "not found" in str(e).lower():
             raise HTTPException(status_code=404, detail="Character not found")

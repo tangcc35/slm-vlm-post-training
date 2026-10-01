@@ -539,7 +539,7 @@ async def test_native_runner_chat_execution(tmp_path):
         first_mes="D",
         mes_example="",
     )
-    store.save_character("lyra", card)
+    await store.save_character("lyra", card)
 
     # Verify agent is created once in registry and app.state
     assert hasattr(app.state, "agent_registry")
@@ -596,7 +596,7 @@ async def test_native_runner_stream_execution(tmp_path):
         first_mes="D",
         mes_example="",
     )
-    store.save_character("lyra", card)
+    await store.save_character("lyra", card)
 
     from google.adk.models.base_llm import BaseLlm
     from google.adk.models.llm_response import LlmResponse
