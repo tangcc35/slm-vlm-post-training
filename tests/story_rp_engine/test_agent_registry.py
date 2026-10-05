@@ -7,7 +7,8 @@ from story_rp_engine.core.agent_registry import AgentRegistry
 from story_rp_engine.core.types import CharacterCard, Lorebook, LorebookEntry
 
 
-def test_agent_registry_instantiates_agent_only_once(tmp_path):
+@pytest.mark.anyio
+async def test_agent_registry_instantiates_agent_only_once(tmp_path):
     store = EngineStore(storage_dir=str(tmp_path))
     config = EngineConfig(model_name="ollama/llama3.1:8b")
     registry = AgentRegistry(config=config, store=store)
@@ -21,27 +22,29 @@ def test_agent_registry_instantiates_agent_only_once(tmp_path):
         first_mes="Blessings upon you.",
         mes_example="",
     )
-    store.save_character("seraphina", card)
+    await store.save_character("seraphina", card)
 
     # First access creates agent
-    agent1 = registry.get_or_create_rp_agent("seraphina")
+    agent1 = await registry.get_or_create_rp_agent("seraphina")
     assert agent1.name == "rp_seraphina"
 
     # Second access returns the exact same cached instance
-    agent2 = registry.get_or_create_rp_agent("seraphina")
+    agent2 = await registry.get_or_create_rp_agent("seraphina")
     assert agent1 is agent2
 
 
-def test_agent_registry_character_not_found_raises(tmp_path):
+@pytest.mark.anyio
+async def test_agent_registry_character_not_found_raises(tmp_path):
     store = EngineStore(storage_dir=str(tmp_path))
     config = EngineConfig(model_name="ollama/llama3.1:8b")
     registry = AgentRegistry(config=config, store=store)
 
     with pytest.raises(ValueError, match="Character nonexistent not found"):
-        registry.get_or_create_rp_agent("nonexistent")
+        await registry.get_or_create_rp_agent("nonexistent")
 
 
-def test_agent_registry_with_explicit_card_and_lorebook(tmp_path):
+@pytest.mark.anyio
+async def test_agent_registry_with_explicit_card_and_lorebook(tmp_path):
     store = EngineStore(storage_dir=str(tmp_path))
     config = EngineConfig(model_name="ollama/llama3.1:8b")
     registry = AgentRegistry(config=config, store=store)
@@ -57,12 +60,13 @@ def test_agent_registry_with_explicit_card_and_lorebook(tmp_path):
     )
     lorebook = Lorebook(name="weapons", entries=[LorebookEntry(keys=["sword"], content="Holy sword")])
 
-    agent = registry.get_or_create_rp_agent("gareth", card=card, lorebook=lorebook)
+    agent = await registry.get_or_create_rp_agent("gareth", card=card, lorebook=lorebook)
     assert agent.name == "rp_gareth"
-    assert registry.get_or_create_rp_agent("gareth") is agent
+    assert await registry.get_or_create_rp_agent("gareth") is agent
 
 
-def test_agent_registry_register_rp_agent(tmp_path):
+@pytest.mark.anyio
+async def test_agent_registry_register_rp_agent(tmp_path):
     store = EngineStore(storage_dir=str(tmp_path))
     config = EngineConfig(model_name="ollama/llama3.1:8b")
     registry = AgentRegistry(config=config, store=store)
@@ -70,7 +74,7 @@ def test_agent_registry_register_rp_agent(tmp_path):
     custom_agent = LlmAgent(name="custom_char")
     registry.register_rp_agent("custom_id", custom_agent)
 
-    assert registry.get_or_create_rp_agent("custom_id") is custom_agent
+    assert await registry.get_or_create_rp_agent("custom_id") is custom_agent
 
 
 def test_agent_registry_story_workflow_lifecycle(tmp_path):
@@ -83,7 +87,8 @@ def test_agent_registry_story_workflow_lifecycle(tmp_path):
     assert registry.get_story_workflow() is wf
 
 
-def test_agent_registry_rp_runner_caching(tmp_path):
+@pytest.mark.anyio
+async def test_agent_registry_rp_runner_caching(tmp_path):
     store = EngineStore(storage_dir=str(tmp_path))
     config = EngineConfig(model_name="ollama/llama3.1:8b")
     registry = AgentRegistry(config=config, store=store)
@@ -97,14 +102,14 @@ def test_agent_registry_rp_runner_caching(tmp_path):
         first_mes="Blessings upon you.",
         mes_example="",
     )
-    store.save_character("seraphina", card)
+    await store.save_character("seraphina", card)
 
-    runner1 = registry.get_or_create_rp_runner("seraphina")
+    runner1 = await registry.get_or_create_rp_runner("seraphina")
     assert runner1 is not None
     assert runner1.app_name == "rp_app"
 
     # Second call returns the exact same cached runner instance
-    runner2 = registry.get_or_create_rp_runner("seraphina")
+    runner2 = await registry.get_or_create_rp_runner("seraphina")
     assert runner1 is runner2
 
 
@@ -122,7 +127,8 @@ def test_agent_registry_story_runner_caching(tmp_path):
     assert runner1 is runner2
 
 
-def test_agent_registry_register_rp_agent_invalidates_runner(tmp_path):
+@pytest.mark.anyio
+async def test_agent_registry_register_rp_agent_invalidates_runner(tmp_path):
     store = EngineStore(storage_dir=str(tmp_path))
     config = EngineConfig(model_name="ollama/llama3.1:8b")
     registry = AgentRegistry(config=config, store=store)
@@ -136,12 +142,71 @@ def test_agent_registry_register_rp_agent_invalidates_runner(tmp_path):
         first_mes="Blessings.",
         mes_example="",
     )
-    store.save_character("seraphina", card)
+    await store.save_character("seraphina", card)
 
-    runner1 = registry.get_or_create_rp_runner("seraphina")
+    runner1 = await registry.get_or_create_rp_runner("seraphina")
     new_agent = LlmAgent(name="rp_seraphina_v2")
     registry.register_rp_agent("seraphina", new_agent)
 
-    runner2 = registry.get_or_create_rp_runner("seraphina")
+    runner2 = await registry.get_or_create_rp_runner("seraphina")
     assert runner1 is not runner2
     assert runner2.agent is new_agent
+
+
+def _seraphina(description: str = "High Priestess") -> CharacterCard:
+    return CharacterCard(
+        char_id="seraphina",
+        name="Seraphina",
+        description=description,
+        personality="Serene",
+        scenario="Temple",
+        first_mes="Blessings upon you.",
+        mes_example="",
+    )
+
+
+@pytest.mark.anyio
+async def test_agent_registry_rebuilds_agent_when_stored_card_changes(tmp_path):
+    store = EngineStore(storage_dir=str(tmp_path))
+    registry = AgentRegistry(config=EngineConfig(model_name="ollama/llama3.1:8b"), store=store)
+    await store.save_character("seraphina", _seraphina())
+    agent1 = await registry.get_or_create_rp_agent("seraphina")
+    runner1 = await registry.get_or_create_rp_runner("seraphina")
+
+    # Edited through the store, e.g. by another serverless instance sharing the database
+    await store.save_character("seraphina", _seraphina(description="Fallen Priestess"))
+
+    runner2 = await registry.get_or_create_rp_runner("seraphina")
+    agent2 = await registry.get_or_create_rp_agent("seraphina")
+    assert agent2 is not agent1
+    assert "Fallen Priestess" in agent2.instruction
+    assert runner2 is not runner1
+    assert runner2.agent is agent2
+    assert await registry.get_or_create_rp_runner("seraphina") is runner2
+
+
+@pytest.mark.anyio
+async def test_agent_registry_forgets_character_deleted_from_store(tmp_path):
+    store = EngineStore(storage_dir=str(tmp_path))
+    registry = AgentRegistry(config=EngineConfig(model_name="ollama/llama3.1:8b"), store=store)
+    await store.save_character("seraphina", _seraphina())
+    await registry.get_or_create_rp_runner("seraphina")
+
+    await store.delete_character("seraphina")
+
+    with pytest.raises(ValueError, match="Character seraphina not found"):
+        await registry.get_or_create_rp_runner("seraphina")
+    assert "seraphina" not in registry._rp_agents
+    assert "seraphina" not in registry._rp_runners
+
+
+@pytest.mark.anyio
+async def test_agent_registry_register_rp_runner_is_pinned(tmp_path):
+    store = EngineStore(storage_dir=str(tmp_path))
+    registry = AgentRegistry(config=EngineConfig(model_name="ollama/llama3.1:8b"), store=store)
+    await store.save_character("seraphina", _seraphina())
+    runner = await registry.get_or_create_rp_runner("seraphina")
+
+    # Registered runners are served as-is, without a store lookup
+    registry.register_rp_runner("not_in_store", runner)
+    assert await registry.get_or_create_rp_runner("not_in_store") is runner

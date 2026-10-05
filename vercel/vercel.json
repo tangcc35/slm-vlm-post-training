@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "buildCommand": "if [ -d ../src/story_rp_engine ]; then rm -rf src/story_rp_engine && cp -r ../src/story_rp_engine src/ ; fi",
+  "buildCommand": "rm -rf src && mkdir -p src && cp -r ../src/story_rp_engine src/",
   "functions": {
     "api/index.py": {
       "maxDuration": 60,

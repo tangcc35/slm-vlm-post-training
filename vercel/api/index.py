@@ -19,11 +19,19 @@ for candidate in (
 # Serverless environment defaults
 os.environ.setdefault("STORY_RP_STORAGE_DIR", "/tmp/.engine_data")
 os.environ.setdefault("STORY_RP_SKIP_WARMUP", "1")
+os.environ.setdefault("STORY_RP_DB_NULL_POOL", "1")
 os.environ["PHOENIX_ENABLED"] = "0"
+
+import logging
 
 from story_rp_engine.api.app import create_app
 
 base_app = create_app()
+if base_app.state.config.db_url is None:
+    logging.getLogger("story_rp_engine.vercel").warning(
+        "No DATABASE_URL configured: characters, lorebooks and sessions are kept in /tmp "
+        "and lost whenever this instance is recycled."
+    )
 
 
 class VercelPathMiddleware:

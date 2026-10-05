@@ -121,6 +121,7 @@ def create_app(
     resolved_store = store or EngineStore(
         storage_dir=resolved_config.storage_dir,
         db_url=resolved_config.db_url,
+        db_null_pool=resolved_config.db_null_pool,
     )
 
     app.state.store = resolved_store

@@ -1,4 +1,3 @@
-import os
 import re
 from fastapi import APIRouter, HTTPException, Request
 from story_rp_engine.core.types import Lorebook
@@ -13,27 +12,27 @@ def _slugify(name: str) -> str:
 
 
 @router.post("/lorebooks")
-def save_lorebook(lorebook: Lorebook, request: Request):
+async def save_lorebook(lorebook: Lorebook, request: Request):
     store = request.app.state.store
     lb_id = _slugify(lorebook.name)
     try:
-        store.save_lorebook(lb_id, lorebook)
+        await store.save_lorebook(lb_id, lorebook)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     return {"status": "saved", "lorebook_id": lb_id}
 
 
 @router.get("/lorebooks")
-def list_lorebooks(request: Request):
+async def list_lorebooks(request: Request):
     store = request.app.state.store
-    return store.list_lorebooks()
+    return await store.list_lorebooks()
 
 
 @router.get("/lorebooks/{lorebook_id}")
-def get_lorebook(lorebook_id: str, request: Request):
+async def get_lorebook(lorebook_id: str, request: Request):
     store = request.app.state.store
     try:
-        lb = store.get_lorebook(lorebook_id)
+        lb = await store.get_lorebook(lorebook_id)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     if not lb:
@@ -42,14 +41,13 @@ def get_lorebook(lorebook_id: str, request: Request):
 
 
 @router.delete("/lorebooks/{lorebook_id}")
-def delete_lorebook(lorebook_id: str, request: Request):
+async def delete_lorebook(lorebook_id: str, request: Request):
     store = request.app.state.store
     try:
         clean_id = _sanitize_key(lorebook_id)
-        path = os.path.join(store.lorebooks_dir, f"{clean_id}.json")
-        if not os.path.exists(path):
-            raise HTTPException(status_code=404, detail="Lorebook not found")
-        os.remove(path)
+        deleted = await store.delete_lorebook(clean_id)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Lorebook not found")
     return {"status": "deleted", "lorebook_id": clean_id}

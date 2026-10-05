@@ -30,6 +30,7 @@ dependencies = [
     "sse-starlette>=3.4.11",
     "sqlalchemy>=2.0.0",
     "aiosqlite>=0.20.0",
+    "asyncpg>=0.29.0",
     "openinference-instrumentation-google-adk>=0.1.28",
     "arize-phoenix-otel>=0.17.0",
 ]

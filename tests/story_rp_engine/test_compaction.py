@@ -38,14 +38,15 @@ def test_engine_config_compaction_env_overrides(monkeypatch):
     assert config.compaction_prompt_template == "Custom template: {conversation_history}"
 
 
-def test_agent_registry_rp_app_compaction_config(tmp_path):
+@pytest.mark.anyio
+async def test_agent_registry_rp_app_compaction_config(tmp_path):
     config = EngineConfig(storage_dir=str(tmp_path), db_url=f"sqlite+aiosqlite:///{tmp_path}/sessions.db")
     store = EngineStore(storage_dir=str(tmp_path), db_url=config.db_url)
     card = CharacterCard(char_id="hero", name="Hero", description="A brave hero")
-    store.save_character("hero", card)
+    await store.save_character("hero", card)
 
     registry = AgentRegistry(config, store)
-    runner = registry.get_or_create_rp_runner("hero")
+    runner = await registry.get_or_create_rp_runner("hero")
 
     assert runner.app.events_compaction_config is not None
     cfg = runner.app.events_compaction_config
@@ -74,7 +75,8 @@ def test_agent_registry_story_app_compaction_config(tmp_path):
     assert isinstance(cfg.summarizer, LlmEventSummarizer)
 
 
-def test_agent_registry_compaction_disabled(tmp_path):
+@pytest.mark.anyio
+async def test_agent_registry_compaction_disabled(tmp_path):
     config = EngineConfig(
         compaction_enabled=False,
         storage_dir=str(tmp_path),
@@ -82,10 +84,10 @@ def test_agent_registry_compaction_disabled(tmp_path):
     )
     store = EngineStore(storage_dir=str(tmp_path), db_url=config.db_url)
     card = CharacterCard(char_id="hero", name="Hero", description="A brave hero")
-    store.save_character("hero", card)
+    await store.save_character("hero", card)
 
     registry = AgentRegistry(config, store)
-    rp_runner = registry.get_or_create_rp_runner("hero")
+    rp_runner = await registry.get_or_create_rp_runner("hero")
     assert rp_runner.app.events_compaction_config is None
 
     story_runner = registry.get_story_runner()

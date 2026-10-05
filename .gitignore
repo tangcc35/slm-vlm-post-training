@@ -22,6 +22,8 @@ share/python-wheels/
 *.egg
 .env
 .engine_data/
+# Copied from src/ by the Vercel build step (vercel/vercel.json)
+vercel/src/
 
 # Virtual environments
 .venv

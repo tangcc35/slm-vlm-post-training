@@ -379,8 +379,9 @@ Configure model backends, endpoints, and storage through environment variables o
 | `STORY_RP_TEMPERATURE` | `0.8` | Generation sampling temperature (`0.0` - `2.0`). |
 | `STORY_RP_TOP_P` | `0.9` | Top-p nucleus sampling cutoff (`0.0` - `1.0`). |
 | `STORY_RP_MAX_TOKENS` | `131072` | Maximum generation tokens buffer. |
-| `STORY_RP_STORAGE_DIR` | `.engine_data` | Directory path for persisted character cards, lorebooks, and sessions. |
-| `STORY_RP_DB_URL` | SQLite in storage dir | SQLAlchemy database URL for ADK session persistence (e.g., `sqlite+aiosqlite:///...`). |
+| `STORY_RP_STORAGE_DIR` | `.engine_data` | Directory for character cards, lorebooks, and the SQLite session DB when no database URL is set. |
+| `STORY_RP_DB_URL` / `DATABASE_URL` / `POSTGRES_URL` | None (local files + SQLite) | Database URL, first one set wins. When set, sessions, characters, and lorebooks are all stored there. Neon connection strings (`postgresql://...?sslmode=require&channel_binding=require`) can be used as-is; they are converted for asyncpg automatically. |
+| `STORY_RP_DB_NULL_POOL` | `0` (`1` on Vercel) | Open a fresh connection per database operation instead of pooling; meant for serverless with Neon's pooled endpoint. |
 | `STORY_RP_SKIP_WARMUP` | `0` | Set to `1` or `true` to skip model inference warmup on startup. |
 | `STORY_RP_COMPACTION_ENABLED` | `1` | Enable ADK context compaction (`1`/`true`/`yes` to enable, `0`/`false` to disable). |
 | `STORY_RP_COMPACTION_TOKEN_THRESHOLD` | `4000` | Token limit triggering pre-invocation tail-retention context compaction. |

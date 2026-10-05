@@ -41,8 +41,16 @@ class EngineConfig(BaseModel):
         description="Directory for local storage (characters, lorebooks, sessions)",
     )
     db_url: Optional[str] = Field(
-        default_factory=lambda: os.getenv("STORY_RP_DB_URL"),
-        description="Database connection URL for ADK DatabaseSessionService",
+        # DATABASE_URL / POSTGRES_URL are the names Neon's Vercel integration injects.
+        default_factory=lambda: os.getenv("STORY_RP_DB_URL")
+        or os.getenv("DATABASE_URL")
+        or os.getenv("POSTGRES_URL"),
+        description="Database URL (e.g. Neon Postgres) for sessions, characters and lorebooks; "
+        "unset means local SQLite sessions plus JSON files",
+    )
+    db_null_pool: bool = Field(
+        default_factory=lambda: os.getenv("STORY_RP_DB_NULL_POOL", "0").lower() in ("1", "true", "yes"),
+        description="Open a new database connection per operation instead of pooling (for serverless)",
     )
     phoenix_enabled: bool = Field(
         default_factory=lambda: os.getenv("PHOENIX_ENABLED", "0").lower() in ("1", "true", "yes"),

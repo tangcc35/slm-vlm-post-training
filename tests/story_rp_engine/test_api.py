@@ -539,7 +539,7 @@ async def test_native_runner_chat_execution(tmp_path):
         first_mes="D",
         mes_example="",
     )
-    store.save_character("lyra", card)
+    await store.save_character("lyra", card)
 
     # Verify agent is created once in registry and app.state
     assert hasattr(app.state, "agent_registry")
@@ -559,7 +559,7 @@ async def test_native_runner_chat_execution(tmp_path):
                 content=types.Content(parts=[types.Part.from_text(text="I sing a ballad.")]),
             )
 
-    agent = app.state.agent_registry.get_or_create_rp_agent("lyra")
+    agent = await app.state.agent_registry.get_or_create_rp_agent("lyra")
     agent.model = MockLlm()
 
     client = TestClient(app)
@@ -596,7 +596,7 @@ async def test_native_runner_stream_execution(tmp_path):
         first_mes="D",
         mes_example="",
     )
-    store.save_character("lyra", card)
+    await store.save_character("lyra", card)
 
     from google.adk.models.base_llm import BaseLlm
     from google.adk.models.llm_response import LlmResponse
@@ -625,7 +625,7 @@ async def test_native_runner_stream_execution(tmp_path):
                     content=types.Content(parts=[types.Part.from_text(text="A lovely song")]),
                 )
 
-    agent = app.state.agent_registry.get_or_create_rp_agent("lyra")
+    agent = await app.state.agent_registry.get_or_create_rp_agent("lyra")
     agent.model = MockStreamLlm()
 
     client = TestClient(app)

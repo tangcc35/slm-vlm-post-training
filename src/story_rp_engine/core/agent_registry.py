@@ -20,29 +20,49 @@ class AgentRegistry:
         self.store = store
         self._rp_agents: Dict[str, LlmAgent] = {}
         self._rp_runners: Dict[str, Runner] = {}
+        # Card each store-backed agent was built from. Agents missing here were
+        # registered or built from an explicit card and are never refreshed.
+        self._rp_agent_cards: Dict[str, CharacterCard] = {}
         self._story_workflow: Optional[Workflow] = None
         self._story_runner: Optional[Runner] = None
 
-    def get_or_create_rp_agent(
+    async def get_or_create_rp_agent(
         self,
         char_id: str,
         card: Optional[CharacterCard] = None,
         lorebook: Optional[Lorebook] = None,
     ) -> LlmAgent:
-        if char_id in self._rp_agents:
-            return self._rp_agents[char_id]
+        cached = self._rp_agents.get(char_id)
+        if cached is not None and (card is not None or char_id not in self._rp_agent_cards):
+            return cached
 
-        if card is None:
-            card = self.store.get_character(char_id)
-        if not card:
-            raise ValueError(f"Character {char_id} not found")
+        if card is not None:
+            agent = create_rp_agent(card, self.config, lorebook=lorebook)
+        else:
+            # The store may be shared with other instances, so re-read the card and
+            # rebuild the agent if the character was edited or deleted elsewhere.
+            stored = await self.store.get_character(char_id)
+            if not stored:
+                self.forget_rp_agent(char_id)
+                raise ValueError(f"Character {char_id} not found")
+            if cached is not None and self._rp_agent_cards.get(char_id) == stored:
+                return cached
+            agent = create_rp_agent(stored, self.config, lorebook=lorebook)
+            self._rp_agent_cards[char_id] = stored
 
-        agent = create_rp_agent(card, self.config, lorebook=lorebook)
         self._rp_agents[char_id] = agent
+        self._rp_runners.pop(char_id, None)
         return agent
 
     def register_rp_agent(self, char_id: str, agent: LlmAgent) -> None:
         self._rp_agents[char_id] = agent
+        self._rp_agent_cards.pop(char_id, None)
+        self._rp_runners.pop(char_id, None)
+
+    def forget_rp_agent(self, char_id: str) -> None:
+        """Drops the cached agent and runner for a character (e.g. after deletion)."""
+        self._rp_agents.pop(char_id, None)
+        self._rp_agent_cards.pop(char_id, None)
         self._rp_runners.pop(char_id, None)
 
     def _build_compaction_config(self) -> Optional[EventsCompactionConfig]:
@@ -64,12 +84,13 @@ class AgentRegistry:
             summarizer=summarizer,
         )
 
-    def get_or_create_rp_runner(self, char_id: str) -> Runner:
+    async def get_or_create_rp_runner(self, char_id: str) -> Runner:
         """Retrieves or creates a cached ADK Runner for the specified character agent."""
+        # Resolving the agent first evicts the runner if the agent had to be rebuilt.
+        agent = await self.get_or_create_rp_agent(char_id)
         if char_id in self._rp_runners:
             return self._rp_runners[char_id]
 
-        agent = self.get_or_create_rp_agent(char_id)
         compaction_config = self._build_compaction_config()
         app = App(
             name="rp_app",
@@ -85,6 +106,7 @@ class AgentRegistry:
         return runner
 
     def register_rp_runner(self, char_id: str, runner: Runner) -> None:
+        self.register_rp_agent(char_id, runner.agent)
         self._rp_runners[char_id] = runner
 
     def get_story_workflow(self) -> Workflow:
