@@ -269,3 +269,10 @@ def test_story_co_pilot_api_flow(tmp_path):
 
 
 
+
+
+def test_web_ui_files_must_be_revalidated(tmp_path):
+    # Without this, browsers can keep running an old app.js for hours after an update.
+    client = TestClient(create_app(store=EngineStore(storage_dir=str(tmp_path))))
+    for path in ["/", "/app.js"]:
+        assert client.get(path).headers.get("cache-control") == "no-cache", path

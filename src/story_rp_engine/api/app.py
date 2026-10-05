@@ -20,6 +20,15 @@ from story_rp_engine.storage.store import EngineStore
 logger = logging.getLogger("story_rp_engine.api")
 
 
+class RevalidatingStaticFiles(StaticFiles):
+    """Makes browsers check with the server before reusing a cached UI file, so frontend updates show up."""
+
+    def file_response(self, *args, **kwargs):
+        response = super().file_response(*args, **kwargs)
+        response.headers["Cache-Control"] = "no-cache"
+        return response
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     skip_warmup = os.getenv("STORY_RP_SKIP_WARMUP", "0").lower() in ("1", "true")
@@ -140,6 +149,6 @@ def create_app(
 
     web_dir = Path(__file__).parent.parent / "web"
     if web_dir.exists():
-        app.mount("/", StaticFiles(directory=str(web_dir), html=True), name="web_ui")
+        app.mount("/", RevalidatingStaticFiles(directory=str(web_dir), html=True), name="web_ui")
 
     return app

@@ -107,3 +107,46 @@ async def test_session_state_injection_into_workflow_instructions():
     assert "The torch flickers in the damp air." in writer_inst
 
 
+
+
+async def _run_story_workflow(config, instruction):
+    """Runs one story turn with recording models; returns {agent_name: llm_request}."""
+    wf = create_story_workflow(config)
+    requests = {}
+
+    class RecordingLlm(BaseLlm):
+        model: str = "mock"
+        agent_name: str = ""
+
+        async def generate_content_async(self, llm_request, stream=False):
+            requests[self.agent_name] = llm_request
+            yield LlmResponse(content=types.Content(role="model", parts=[types.Part.from_text(text=f"{self.agent_name} output")]))
+
+    for node in wf.graph.nodes:
+        if node.name in ["story_director", "story_writer"]:
+            node.model = RecordingLlm(agent_name=node.name)
+
+    runner = Runner(app=App(name="story_app", root_agent=wf), session_service=InMemorySessionService(), auto_create_session=True)
+    async for _ in runner.run_async(
+        user_id="User",
+        session_id="s1",
+        new_message=types.Content(role="user", parts=[types.Part.from_text(text=instruction)]),
+        state_delta={"premise": "P", "genre": "G", "tone": "T", "current_text": "Rain.", "instruction": instruction},
+    ):
+        pass
+    return requests
+
+
+@pytest.mark.anyio
+async def test_writer_prompt_includes_user_instruction():
+    requests = await _run_story_workflow(EngineConfig(), "Mara confesses she stole the map.")
+    assert "Mara confesses she stole the map." in requests["story_writer"].config.system_instruction
+
+
+@pytest.mark.anyio
+async def test_story_agents_use_configured_sampling():
+    config = EngineConfig(temperature=0.3, top_p=0.5, max_tokens=700)
+    requests = await _run_story_workflow(config, "Go on.")
+    for name in ["story_director", "story_writer"]:
+        cfg = requests[name].config
+        assert (cfg.temperature, cfg.top_p, cfg.max_output_tokens) == (0.3, 0.5, 700)

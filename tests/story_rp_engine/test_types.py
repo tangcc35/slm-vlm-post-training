@@ -14,7 +14,7 @@ def test_engine_config_defaults():
     config = EngineConfig()
     assert config.model_name == "ollama/llama3.1:8b"
     assert config.temperature == 0.8
-    assert config.max_tokens == 131072
+    assert config.max_tokens is None
 
 def test_character_card_valid():
     card = CharacterCard(

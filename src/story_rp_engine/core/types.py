@@ -52,6 +52,8 @@ class RPChatRequest(BaseModel):
     session_id: str
     message: str
     authors_note: Optional[str] = None
+    lorebook_id: Optional[str] = Field(default=None, description="Loads this lorebook into the session; omit to keep the current one, empty string to clear it.")
     user_name: Optional[str] = "User"
+    greeting: Optional[str] = Field(default=None, description="Opening message shown to the user before their first message.")
     chunk_size: Optional[int] = Field(default=16, ge=1, le=100, description="Number of tokens to buffer before yielding in streaming mode.")
 

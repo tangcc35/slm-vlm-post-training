@@ -66,6 +66,7 @@ const AppDefinition = {
       rpUserName: 'User',
       rpAuthorsNote: '',
       rpLorebookId: '',
+      rpLorebookSentKey: null, // "<session>|<lorebook>" last loaded into the backend session
       rpChunkSize: 1,
       rpMessages: [],
       selectedGreetingIndex: 0,
@@ -1018,6 +1019,7 @@ const AppDefinition = {
         }
       }
       this.rpMessages = [];
+      this.rpLorebookSentKey = null;
       this.showToast('Roleplay session cleared.', 'info');
       this.refreshIcons();
     },
@@ -1249,14 +1251,23 @@ const AppDefinition = {
         this.rpSessionId = 'sess_' + Math.random().toString(36).substring(2, 10);
       }
 
+      const firstMsg = this.rpMessages[0];
       const payload = {
         char_id: this.rpCharId,
         session_id: this.rpSessionId,
         message: promptText,
+        // The greeting lives only in the UI, so the backend gets it with each message.
+        greeting: firstMsg && firstMsg.isGreeting ? firstMsg.content : null,
         authors_note: this.rpAuthorsNote ? this.rpAuthorsNote.trim() : null,
         user_name: this.rpUserName ? this.rpUserName.trim() : 'User',
         chunk_size: Number(this.rpChunkSize) || 1,
       };
+      // The backend keeps the lorebook in the session, so only send it when the
+      // session or the selection changed ('' clears it).
+      const lorebookKey = `${this.rpSessionId}|${this.rpLorebookId || ''}`;
+      if (lorebookKey !== this.rpLorebookSentKey) {
+        payload.lorebook_id = this.rpLorebookId || '';
+      }
 
       try {
         const res = await fetch('/api/v1/rp/chat/stream', {
@@ -1338,6 +1349,9 @@ const AppDefinition = {
             }
           }
         }
+
+        // Marked only after a completed turn; re-sending on a failed one is harmless.
+        this.rpLorebookSentKey = lorebookKey;
 
         if (!assistantMsg.content.trim()) {
           assistantMsg.content = '*(No response)*';

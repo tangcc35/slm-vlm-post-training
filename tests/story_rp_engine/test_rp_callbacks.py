@@ -159,3 +159,22 @@ def test_rp_before_model_callback_direct_session_state():
     instruction = str(request.config.system_instruction)
     assert "Dragons breathe fire." in instruction
     assert "Focus on combat tension." in instruction
+
+
+def test_before_model_callback_reads_lorebook_stored_as_dict():
+    # Session state is JSON in the database, so a stored lorebook comes back as a dict.
+    lore = Lorebook(
+        name="Stored Lore",
+        entries=[LorebookEntry(keys=["griffin"], content="Griffins guard the pass.")],
+    )
+    mock_context = MagicMock(spec=CallbackContext)
+    mock_context.state = {"lorebook": lore.model_dump()}
+
+    request = LlmRequest(
+        model="test-model",
+        contents=[types.Content(role="user", parts=[types.Part.from_text(text="A griffin swoops down!")])],
+        config=types.GenerateContentConfig(system_instruction="Base prompt"),
+    )
+
+    assert rp_before_model_callback(mock_context, request) is None
+    assert "Griffins guard the pass." in str(request.config.system_instruction)

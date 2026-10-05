@@ -1,6 +1,6 @@
 from google.adk.agents import LlmAgent
 from story_rp_engine.core.config import EngineConfig
-from story_rp_engine.core.model_provider import get_adk_model
+from story_rp_engine.core.model_provider import get_adk_model, get_generate_config
 
 
 def create_director_agent(config: EngineConfig) -> LlmAgent:
@@ -20,6 +20,7 @@ def create_director_agent(config: EngineConfig) -> LlmAgent:
         name="story_director",
         model=get_adk_model(config),
         instruction=instruction,
+        generate_content_config=get_generate_config(config),
     )
 
 

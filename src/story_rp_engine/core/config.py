@@ -31,10 +31,11 @@ class EngineConfig(BaseModel):
         ge=0.0,
         le=1.0,
     )
-    max_tokens: int = Field(
-        default_factory=lambda: int(os.getenv("STORY_RP_MAX_TOKENS", "131072")),
+    max_tokens: Optional[int] = Field(
+        default_factory=lambda: int(os.getenv("STORY_RP_MAX_TOKENS")) if os.getenv("STORY_RP_MAX_TOKENS") else None,
         ge=1,
         le=131072,
+        description="Output token cap; unset uses the model's own limit",
     )
     storage_dir: str = Field(
         default_factory=lambda: os.getenv("STORY_RP_STORAGE_DIR", ".engine_data"),

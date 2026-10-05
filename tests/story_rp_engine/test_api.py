@@ -3,7 +3,7 @@ from fastapi.testclient import TestClient
 from unittest.mock import AsyncMock, MagicMock, patch
 from story_rp_engine.api.app import create_app
 from story_rp_engine.core.config import EngineConfig
-from story_rp_engine.core.types import CharacterCard
+from story_rp_engine.core.types import CharacterCard, Lorebook, LorebookEntry
 from story_rp_engine.storage.store import EngineStore
 
 
@@ -392,10 +392,10 @@ def test_rp_chat_authors_note_and_custom_user(tmp_path):
         assert res.json()["reply"] == "Secret chord."
         assert mock_exec.called
         kwargs = mock_exec.call_args.kwargs
-        assert kwargs["user_id"] == "Adventurer"
+        assert kwargs["user_id"] == "User"
         assert kwargs["session_id"] == "session_special"
         assert kwargs["message"] == "Play the hidden song."
-        assert kwargs["state_delta"] == {"authors_note": "[Style: Melancholy]"}
+        assert kwargs["state_delta"] == {"authors_note": "[Style: Melancholy]", "user_name": "Adventurer", "greeting": None}
 
 
 
@@ -824,3 +824,94 @@ async def test_lifespan_warmup_skipped_for_remote_gemini(tmp_path):
         async with lifespan(app):
             pass
         assert not mock_turn.called
+
+
+async def _recording_rp_app(tmp_path):
+    """App with character 'ava', a lorebook keyed on 'dragon', and recorded RP prompts."""
+    from google.adk.models.base_llm import BaseLlm
+    from google.adk.models.llm_response import LlmResponse
+    from google.genai import types
+
+    prompts = []
+
+    class RecordingLlm(BaseLlm):
+        model: str = "mock"
+
+        async def generate_content_async(self, llm_request, stream=False):
+            prompts.append(str(llm_request.config.system_instruction))
+            yield LlmResponse(content=types.Content(role="model", parts=[types.Part.from_text(text="Hm.")]))
+
+    store = EngineStore(storage_dir=str(tmp_path))
+    app = create_app(store=store, config=EngineConfig(compaction_enabled=False))
+    await store.save_character("ava", CharacterCard(char_id="ava", name="Ava", description="Ava owes {{user}} a favor."))
+    await store.save_lorebook(
+        "world", Lorebook(name="World", entries=[LorebookEntry(keys=["dragon"], content="Dragons sleep under Mount Ash.")])
+    )
+    agent = await app.state.agent_registry.get_or_create_rp_agent("ava")
+    agent.model = RecordingLlm()
+    return TestClient(app), prompts
+
+
+@pytest.mark.anyio
+async def test_rp_chat_lorebook_loaded_once_stays_in_session(tmp_path):
+    client, prompts = await _recording_rp_app(tmp_path)
+    chat = {"char_id": "ava", "session_id": "s1", "message": "Where is the dragon?"}
+
+    res = client.post("/api/v1/rp/chat/stream", json={**chat, "lorebook_id": "world"})
+    assert res.status_code == 200
+    assert "Dragons sleep under Mount Ash." in prompts[-1]
+
+    # Later messages omit lorebook_id; the copy loaded into the session is still used.
+    res = client.post("/api/v1/rp/chat/stream", json=chat)
+    assert res.status_code == 200
+    assert "Dragons sleep under Mount Ash." in prompts[-1]
+
+
+@pytest.mark.anyio
+async def test_rp_chat_empty_lorebook_id_clears_session_lorebook(tmp_path):
+    client, prompts = await _recording_rp_app(tmp_path)
+    chat = {"char_id": "ava", "session_id": "s1", "message": "Where is the dragon?"}
+
+    assert client.post("/api/v1/rp/chat", json={**chat, "lorebook_id": "world"}).status_code == 200
+    assert "Dragons sleep under Mount Ash." in prompts[-1]
+    assert client.post("/api/v1/rp/chat", json={**chat, "lorebook_id": ""}).status_code == 200
+    assert "Dragons sleep under Mount Ash." not in prompts[-1]
+
+
+@pytest.mark.anyio
+async def test_rp_chat_unknown_lorebook_id_returns_404(tmp_path):
+    client, prompts = await _recording_rp_app(tmp_path)
+    res = client.post(
+        "/api/v1/rp/chat/stream",
+        json={"char_id": "ava", "session_id": "s1", "message": "Hi", "lorebook_id": "missing"},
+    )
+    assert res.status_code == 404
+    assert res.json()["detail"] == "Lorebook not found"
+    assert prompts == []
+
+
+@pytest.mark.anyio
+async def test_rp_chat_greeting_is_in_prompt(tmp_path):
+    client, prompts = await _recording_rp_app(tmp_path)
+    res = client.post(
+        "/api/v1/rp/chat/stream",
+        json={"char_id": "ava", "session_id": "s1", "message": "Hello!", "greeting": "Ava waves from the lighthouse door."},
+    )
+    assert res.status_code == 200
+    assert "Ava waves from the lighthouse door." in prompts[-1]
+
+
+@pytest.mark.anyio
+async def test_rp_chat_user_name_fills_user_macro(tmp_path):
+    client, prompts = await _recording_rp_app(tmp_path)
+    res = client.post("/api/v1/rp/chat", json={"char_id": "ava", "session_id": "s1", "message": "Hi", "user_name": "Alice"})
+    assert res.status_code == 200
+    assert "Ava owes Alice a favor." in prompts[-1]
+
+
+@pytest.mark.anyio
+async def test_rp_session_turns_found_for_custom_user_name(tmp_path):
+    client, prompts = await _recording_rp_app(tmp_path)
+    client.post("/api/v1/rp/chat", json={"char_id": "ava", "session_id": "s1", "message": "Hi there", "user_name": "Alice"})
+    turns = client.get("/api/v1/rp/sessions/s1/turns").json()["turns"]
+    assert [t["text"] for t in turns] == ["Hi there", "Hm."]

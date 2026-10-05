@@ -1,3 +1,4 @@
+from types import SimpleNamespace
 import pytest
 from google.adk import Workflow
 from google.adk.agents import LlmAgent
@@ -179,7 +180,7 @@ async def test_agent_registry_rebuilds_agent_when_stored_card_changes(tmp_path):
     runner2 = await registry.get_or_create_rp_runner("seraphina")
     agent2 = await registry.get_or_create_rp_agent("seraphina")
     assert agent2 is not agent1
-    assert "Fallen Priestess" in agent2.instruction
+    assert "Fallen Priestess" in agent2.instruction(SimpleNamespace(state={}))
     assert runner2 is not runner1
     assert runner2.agent is agent2
     assert await registry.get_or_create_rp_runner("seraphina") is runner2

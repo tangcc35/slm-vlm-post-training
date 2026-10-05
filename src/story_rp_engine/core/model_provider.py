@@ -33,6 +33,15 @@ def is_remote_model(config: EngineConfig) -> bool:
     return False
 
 
+def get_generate_config(config: EngineConfig) -> types.GenerateContentConfig:
+    """Sampling settings from the engine config, applied to every agent."""
+    return types.GenerateContentConfig(
+        temperature=config.temperature,
+        top_p=config.top_p,
+        max_output_tokens=config.max_tokens,
+    )
+
+
 def get_adk_model(config: EngineConfig) -> BaseLlm:
     """Instantiates and configures a Google ADK model wrapper (Gemini or LiteLlm)."""
     api_key = config.api_key

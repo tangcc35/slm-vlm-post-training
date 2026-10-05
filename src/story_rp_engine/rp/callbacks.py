@@ -26,20 +26,28 @@ def rp_before_model_callback(
         lorebook = callback_context.state.get("lorebook")
 
     if lorebook and user_text:
-        lorebooks = [lorebook] if isinstance(lorebook, Lorebook) else list(lorebook)
+        # Lorebooks loaded into session state come back from the database as dicts.
+        if isinstance(lorebook, (Lorebook, dict)):
+            lorebook = [lorebook]
+        lorebooks = [Lorebook.model_validate(lb) for lb in lorebook]
         active_lore = LorebookEngine.find_matching_entries(lorebooks, user_text)
         if active_lore:
             lore_text = "\n".join([f"- {entry.content}" for entry in active_lore])
             extra_sections.append(f"### Relevant World Information\n{lore_text}")
 
-    # 2. Author's note from session state
+    # 2. Greeting the user saw first; it is not stored as a chat turn
+    greeting = callback_context.state.get("greeting") if callback_context is not None else None
+    if greeting:
+        extra_sections.append(f"### Opening Message (already sent by you)\n{greeting}")
+
+    # 3. Author's note from session state
     authors_note = None
     if callback_context is not None and getattr(callback_context, "state", None) is not None:
         authors_note = callback_context.state.get("authors_note")
     if authors_note and str(authors_note).strip():
         extra_sections.append(f"### Narrative Directive\n{str(authors_note).strip()}")
 
-    # 3. Inject additions into system instruction
+    # 4. Inject additions into system instruction
     if extra_sections:
         additions = "\n\n".join(extra_sections)
         current_instruction = ""
