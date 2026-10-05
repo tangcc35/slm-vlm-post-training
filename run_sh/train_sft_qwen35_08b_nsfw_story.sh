@@ -25,8 +25,10 @@ uv run slm-post-train train --config configs/sft/qwen35_08b_nsfw_story.yaml
 echo "********** Finished training **********"
 
 echo "********** Starting model export **********"
+# Training saves into a timestamped subdirectory (YYYYMMDD-HHMMSS); export the newest one
+MODEL_DIR=$(ls -d outputs/qwen35_08b_nsfw_story/[0-9]* | tail -n 1)
 uv run slm-post-train export \
-    --model-path outputs/qwen35_08b_nsfw_story \
+    --model-path "$MODEL_DIR" \
     --output-dir outputs/qwen35_08b_nsfw_story/gguf \
     --format gguf \
     --quant q8_0

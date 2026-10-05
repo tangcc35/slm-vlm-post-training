@@ -81,7 +81,7 @@ def test_get_adk_model_fallback_handling(monkeypatch):
         # Return real LiteLlm instance
         return LiteLlm(model=kwargs.get("model", "ollama/test-model"))
 
-    with patch("story_rp_engine.core.model_provider.LiteLlm", side_effect=mock_lite_llm):
+    with patch("google.adk.models.lite_llm.LiteLlm", side_effect=mock_lite_llm):
         model = get_adk_model(config)
         assert isinstance(model, LiteLlm)
         assert len(call_records) == 2

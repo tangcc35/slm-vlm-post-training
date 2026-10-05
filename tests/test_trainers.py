@@ -1,6 +1,13 @@
+import os
 from unittest.mock import MagicMock, patch
 import pytest
 import torch
+
+
+@pytest.fixture(autouse=True)
+def no_wandb():
+    with patch("slm_post_train.trainers.sft_runner.wandb"):
+        yield
 
 
 # ============================================================================
@@ -29,7 +36,7 @@ def test_run_sft_default_config(
     mock_sft_trainer_cls,
     mock_train_on_responses,
 ):
-    from slm_post_train.trainers.sft_runner import run_sft
+    from slm_post_train.trainers.sft_runner import DT_STR, run_sft
 
     mock_model = MagicMock(name="model")
     mock_tokenizer = MagicMock(name="tokenizer")
@@ -84,8 +91,8 @@ def test_run_sft_default_config(
         weight_decay=0.01,
         lr_scheduler_type="linear",
         seed=3407,
-        output_dir="outputs/sft_model",
-        report_to="none",
+        output_dir=os.path.join("outputs/sft_model", DT_STR),
+        report_to="wandb",
     )
 
     # 4. Verify SFTTrainer creation
@@ -108,8 +115,8 @@ def test_run_sft_default_config(
     assert result == mock_train_stats
 
     # 7. Verify model & tokenizer saving
-    mock_model.save_pretrained.assert_called_once_with("outputs/sft_model")
-    mock_tokenizer.save_pretrained.assert_called_once_with("outputs/sft_model")
+    mock_model.save_pretrained.assert_called_once_with(os.path.join("outputs/sft_model", DT_STR))
+    mock_tokenizer.save_pretrained.assert_called_once_with(os.path.join("outputs/sft_model", DT_STR))
 
 
 @patch("slm_post_train.trainers.sft_runner.train_on_responses_only")
@@ -300,7 +307,7 @@ def test_run_sft_custom_config(
     mock_sft_trainer_cls,
     mock_train_on_responses,
 ):
-    from slm_post_train.trainers.sft_runner import run_sft
+    from slm_post_train.trainers.sft_runner import DT_STR, run_sft
 
     mock_model = MagicMock(name="model")
     mock_tokenizer = MagicMock(name="tokenizer")
@@ -378,8 +385,8 @@ def test_run_sft_custom_config(
         weight_decay=0.05,
         lr_scheduler_type="cosine",
         seed=42,
-        output_dir="custom_outputs/sft_experiment",
-        report_to="none",
+        output_dir=os.path.join("custom_outputs/sft_experiment", DT_STR),
+        report_to="wandb",
     )
 
     # 4. When train_on_responses_only is False, wrapper should not be called
@@ -387,8 +394,8 @@ def test_run_sft_custom_config(
     mock_raw_trainer.train.assert_called_once()
 
     # 5. Model & tokenizer saved to custom output dir
-    mock_model.save_pretrained.assert_called_once_with("custom_outputs/sft_experiment")
-    mock_tokenizer.save_pretrained.assert_called_once_with("custom_outputs/sft_experiment")
+    mock_model.save_pretrained.assert_called_once_with(os.path.join("custom_outputs/sft_experiment", DT_STR))
+    mock_tokenizer.save_pretrained.assert_called_once_with(os.path.join("custom_outputs/sft_experiment", DT_STR))
 
 
 @patch("slm_post_train.trainers.sft_runner.torch.cuda")

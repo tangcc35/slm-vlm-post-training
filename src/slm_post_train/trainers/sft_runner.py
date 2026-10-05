@@ -96,7 +96,7 @@ def run_sft(config: dict = None):
     # init wandb with project name and run name
     wandb.init(
         project="slm_post_train",
-        name=f'{model_cfg["name_or_path"]}-{DT_STR}',
+        name=f'{model_cfg.get("name_or_path")}-{DT_STR}',
         config=config,
     )
 

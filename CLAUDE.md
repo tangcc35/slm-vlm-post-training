@@ -1,5 +1,7 @@
 # CLAUDE.md
 
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
 ## Writing code: keep it simple
 
 - Write the simplest code that solves the actual problem: fewer lines, fewer branches, fewer abstractions.
@@ -8,3 +10,61 @@
 - Don't be over-protective: no defensive checks for states that can't happen, no re-validating values our own code produced, no try/except around code that isn't expected to fail. Validate only at real boundaries (request bodies, external APIs, user-supplied files).
 - Keep changes scoped to the task. No drive-by refactors, new config options, helpers, or abstractions unless asked.
 - Tests cover the behavior that changed, not every permutation.
+
+## Commands
+
+Python 3.11, managed with `uv`. No linter or formatter is configured.
+
+```bash
+uv sync --extra dev                                    # install (add --extra phoenix for a local Phoenix server)
+uv run pytest                                          # full suite, ~20s
+uv run pytest tests/story_rp_engine/test_lorebook.py   # one file
+uv run pytest tests/test_rewards.py::test_name         # one test
+
+uv run slm-post-train train --config configs/sft/smoke_test.yaml    # 2-step real SFT run (needs CUDA GPU)
+uv run slm-post-train train --config configs/grpo/smoke_test.yaml   # 2-step real GRPO run
+uv run slm-post-train curate-data --config configs/sft/qwen35_08b_nsfw_story.yaml
+uv run slm-post-train export --model-path <dir> --output-dir <dir> --format gguf --quant q4_k_m
+
+./run_sh/run_story_rp_backend.sh   # engine on :8000 with --reload; sources .env, starts Phoenix if PHOENIX_ENABLED
+./run_sh/serve_llama_cpp.sh        # llama.cpp server (LLAMA_* vars in .env) plus the engine
+```
+
+Testing notes:
+- Tests never train or call a real LLM: trainer tests patch Unsloth/TRL, engine tests use fake ADK `BaseLlm`s and `InMemorySessionService`. Async tests use `@pytest.mark.anyio`.
+- Postgres storage tests are skipped unless `STORY_RP_TEST_PG_URL` points at a Postgres server.
+- `EngineConfig` skips `load_dotenv()` under pytest, so `.env` doesn't leak into tests.
+
+## Architecture
+
+Two packages under `src/` ship in one wheel but share no code. The engine can serve models trained by the first package once they're exported to GGUF and served through llama.cpp or another OpenAI-compatible server.
+
+### `slm_post_train`
+
+- `cli.py` dispatches: `train` reads the YAML's `stage` and calls `trainers/sft_runner.run_sft` or `trainers/grpo_runner.run_grpo`; `curate-data` calls `data/nsfw_story.curate_from_config`; `export` calls `export/exporter.export_model`.
+- Runners take the raw YAML dict and read each section (`model`, `lora`, `dataset`, `training`, `output`, `rewards`) with `.get(key, default)`. There's no schema: defaults live in the runner code, and a new config knob means reading it in the runner.
+- `import unsloth` must come before any `trl`/`transformers` import so its kernel patches apply. `slm_post_train/__init__.py` does this and also patches `trl.import_utils` for transformers ≥ 5.
+- `models/loader.py` loads `FastLanguageModel` or `FastVisionModel` (chosen by `model.modality`) and attaches LoRA when the `lora` section is non-empty.
+- SFT data (`data/sft_data.py`) converts `messages`, `instruction`/`output`, `prompt`/`response` and ShareGPT rows into a `conversations` column, then renders a `text` column with the Unsloth chat template. Responses-only loss takes its delimiters from the tokenizer's Unsloth parts, then from `CHAT_TEMPLATE_DELIMITERS[dataset.chat_template]`, then from explicit `instruction_part`/`response_part`. It's turned off when `packing: true`.
+- GRPO data (`data/grpo_data.py`) maps `prompt`/`question`/`problem` to a chat-format `prompt` and `answer`/`solution`/`ground_truth` to `answer`. Rewards are resolved by name from `rewards/registry.py`. Built-ins register because `rewards/__init__.py` imports `standard.py`, so a new reward module must also be imported before the runner looks it up.
+- Outputs: SFT and export each write into a timestamped `YYYYMMDD-HHMMSS` subdirectory of the configured dir; GRPO doesn't. SFT logs to W&B (project `slm_post_train`); GRPO doesn't log anywhere. GGUF export uses llama.cpp from `~/.unsloth/llama.cpp`.
+
+### `story_rp_engine`
+
+- `api/app.py:create_app(store=None, config=None)` is a factory (uvicorn runs it with `--factory`), so tests can inject a store and config. It puts `store`, `config`, `session_service`, `agent_registry` and the story `runner` on `app.state`, and serves `web/` (a vanilla JS UI) at `/`.
+- `core/config.py:EngineConfig` reads every env var in a `default_factory`, so env values are captured when it's instantiated.
+- `core/model_provider.get_adk_model`: model names starting with `gemini`, `gemini/` or `google/` use ADK's native `Gemini`; everything else goes through ADK's `LiteLlm`. Every agent uses the same sampling settings from `get_generate_config`.
+- `core/agent_registry.AgentRegistry` caches one RP `LlmAgent` and `Runner` per `char_id` (ADK app `rp_app`), plus one story workflow runner (`story_app`). An agent loaded from the store is rebuilt when the stored card changes, because serverless instances can share the store. Both apps get the same `EventsCompactionConfig`.
+- Roleplay (`rp/`): the agent's instruction is a **callable** (`build_rp_system_instruction`), so ADK's `{var}` state templating can't choke on braces in card text. Per-turn context (lorebook entries whose keys match, and the author's note) is appended to the latest user message by `rp_before_model_callback`, not to the system prompt. That keeps the system prompt identical across turns, so prompt caching works. Session state keys (`user_name`, `greeting`, `authors_note`, `lorebook`) are set through `state_delta` in `routes_rp._rp_state_delta`.
+- Story (`story/`): an ADK `Workflow` graph, `START → director → writer`. These two agents *do* use ADK `{key?}` templating over the state keys `premise`, `genre`, `tone`, `current_text` and `instruction`. `core/agent_utils` only surfaces events from the graph's terminal node, the writer.
+- Turns run through `execute_runner_turn` / `stream_runner_turn`. `format_sse_stream` emits `data: {"delta": …}` chunks, then `{"full_text": …, "done": true}`, then `data: [DONE]`; `web/app.js` parses this exact format.
+- Every session uses `user_id="User"`, and the session routes hardcode the app name `rp_app`. Deleting a turn rewrites the whole session: delete it, recreate it, and re-append the kept events.
+- Storage (`storage/store.py:EngineStore`): when a DB URL is set (`DATABASE_URL`, `STORY_RP_DB_URL` or `POSTGRES_URL`), ADK `DatabaseSessionService` and the `story_rp_characters`/`story_rp_lorebooks` tables share one engine. With no DB URL, sessions go to SQLite `sessions.db` and characters and lorebooks to JSON files under `STORY_RP_STORAGE_DIR` (default `.engine_data/`). `storage/db.normalize_db_url` rewrites Neon/libpq URLs for asyncpg. IDs go through `_sanitize_key`.
+- On startup the app warms up with one story turn, unless the model is remote or `STORY_RP_SKIP_WARMUP=1`.
+
+### Deployment and other directories
+
+- `vercel/`: the build step copies `src/story_rp_engine` into `vercel/src/`, and `vercel/api/index.py` sets serverless defaults (`/tmp` storage, no warmup, NullPool, Phoenix off). `vercel/requirements.txt` is maintained separately from `pyproject.toml`, so new engine runtime deps must go in both. It leaves out `litellm` on purpose: Vercel only runs Gemini models.
+- `.agents/skills/`: [agentskills.io](https://agentskills.io) skills covering each subsystem (SFT, GRPO, GGUF export, character RP, story co-pilot, backend, frontend). `tests/test_agent_skills.py` checks their format and links.
+- `docs/superpowers/{specs,plans}/`: dated design specs and implementation plans for past features.
+- `unsloth_notebook_reference/`: the Unsloth notebooks (Gemma SFT, GRPO Sudoku) the recipes are based on.
