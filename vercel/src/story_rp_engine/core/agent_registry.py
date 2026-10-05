@@ -33,25 +33,7 @@ class AgentRegistry:
             return self._rp_agents[char_id]
 
         if card is None:
-            card = self.store.get_character_sync(char_id)
-        if not card:
-            raise ValueError(f"Character {char_id} not found")
-
-        agent = create_rp_agent(card, self.config, lorebook=lorebook)
-        self._rp_agents[char_id] = agent
-        return agent
-
-    async def get_or_create_rp_agent_async(
-        self,
-        char_id: str,
-        card: Optional[CharacterCard] = None,
-        lorebook: Optional[Lorebook] = None,
-    ) -> LlmAgent:
-        if char_id in self._rp_agents:
-            return self._rp_agents[char_id]
-
-        if card is None:
-            card = await self.store.get_character(char_id)
+            card = self.store.get_character(char_id)
         if not card:
             raise ValueError(f"Character {char_id} not found")
 
@@ -83,31 +65,11 @@ class AgentRegistry:
         )
 
     def get_or_create_rp_runner(self, char_id: str) -> Runner:
-        """Retrieves or creates a cached ADK Runner for the specified character agent (sync)."""
+        """Retrieves or creates a cached ADK Runner for the specified character agent."""
         if char_id in self._rp_runners:
             return self._rp_runners[char_id]
 
         agent = self.get_or_create_rp_agent(char_id)
-        compaction_config = self._build_compaction_config()
-        app = App(
-            name="rp_app",
-            root_agent=agent,
-            events_compaction_config=compaction_config,
-        )
-        runner = Runner(
-            app=app,
-            session_service=self.store.session_service,
-            auto_create_session=True,
-        )
-        self._rp_runners[char_id] = runner
-        return runner
-
-    async def get_or_create_rp_runner_async(self, char_id: str) -> Runner:
-        """Retrieves or creates a cached ADK Runner for the specified character agent (async)."""
-        if char_id in self._rp_runners:
-            return self._rp_runners[char_id]
-
-        agent = await self.get_or_create_rp_agent_async(char_id)
         compaction_config = self._build_compaction_config()
         app = App(
             name="rp_app",

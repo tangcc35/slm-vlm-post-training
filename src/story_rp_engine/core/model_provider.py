@@ -3,10 +3,6 @@
 import os
 from google.adk.models.base_llm import BaseLlm
 from google.adk.models.google_llm import Gemini
-try:
-    from google.adk.models.lite_llm import LiteLlm
-except ImportError:
-    LiteLlm = None
 from google.genai import types
 from story_rp_engine.core.config import EngineConfig
 
@@ -66,10 +62,7 @@ def get_adk_model(config: EngineConfig) -> BaseLlm:
         return Gemini(model=clean_model, **gemini_kwargs)
 
     # For other models, fallback to LiteLlm
-    target_litellm = LiteLlm
-    if target_litellm is None:
-        from google.adk.models.lite_llm import LiteLlm as ImportedLiteLlm
-        target_litellm = ImportedLiteLlm
+    from google.adk.models.lite_llm import LiteLlm
 
     if not api_key and config.api_base and model_name.startswith("openai/"):
         api_key = "local"
@@ -87,8 +80,8 @@ def get_adk_model(config: EngineConfig) -> BaseLlm:
         kwargs["api_key"] = api_key
 
     try:
-        return target_litellm(model_name=model_name, **kwargs)
+        return LiteLlm(model_name=model_name, **kwargs)
     except TypeError:
         # Fallback for alternative parameter signature
-        return target_litellm(model=model_name, **kwargs)
+        return LiteLlm(model=model_name, **kwargs)
 

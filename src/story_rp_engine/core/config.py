@@ -1,61 +1,10 @@
 import os
-import re
 from typing import Optional
-from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from dotenv import load_dotenv
 from pydantic import BaseModel, Field
 
 if "PYTEST_CURRENT_TEST" not in os.environ and "PYTEST_VERSION" not in os.environ:
     load_dotenv()
-
-
-def normalize_db_url(url: Optional[str]) -> Optional[str]:
-    """Normalizes database connection URLs for async SQLAlchemy (e.g. Neon PostgreSQL, SQLite)."""
-    if not url or not str(url).strip():
-        return None
-
-    cleaned = str(url).strip()
-
-    # Handle Postgres URLs
-    if cleaned.startswith(("postgresql://", "postgres://", "postgresql+asyncpg://")):
-        try:
-            split = urlsplit(cleaned)
-        except ValueError:
-            return None
-        scheme = "postgresql+asyncpg"
-
-        query_params = dict(parse_qsl(split.query))
-
-        # Map sslmode parameter to ssl for asyncpg
-        if "sslmode" in query_params:
-            sslmode = query_params.pop("sslmode")
-            if "ssl" not in query_params:
-                query_params["ssl"] = sslmode
-
-        # If Neon host or ssl was requested, ensure ssl=require
-        if "ssl" not in query_params and (".neon.tech" in split.netloc or "ssl" in cleaned):
-            query_params["ssl"] = "require"
-
-        new_query = urlencode(query_params)
-        return urlunsplit((scheme, split.netloc, split.path, new_query, split.fragment))
-
-    # Handle SQLite URLs
-    if cleaned.startswith("sqlite://") and not cleaned.startswith("sqlite+aiosqlite://"):
-        return cleaned.replace("sqlite://", "sqlite+aiosqlite://", 1)
-
-    return cleaned
-
-
-def resolve_db_url() -> Optional[str]:
-    """Resolves and normalizes database URL from environment variable hierarchy."""
-    raw = (
-        os.getenv("STORY_RP_DB_URL")
-        or os.getenv("DATABASE_URL")
-        or os.getenv("POSTGRES_URL")
-        or os.getenv("NEON_DATABASE_URL")
-    )
-    return normalize_db_url(raw)
-
 
 class EngineConfig(BaseModel):
     model_name: str = Field(
@@ -92,8 +41,8 @@ class EngineConfig(BaseModel):
         description="Directory for local storage (characters, lorebooks, sessions)",
     )
     db_url: Optional[str] = Field(
-        default_factory=resolve_db_url,
-        description="Database connection URL for ADK DatabaseSessionService and persistent storage",
+        default_factory=lambda: os.getenv("STORY_RP_DB_URL"),
+        description="Database connection URL for ADK DatabaseSessionService",
     )
     phoenix_enabled: bool = Field(
         default_factory=lambda: os.getenv("PHOENIX_ENABLED", "0").lower() in ("1", "true", "yes"),

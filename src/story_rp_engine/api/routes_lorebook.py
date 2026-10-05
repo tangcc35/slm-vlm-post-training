@@ -13,27 +13,27 @@ def _slugify(name: str) -> str:
 
 
 @router.post("/lorebooks")
-async def save_lorebook(lorebook: Lorebook, request: Request):
+def save_lorebook(lorebook: Lorebook, request: Request):
     store = request.app.state.store
     lb_id = _slugify(lorebook.name)
     try:
-        await store.save_lorebook(lb_id, lorebook)
+        store.save_lorebook(lb_id, lorebook)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     return {"status": "saved", "lorebook_id": lb_id}
 
 
 @router.get("/lorebooks")
-async def list_lorebooks(request: Request):
+def list_lorebooks(request: Request):
     store = request.app.state.store
-    return await store.list_lorebooks()
+    return store.list_lorebooks()
 
 
 @router.get("/lorebooks/{lorebook_id}")
-async def get_lorebook(lorebook_id: str, request: Request):
+def get_lorebook(lorebook_id: str, request: Request):
     store = request.app.state.store
     try:
-        lb = await store.get_lorebook(lorebook_id)
+        lb = store.get_lorebook(lorebook_id)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     if not lb:
@@ -42,13 +42,14 @@ async def get_lorebook(lorebook_id: str, request: Request):
 
 
 @router.delete("/lorebooks/{lorebook_id}")
-async def delete_lorebook(lorebook_id: str, request: Request):
+def delete_lorebook(lorebook_id: str, request: Request):
     store = request.app.state.store
     try:
         clean_id = _sanitize_key(lorebook_id)
-        await store.delete_lorebook(clean_id)
-    except KeyError:
-        raise HTTPException(status_code=404, detail="Lorebook not found")
+        path = os.path.join(store.lorebooks_dir, f"{clean_id}.json")
+        if not os.path.exists(path):
+            raise HTTPException(status_code=404, detail="Lorebook not found")
+        os.remove(path)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     return {"status": "deleted", "lorebook_id": clean_id}
