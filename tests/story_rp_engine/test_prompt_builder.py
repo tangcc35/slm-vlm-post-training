@@ -38,9 +38,9 @@ def test_build_rp_system_instruction_with_post_history_instructions():
     )
 
     instruction = build_rp_system_instruction(card, active_lore=None, user_name="Morgan")
-    assert "### Additional Directives\nMaintain a polite tone with Morgan." in instruction
-    assert "### World Information & Lore" not in instruction
-    assert "### Dialogue Examples" not in instruction
+    assert "Maintain a polite tone with Morgan." in instruction
+    assert "<world_info>" not in instruction
+    assert "<example_dialogue>" not in instruction
 
 
 def test_build_rp_system_instruction_default_user_name():
@@ -55,7 +55,7 @@ def test_build_rp_system_instruction_default_user_name():
     )
 
     instruction = build_rp_system_instruction(card)
-    assert "speak for User." in instruction
+    assert "Never write User's words" in instruction
 
 
 def test_replace_macros_edge_cases():
@@ -77,3 +77,17 @@ def test_replace_macros_case_insensitive():
 
 
 
+
+
+def _aria():
+    return CharacterCard(char_id="aria", name="Aria", description="Scout", system_prompt="Always speak in rhyme to {{user}}.")
+
+
+def test_build_rp_system_instruction_includes_greeting_with_macros():
+    instruction = build_rp_system_instruction(_aria(), user_name="Alex", greeting="Halt, {{user}}! I am {{char}}.")
+    assert "Halt, Alex! I am Aria." in instruction
+
+
+def test_build_rp_system_instruction_includes_card_system_prompt():
+    instruction = build_rp_system_instruction(_aria(), user_name="Alex")
+    assert "Always speak in rhyme to Alex." in instruction

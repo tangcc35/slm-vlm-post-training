@@ -7,6 +7,13 @@ from story_rp_engine.core.types import Lorebook, LorebookEntry
 from story_rp_engine.rp.callbacks import rp_before_model_callback
 
 
+def _model_input(request):
+    """Everything the model receives: the system prompt plus the message text."""
+    texts = [str(request.config.system_instruction or "")] if request.config else []
+    texts += [p.text for c in request.contents for p in c.parts if p.text]
+    return "\n".join(texts)
+
+
 def test_before_model_callback_injects_lore_and_authors_note():
     lore = Lorebook(
         name="Fantasy World",
@@ -34,8 +41,7 @@ def test_before_model_callback_injects_lore_and_authors_note():
     res = rp_before_model_callback(mock_context, request)
     assert res is None  # Allow generation to proceed
 
-    # Verify lore and author's note were injected into system_instruction
-    instruction = str(request.config.system_instruction)
+    instruction = _model_input(request)
     assert "Excalibur is a legendary blade." in instruction
     assert "Tone: mysterious" in instruction
 
@@ -83,9 +89,9 @@ def test_before_model_callback_lore_only_without_authors_note():
 
     res = rp_before_model_callback(mock_context, request)
     assert res is None
-    instruction = str(request.config.system_instruction)
+    instruction = _model_input(request)
     assert "Hyperdrive allows FTL travel." in instruction
-    assert "### Narrative Directive" not in instruction
+    assert "Author's note" not in instruction
 
 
 def test_before_model_callback_authors_note_only_without_lore():
@@ -105,9 +111,9 @@ def test_before_model_callback_authors_note_only_without_lore():
 
     res = rp_before_model_callback(mock_context, request)
     assert res is None
-    instruction = str(request.config.system_instruction)
+    instruction = _model_input(request)
     assert "Keep replies under 2 sentences." in instruction
-    assert "### Relevant World Information" not in instruction
+    assert "World info" not in instruction
 
 
 def test_before_model_callback_default_config_no_system_instruction():
@@ -127,7 +133,7 @@ def test_before_model_callback_default_config_no_system_instruction():
     res = rp_before_model_callback(mock_context, request)
     assert res is None
     assert request.config is not None
-    assert "Tone: dark" in str(request.config.system_instruction)
+    assert "Tone: dark" in _model_input(request)
 
 
 def test_rp_before_model_callback_direct_session_state():
@@ -156,7 +162,7 @@ def test_rp_before_model_callback_direct_session_state():
 
     res = rp_before_model_callback(mock_context, request)
     assert res is None
-    instruction = str(request.config.system_instruction)
+    instruction = _model_input(request)
     assert "Dragons breathe fire." in instruction
     assert "Focus on combat tension." in instruction
 
@@ -177,4 +183,38 @@ def test_before_model_callback_reads_lorebook_stored_as_dict():
     )
 
     assert rp_before_model_callback(mock_context, request) is None
-    assert "Griffins guard the pass." in str(request.config.system_instruction)
+    assert "Griffins guard the pass." in _model_input(request)
+
+
+def _sword_request(original=None):
+    original = original or types.Content(role="user", parts=[types.Part.from_text(text="I draw my sword!")])
+    return LlmRequest(
+        model="test-model",
+        contents=[original],
+        config=types.GenerateContentConfig(system_instruction="Base prompt"),
+    )
+
+
+def test_before_model_callback_puts_turn_context_in_latest_user_message():
+    lore = Lorebook(name="W", entries=[LorebookEntry(keys=["sword"], content="Excalibur is a legendary blade.")])
+    mock_context = MagicMock(spec=CallbackContext)
+    mock_context.state = {"lorebook": lore, "authors_note": "Tone: mysterious"}
+    request = _sword_request()
+
+    rp_before_model_callback(mock_context, request)
+
+    latest = " ".join(p.text for p in request.contents[-1].parts)
+    assert "Excalibur is a legendary blade." in latest
+    assert "Tone: mysterious" in latest
+    # The system prompt stays the same every turn, so prompt caching keeps working.
+    assert request.config.system_instruction == "Base prompt"
+
+
+def test_before_model_callback_does_not_modify_stored_message():
+    original = types.Content(role="user", parts=[types.Part.from_text(text="I draw my sword!")])
+    mock_context = MagicMock(spec=CallbackContext)
+    mock_context.state = {"authors_note": "Tone: mysterious"}
+
+    rp_before_model_callback(mock_context, _sword_request(original))
+
+    assert [p.text for p in original.parts] == ["I draw my sword!"]

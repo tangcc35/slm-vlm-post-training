@@ -10,21 +10,26 @@ def rp_before_model_callback(
     callback_context: CallbackContext,
     llm_request: LlmRequest,
 ) -> Optional[LlmResponse]:
-    """ADK before_model_callback that dynamically injects active lore and author's note."""
-    user_text = ""
-    if llm_request.contents:
-        for content in reversed(llm_request.contents):
-            if content.role == "user" and content.parts:
-                user_text = " ".join([p.text for p in content.parts if getattr(p, "text", None)])
-                break
+    """ADK before_model_callback that adds matching lore and the author's note to the latest user message.
 
-    extra_sections = []
+    Keeping per-turn context out of the system prompt keeps that prompt identical across turns
+    (so prompt caching works) and puts the context next to the message it applies to.
+    """
+    user_index = None
+    for i in range(len(llm_request.contents) - 1, -1, -1):
+        content = llm_request.contents[i]
+        if content.role == "user" and content.parts:
+            user_index = i
+            break
+    if user_index is None or callback_context is None:
+        return None
 
-    # 1. Match Lorebook from session state
-    lorebook = None
-    if callback_context is not None and getattr(callback_context, "state", None) is not None:
-        lorebook = callback_context.state.get("lorebook")
+    latest = llm_request.contents[user_index]
+    user_text = " ".join(p.text for p in latest.parts if getattr(p, "text", None))
+    state = callback_context.state
+    notes = []
 
+    lorebook = state.get("lorebook")
     if lorebook and user_text:
         # Lorebooks loaded into session state come back from the database as dicts.
         if isinstance(lorebook, (Lorebook, dict)):
@@ -32,32 +37,17 @@ def rp_before_model_callback(
         lorebooks = [Lorebook.model_validate(lb) for lb in lorebook]
         active_lore = LorebookEngine.find_matching_entries(lorebooks, user_text)
         if active_lore:
-            lore_text = "\n".join([f"- {entry.content}" for entry in active_lore])
-            extra_sections.append(f"### Relevant World Information\n{lore_text}")
+            notes.append("World info:\n" + "\n".join(f"- {entry.content}" for entry in active_lore))
 
-    # 2. Greeting the user saw first; it is not stored as a chat turn
-    greeting = callback_context.state.get("greeting") if callback_context is not None else None
-    if greeting:
-        extra_sections.append(f"### Opening Message (already sent by you)\n{greeting}")
+    authors_note = str(state.get("authors_note") or "").strip()
+    if authors_note:
+        notes.append(f"Author's note: {authors_note}")
 
-    # 3. Author's note from session state
-    authors_note = None
-    if callback_context is not None and getattr(callback_context, "state", None) is not None:
-        authors_note = callback_context.state.get("authors_note")
-    if authors_note and str(authors_note).strip():
-        extra_sections.append(f"### Narrative Directive\n{str(authors_note).strip()}")
-
-    # 4. Inject additions into system instruction
-    if extra_sections:
-        additions = "\n\n".join(extra_sections)
-        current_instruction = ""
-        if llm_request.config and llm_request.config.system_instruction:
-            inst = llm_request.config.system_instruction
-            current_instruction = inst if isinstance(inst, str) else str(inst)
-
-        new_instruction = f"{current_instruction}\n\n{additions}".strip()
-        if not llm_request.config:
-            llm_request.config = types.GenerateContentConfig()
-        llm_request.config.system_instruction = new_instruction
+    if notes:
+        note = "[Context for your next reply, not shown to the user]\n" + "\n\n".join(notes)
+        # Replace rather than mutate: the original Content belongs to the stored session history.
+        llm_request.contents[user_index] = types.Content(
+            role="user", parts=[*latest.parts, types.Part.from_text(text=note)]
+        )
 
     return None

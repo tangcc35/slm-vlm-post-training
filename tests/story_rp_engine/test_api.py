@@ -838,7 +838,9 @@ async def _recording_rp_app(tmp_path):
         model: str = "mock"
 
         async def generate_content_async(self, llm_request, stream=False):
-            prompts.append(str(llm_request.config.system_instruction))
+            texts = [str(llm_request.config.system_instruction)]
+            texts += [p.text for c in llm_request.contents for p in c.parts if p.text]
+            prompts.append("\n".join(texts))
             yield LlmResponse(content=types.Content(role="model", parts=[types.Part.from_text(text="Hm.")]))
 
     store = EngineStore(storage_dir=str(tmp_path))

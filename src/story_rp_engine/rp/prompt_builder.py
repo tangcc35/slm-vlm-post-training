@@ -16,26 +16,48 @@ def build_rp_system_instruction(
     card: CharacterCard,
     active_lore: Optional[List[LorebookEntry]] = None,
     user_name: str = "User",
+    greeting: Optional[str] = None,
 ) -> str:
-    """Builds a structured roleplay system instruction prompt from a character card and active lore entries."""
+    """Builds the roleplay system prompt from a character card, optional lore, and the opening greeting."""
     char_name = card.name
 
-    sections = [
-        f"You are roleplaying as {char_name}. Stay fully in character at all times. Do not break the fourth wall or speak for {user_name}.",
-        f"### Character: {char_name}\n"
-        f"- Description: {replace_macros(card.description, char_name, user_name)}\n"
-        f"- Personality: {replace_macros(card.personality, char_name, user_name)}",
-        f"### Scenario\n{replace_macros(card.scenario, char_name, user_name)}",
-    ]
+    def fill(text: Optional[str]) -> str:
+        return replace_macros(text, char_name, user_name).strip()
 
+    intro = (
+        f"You are {char_name} in an ongoing roleplay with {user_name}. Write {char_name}'s dialogue, actions "
+        f"and thoughts, plus narration and side characters as needed. Never write {user_name}'s words, actions or decisions."
+    )
+    sections = [intro]
+    if card.system_prompt:
+        sections.append(fill(card.system_prompt))
+
+    sections.append(f"<character>\n{fill(card.description)}\n</character>")
+    if card.personality:
+        sections.append(f"<personality>\n{fill(card.personality)}\n</personality>")
+    if card.scenario:
+        sections.append(f"<scenario>\n{fill(card.scenario)}\n</scenario>")
     if active_lore:
-        lore_snippets = "\n".join([f"- {entry.content}" for entry in active_lore])
-        sections.append(f"### World Information & Lore\n{lore_snippets}")
-
+        lore_snippets = "\n".join(f"- {entry.content}" for entry in active_lore)
+        sections.append(f"<world_info>\n{lore_snippets}\n</world_info>")
     if card.mes_example:
-        sections.append(f"### Dialogue Examples\n{replace_macros(card.mes_example, char_name, user_name)}")
+        sections.append(
+            f"<example_dialogue>\n{fill(card.mes_example)}\n</example_dialogue>\n"
+            "The examples show voice and style only; they are not part of the story."
+        )
 
+    sections.append(
+        "Guidelines:\n"
+        "- Stay in character and consistent with established facts.\n"
+        "- Reply in the language the conversation uses; usually 1-3 paragraphs.\n"
+        f"- Move the scene forward: react, act, add small developments. Don't just mirror {user_name} "
+        f"or end every reply with a question.\n"
+        f"- Vary your wording; don't reuse phrases or openings from earlier replies.\n"
+        f"- If {user_name} writes (OOC: ...), answer briefly out of character."
+    )
+    if greeting:
+        sections.append(f"<opening_message>\n{fill(greeting)}\n</opening_message>\nYou already sent this opening message.")
     if card.post_history_instructions:
-        sections.append(f"### Additional Directives\n{replace_macros(card.post_history_instructions, char_name, user_name)}")
+        sections.append(fill(card.post_history_instructions))
 
     return "\n\n".join(sections)
