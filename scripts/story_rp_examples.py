@@ -15,7 +15,7 @@ from pathlib import Path
 from story_rp_engine.core.types import Lorebook
 from story_rp_engine.rp.lorebook import LorebookEngine
 
-EXAMPLES = Path(__file__).resolve().parents[1] / "examples" / "story_rp"
+EXAMPLES = Path(__file__).resolve().parents[1] / ".examples" / "story_rp"
 
 
 def load(kind: str, name: str) -> dict:

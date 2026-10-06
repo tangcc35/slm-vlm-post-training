@@ -134,7 +134,7 @@ Story sessions work the same way: the first turn sends the setup (`premise`, `ge
 
 ### Examples
 
-[`examples/story_rp/`](examples/story_rp/) has three character cards, three lorebooks, and five scripted demos (three roleplay chats and two stories). Each demo turn has a `showcase` note that names the engine feature it exercises: per-turn lorebook injection with key aliases, phrase keys, `insertion_order` and disabled entries; author's notes; card text with `{braces}` passed through ADK verbatim; Director-to-Writer lore hand-off; and long-range story memory across compaction.
+[`examples/story_rp/`](examples/story_rp/) has six character cards, six lorebooks, and nine scripted demos (six roleplay chats and three stories), half of them in Chinese. Each demo turn has a `showcase` note that names the engine feature it exercises: per-turn lorebook injection with key aliases, phrase keys, `insertion_order` and disabled entries; author's notes; card text with `{braces}` passed through ADK verbatim; Director-to-Writer lore hand-off; and long-range story memory across compaction.
 
 ```bash
 uv run python scripts/story_rp_examples.py                # save the cards and lorebooks to a running engine

@@ -22,6 +22,7 @@ share/python-wheels/
 *.egg
 .env
 .engine_data/
+.examples
 # Copied from src/ by the Vercel build step (vercel/vercel.json)
 vercel/src/
 

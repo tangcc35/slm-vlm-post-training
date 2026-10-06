@@ -20,7 +20,9 @@ class LorebookEngine:
                     stripped_key = key.strip()
                     if not stripped_key:
                         continue
-                    pattern = r'\b' + re.escape(stripped_key) + r'\b'
+                    # ASCII word boundaries: \b treats CJK characters as word characters, so a Chinese key
+                    # inside unspaced Chinese text would never match.
+                    pattern = r'(?<![A-Za-z0-9_])' + re.escape(stripped_key) + r'(?![A-Za-z0-9_])'
                     if re.search(pattern, text, re.IGNORECASE):
                         matched.append(entry)
                         seen_contents.add(entry.content)

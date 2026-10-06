@@ -55,8 +55,9 @@ flowchart TD
    - `{{char}}` and `{{user}}` must be replaced case-insensitively (`{{Char}}`, `{{USER}}`, etc.).
    - Never leave unrendered mustache placeholders in the final system prompt sent to the LLM.
 2. **Exact Word Boundary Enforcement**:
-   - Lorebook keyword search must strictly apply word boundaries `\b` (`r'\b' + re.escape(key) + r'\b'`).
-   - Substring matches (e.g. key `"cat"` triggering on `"caterpillar"`) are strictly prohibited to prevent false positive prompt contamination.
+   - Lorebook keyword search uses ASCII word boundaries (`r'(?<![A-Za-z0-9_])' + re.escape(key) + r'(?![A-Za-z0-9_])'`), not `\b`.
+   - Substring matches (e.g. key `"cat"` triggering on `"caterpillar"`) are prohibited to prevent false positive prompt contamination.
+   - CJK keys match anywhere in unspaced text (`"长安"` matches `"我想去长安城"`); `\b` would never match them there.
 3. **Content Deduplication Across Entries**:
    - When multiple keys in the same entry or across multiple entries match identical content, deduplicate via `seen_contents` to avoid prompt bloating.
 4. **Deterministic Insertion Ordering**:

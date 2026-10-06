@@ -84,7 +84,9 @@ class LorebookEngine:
                     stripped_key = key.strip()
                     if not stripped_key:
                         continue
-                    pattern = r'\b' + re.escape(stripped_key) + r'\b'
+                    # ASCII word boundaries: \b treats CJK characters as word characters, so a Chinese key
+                    # inside unspaced Chinese text would never match.
+                    pattern = r'(?<![A-Za-z0-9_])' + re.escape(stripped_key) + r'(?![A-Za-z0-9_])'
                     if re.search(pattern, text, re.IGNORECASE):
                         matched.append(entry)
                         seen_contents.add(entry.content)
@@ -102,7 +104,7 @@ class LorebookEngine:
 4. **Key Normalization & Regex Search**:
    - Strip leading/trailing whitespace (`key.strip()`).
    - Discard empty or whitespace-only keys (`""`, `"   "`).
-   - Construct regex pattern using `re.escape` bounded by word boundaries `\b`.
+   - Construct regex pattern using `re.escape` bounded by ASCII word boundaries (no ASCII letter, digit or `_` on either side).
    - Apply `re.IGNORECASE`.
    - On the first matched key for an entry, immediately append to `matched`, record `entry.content` in `seen_contents`, and `break` key evaluation for that entry.
 5. **Deterministic Ordering**: Sort all matched entries by `insertion_order` ascending (e.g. 10 before 25 before 50).
@@ -111,7 +113,7 @@ class LorebookEngine:
 
 ## Whole-Word Boundary & Regex Semantics
 
-Word boundary matching (`\b`) is critical to prevent unwanted false positives.
+Word boundary matching is critical to prevent unwanted false positives. The boundaries are ASCII-only: Python's `\b` treats CJK characters as word characters, so it would never match a Chinese key inside unspaced Chinese text.
 
 ### False Positive Prevention Matrix
 
@@ -123,6 +125,8 @@ Word boundary matching (`\b`) is critical to prevent unwanted false positives.
 | `"cat"` | `"Watch out for that cat!"` | **MATCH** | Punctuation (`!`) acts as a word boundary. |
 | `"silver sword"` | `"He drew his silver sword quietly."` | **MATCH** | Multi-word phrase matches full consecutive tokens. |
 | `"Necromancer"` | `"The necromancer cast a spell."` | **MATCH** | `re.IGNORECASE` matches regardless of capitalization. |
+| `"长安"` | `"我想去长安城看看"` | **MATCH** | CJK characters are not ASCII word characters, so they never block a match. |
+| `"KX-9"` | `"这条KX-9烫得要命"` | **MATCH** | ASCII keys inside CJK text are bounded by the surrounding CJK characters. |
 
 ### Regex Escaping
 All keys pass through `re.escape(stripped_key)` before regex compilation. This guarantees that special regex characters in keys (such as `+`, `*`, `?`, `(`, `)`, `[`, `]`) are treated as literal text and do not cause syntax errors or unintended regex behavior.

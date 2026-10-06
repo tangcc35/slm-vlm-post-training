@@ -80,3 +80,12 @@ def test_lorebook_empty_or_whitespace_keys():
     lorebook = Lorebook(name="Test", entries=[LorebookEntry(keys=["", "   "], content="Whitespace content")])
     assert LorebookEngine.find_matching_entries([lorebook], "Any regular text with spaces") == []
 
+
+def test_lorebook_chinese_keys_match_inside_unspaced_text():
+    lorebook = Lorebook(name="Mixed", entries=[
+        LorebookEntry(keys=["长安"], content="Capital", insertion_order=10),
+        LorebookEntry(keys=["KX-9"], content="Arm", insertion_order=20),
+        LorebookEntry(keys=["bell"], content="Bell"),
+    ])
+    matched = LorebookEngine.find_matching_entries([lorebook], "我想去长安城，带着KX-9义体，听bells响")
+    assert [e.content for e in matched] == ["Capital", "Arm"]
