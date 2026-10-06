@@ -9,6 +9,7 @@ from story_rp_engine.core import agent_registry
 from story_rp_engine.core.agent_registry import AgentRegistry
 from story_rp_engine.core.agent_utils import execute_runner_turn
 from story_rp_engine.core.config import EngineConfig
+from story_rp_engine.core.types import Lorebook, LorebookEntry
 from story_rp_engine.storage.store import EngineStore
 from story_rp_engine.story import director_agent, writer_agent
 from story_rp_engine.story.director_agent import create_director_agent
@@ -149,3 +150,31 @@ async def test_story_agents_use_configured_sampling(fake_models):
     for name in ["story_director", "story_writer"]:
         cfg = fake_models[name][0].config
         assert (cfg.temperature, cfg.top_p, cfg.max_output_tokens) == (0.3, 0.5, 700)
+
+
+@pytest.mark.anyio
+async def test_director_gets_matching_lore_with_latest_message(fake_models):
+    lorebook = Lorebook(
+        name="World",
+        entries=[
+            LorebookEntry(keys=["Mara"], content="Mara is a one-eyed smuggler."),
+            LorebookEntry(keys=["map"], content="The map is drawn on whale skin."),
+            LorebookEntry(keys=["dragon"], content="Dragons sleep under Mount Ash."),
+        ],
+    )
+    await _run_turns(
+        EngineConfig(),
+        ["She finds the map."],
+        state_delta={"current_text": "Mara walked in.", "instruction": "She finds the map.", "lorebook": lorebook.model_dump()},
+    )
+
+    director = fake_models["story_director"][0]
+    latest = _texts(director)[-1]
+    # Keys are matched in the user's message only, not the recent text.
+    assert latest.startswith("She finds the map.")
+    assert "The map is drawn on whale skin." in latest
+    assert "Mara is a one-eyed smuggler." not in latest
+    assert "Dragons sleep under Mount Ash." not in latest
+    assert "whale skin" not in director.config.system_instruction
+    # The writer gets lore only through the director's notes.
+    assert "whale skin" not in str(fake_models["story_writer"][0])

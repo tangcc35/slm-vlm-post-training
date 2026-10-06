@@ -557,6 +557,18 @@
             </div>
 
             <div class="space-y-1.5">
+              <label class="block text-xs font-medium text-neutral-300">Lorebook</label>
+              <select
+                v-model="storyLorebookId"
+                class="w-full bg-neutral-950 border border-neutral-800 rounded-md px-3 py-1.5 text-xs text-neutral-200 focus:border-indigo-500">
+                <option value="">None (No Lorebook)</option>
+                <option v-for="(lb, id) in lorebooks" :key="id" :value="id">
+                  {{ lb.name || id }}
+                </option>
+              </select>
+            </div>
+
+            <div class="space-y-1.5">
               <label class="block text-xs font-medium text-neutral-300">Opening Instruction</label>
               <textarea
                 v-model="storyInstruction"

@@ -42,6 +42,7 @@ class StoryRequest(BaseModel):
     premise: Optional[str] = None
     genre: Optional[str] = None
     tone: Optional[str] = None
+    lorebook_id: Optional[str] = Field(default=None, description="Copies this lorebook into the session; like the other setup fields, sent with the first turn.")
     instruction: Optional[str] = "Continue the story naturally from the current point."
     max_tokens: int = Field(default=512, ge=1, le=131072)
     chunk_size: Optional[int] = Field(default=16, ge=1, le=100, description="Number of tokens to buffer before yielding in streaming mode.")

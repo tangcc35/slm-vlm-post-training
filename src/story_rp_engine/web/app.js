@@ -89,6 +89,7 @@ const AppDefinition = {
       customGenre: '',
       storyTone: 'Balanced',
       customTone: '',
+      storyLorebookId: '',
       storyInstruction: '',
       storyInput: '',
       storyChunkSize: 1,
@@ -1513,7 +1514,7 @@ const AppDefinition = {
         tone: this.effectiveTone || 'Balanced',
       };
       this.storyMessages.push({ role: 'user', content: instruction, setup, timestamp: this._timeNow() });
-      await this._streamStoryReply({ ...setup, instruction });
+      await this._streamStoryReply({ ...setup, lorebook_id: this.storyLorebookId || null, instruction });
     },
 
     async sendStoryMessage() {

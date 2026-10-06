@@ -27,6 +27,7 @@ flowchart TD
   - The director reads the whole (compacted) conversation and writes short free-form notes for the writer: what the next passage must do, its beats and where it stops, plus any earlier story facts the writer needs (the writer sees only the recent text).
   - Inject optional state parameters: `{premise?}`, `{genre?}`, `{tone?}`, `{current_text?}`.
   - Keep `include_contents="default"`; without it the workflow gives the director no history.
+  - `director_before_model_callback` appends the session lorebook's matching entries (keys found in the user's message) to the user's latest message. The director passes the lore the passage needs on in its notes; the writer never sees the lorebook.
 - Author the Story Writer instruction in `story_rp_engine.story.writer_agent`:
   - Direct the agent to write polished literary prose adhering to the Director's framing, user instruction, genre, and tone.
   - Enforce zero preamble and seamless continuation from `{current_text?}`.

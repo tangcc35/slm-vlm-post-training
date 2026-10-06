@@ -51,6 +51,11 @@ async def _story_turn_inputs(req: StoryRequest, request: Request) -> tuple[Runne
     for key in ("premise", "genre", "tone"):
         if getattr(req, key):
             state_delta[key] = getattr(req, key)
+    if req.lorebook_id:
+        lorebook = await request.app.state.store.get_lorebook(req.lorebook_id)
+        if lorebook is None:
+            raise HTTPException(status_code=404, detail="Lorebook not found")
+        state_delta["lorebook"] = lorebook.model_dump()
     return runner, instruction, state_delta
 
 

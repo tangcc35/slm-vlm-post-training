@@ -252,6 +252,23 @@ async def test_story_follow_up_uses_end_of_writer_replies(tmp_path):
     assert mock_exec.call_args.kwargs["author"] == "story_writer"
 
 
+@pytest.mark.anyio
+async def test_story_lorebook_id_copies_lorebook_into_session(tmp_path):
+    store = EngineStore(storage_dir=str(tmp_path))
+    lorebook = Lorebook(name="World", entries=[LorebookEntry(keys=["dragon"], content="Dragons sleep under Mount Ash.")])
+    await store.save_lorebook("world", lorebook)
+    client = TestClient(create_app(store=store, config=EngineConfig()))
+
+    with patch("story_rp_engine.api.routes_story.execute_runner_turn", new_callable=AsyncMock, return_value="") as mock_exec:
+        res = client.post("/api/v1/story/expand", json={"session_id": "s1", "lorebook_id": "world"})
+        assert res.status_code == 200
+        assert mock_exec.call_args.kwargs["state_delta"]["lorebook"] == lorebook.model_dump()
+
+        res = client.post("/api/v1/story/expand", json={"session_id": "s1", "lorebook_id": "missing"})
+        assert res.status_code == 404
+        assert res.json()["detail"] == "Lorebook not found"
+
+
 def test_story_expand_endpoint_missing_session_id_fails(tmp_path):
     store = EngineStore(storage_dir=str(tmp_path))
     app = create_app(store=store, config=EngineConfig())
