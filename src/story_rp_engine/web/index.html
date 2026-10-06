@@ -139,7 +139,7 @@
           <!-- Session Controls -->
           <div class="space-y-1.5">
             <div class="flex items-center justify-between">
-              <label class="block text-xs font-medium text-neutral-300">Session ID</label>
+              <label class="block text-xs font-medium text-neutral-300">Chat</label>
               <div class="flex space-x-2">
                 <button
                   @click="newRPSession"
@@ -154,6 +154,52 @@
                 </button>
               </div>
             </div>
+            <div class="relative">
+              <button
+                @click="toggleRPHistory"
+                :disabled="!rpCharId"
+                class="w-full flex items-center justify-between gap-2 bg-neutral-950 border border-neutral-800 rounded-md px-3 py-1.5 text-xs text-neutral-200 hover:border-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed"
+                title="Switch, rename or delete chats">
+                <span class="truncate">{{ rpSessionTitle }}</span>
+                <i data-lucide="chevron-down" class="w-3.5 h-3.5 text-neutral-500 flex-shrink-0"></i>
+              </button>
+              <div v-if="showRPHistory" class="fixed inset-0 z-10" @click="showRPHistory = false"></div>
+              <div
+                v-if="showRPHistory"
+                class="absolute left-0 right-0 mt-1 max-h-72 overflow-y-auto z-20 bg-neutral-900 border border-neutral-800 rounded-md shadow-lg p-1 space-y-1">
+                <p v-if="rpSessions.length === 0" class="px-2.5 py-2 text-[11px] text-neutral-500">No saved chats with this character yet.</p>
+                <div
+                  v-for="s in rpSessions"
+                  :key="s.session_id"
+                  @click="editingSessionId !== s.session_id && openRPSession(s)"
+                  :class="s.session_id === rpSessionId ? 'bg-indigo-950/40' : 'hover:bg-neutral-800/60'"
+                  class="group flex items-start justify-between gap-2 px-2.5 py-1.5 rounded cursor-pointer">
+                  <div class="min-w-0 flex-1">
+                    <input
+                      v-if="editingSessionId === s.session_id"
+                      :id="`title-input-${s.session_id}`"
+                      v-model="editingTitle"
+                      @click.stop
+                      @keydown.enter.prevent="saveRename('rp', s)"
+                      @keydown.esc.prevent="cancelRename"
+                      @blur="saveRename('rp', s)"
+                      placeholder="Title"
+                      class="w-full bg-neutral-950 border border-indigo-600 rounded px-1.5 py-0.5 text-xs text-neutral-200">
+                    <p v-else class="text-xs text-neutral-200 truncate">{{ s.title || s.last_message || s.session_id }}</p>
+                    <p class="text-[10px] text-neutral-500">{{ formatSessionTime(s.updated_at) }}</p>
+                  </div>
+                  <div class="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 flex-shrink-0">
+                    <button @click.stop="startRename(s)" class="text-neutral-500 hover:text-indigo-300" title="Rename">
+                      <i data-lucide="pencil" class="w-3.5 h-3.5"></i>
+                    </button>
+                    <button @click.stop="deleteRPSession(s)" class="text-neutral-500 hover:text-rose-400" title="Delete">
+                      <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <label class="block text-[11px] text-neutral-500 pt-1">Session ID</label>
             <input
               type="text"
               v-model="rpSessionId"
@@ -348,7 +394,50 @@
         <!-- Story Toolbar -->
         <div class="flex flex-wrap items-center justify-between gap-2 px-4 py-2 border-b border-neutral-800 bg-neutral-900/40 text-xs text-neutral-400 flex-shrink-0">
           <div class="flex items-center space-x-3">
-            <span class="font-mono text-neutral-500" title="Story session ID">{{ storySessionId }}</span>
+            <div class="relative">
+              <button
+                @click="toggleStoryHistory"
+                class="w-56 flex items-center justify-between gap-2 bg-neutral-950 border border-neutral-800 rounded-md px-3 py-1.5 text-xs text-neutral-200 hover:border-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed"
+                title="Switch, rename or delete stories">
+                <span class="truncate">{{ storySessionTitle }}</span>
+                <i data-lucide="chevron-down" class="w-3.5 h-3.5 text-neutral-500 flex-shrink-0"></i>
+              </button>
+              <div v-if="showStoryHistory" class="fixed inset-0 z-10" @click="showStoryHistory = false"></div>
+              <div
+                v-if="showStoryHistory"
+                class="absolute left-0 mt-1 w-72 max-h-80 overflow-y-auto z-20 bg-neutral-900 border border-neutral-800 rounded-md shadow-lg p-1 space-y-1">
+                <p v-if="storySessions.length === 0" class="px-2.5 py-2 text-[11px] text-neutral-500">No saved stories yet.</p>
+                <div
+                  v-for="s in storySessions"
+                  :key="s.session_id"
+                  @click="editingSessionId !== s.session_id && openStorySession(s)"
+                  :class="s.session_id === storySessionId ? 'bg-indigo-950/40' : 'hover:bg-neutral-800/60'"
+                  class="group flex items-start justify-between gap-2 px-2.5 py-1.5 rounded cursor-pointer">
+                  <div class="min-w-0 flex-1">
+                    <input
+                      v-if="editingSessionId === s.session_id"
+                      :id="`title-input-${s.session_id}`"
+                      v-model="editingTitle"
+                      @click.stop
+                      @keydown.enter.prevent="saveRename('story', s)"
+                      @keydown.esc.prevent="cancelRename"
+                      @blur="saveRename('story', s)"
+                      placeholder="Title"
+                      class="w-full bg-neutral-950 border border-indigo-600 rounded px-1.5 py-0.5 text-xs text-neutral-200">
+                    <p v-else class="text-xs text-neutral-200 truncate">{{ s.title || s.premise || s.session_id }}</p>
+                    <p class="text-[10px] text-neutral-500">{{ [s.genre, s.tone].filter(Boolean).join(' · ') }}{{ s.genre || s.tone ? ' · ' : '' }}{{ formatSessionTime(s.updated_at) }}</p>
+                  </div>
+                  <div class="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 flex-shrink-0">
+                    <button @click.stop="startRename(s)" class="text-neutral-500 hover:text-indigo-300" title="Rename">
+                      <i data-lucide="pencil" class="w-3.5 h-3.5"></i>
+                    </button>
+                    <button @click.stop="deleteStorySession(s)" class="text-neutral-500 hover:text-rose-400" title="Delete">
+                      <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
             <span class="text-neutral-600">&bull;</span>
             <span class="font-mono">{{ wordCount }} words</span>
             <span class="text-neutral-600">&bull;</span>
@@ -1067,6 +1156,6 @@
   </div>
 
   <!-- Vue Application Logic Script -->
-  <script src="app.js?v=2"></script>
+  <script src="app.js?v=5"></script>
 </body>
 </html>

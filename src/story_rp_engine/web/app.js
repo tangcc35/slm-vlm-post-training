@@ -73,6 +73,11 @@ const AppDefinition = {
       isGeneratingRP: false,
       rpAbortController: null,
       rpInput: '',
+      rpSessions: [], // past chats with the selected character, newest first
+      showRPHistory: false,
+      // History title being renamed (RP and story lists share it; only one row edits at a time).
+      editingSessionId: null,
+      editingTitle: '',
 
       // =======================================================================
       // Story Co-Pilot Reactive State (Task 7)
@@ -90,10 +95,22 @@ const AppDefinition = {
       storyMessages: [], // { role: 'user' | 'assistant', content, timestamp, setup? }
       isGeneratingStory: false,
       storyAbortController: null,
+      storySessions: [], // past stories, newest first
+      showStoryHistory: false,
     };
   },
 
   computed: {
+    // Titles shown on the history dropdowns; a session not in the list yet is new.
+    rpSessionTitle() {
+      const s = this.rpSessions.find((x) => x.session_id === this.rpSessionId);
+      return (s && (s.title || s.last_message)) || 'New chat';
+    },
+    storySessionTitle() {
+      const s = this.storySessions.find((x) => x.session_id === this.storySessionId);
+      return (s && (s.title || s.premise || s.session_id)) || 'New story';
+    },
+
     // Character Filtering
     filteredCharacters() {
       const query = (this.charSearchQuery || this.charSearch || '').toLowerCase().trim();
@@ -873,38 +890,10 @@ const AppDefinition = {
     },
 
     onRPCharChange() {
-      const char = this.characters.find((c) => c.char_id === this.rpCharId);
+      // Each character gets its own chat, so switching starts a new session.
       this.selectedGreetingIndex = 0;
-      if (char) {
-        const text = char.first_mes || '';
-        // If chat is empty, or only contains an initial assistant greeting, set/update greeting
-        if (this.rpMessages.length === 0) {
-          if (text) {
-            this.rpMessages.push({
-              role: 'assistant',
-              content: text,
-              isGreeting: true,
-              timestamp: new Date().toLocaleTimeString([], {
-                hour: '2-digit',
-                minute: '2-digit',
-              }),
-            });
-          }
-        } else if (this.rpMessages.length === 1 && this.rpMessages[0].role === 'assistant') {
-          if (text) {
-            this.rpMessages[0].content = text;
-            this.rpMessages[0].isGreeting = true;
-            this.rpMessages[0].timestamp = new Date().toLocaleTimeString([], {
-              hour: '2-digit',
-              minute: '2-digit',
-            });
-          } else {
-            this.rpMessages = [];
-          }
-        }
-      }
-      this.refreshIcons();
-      this.scrollRPChatToBottom();
+      this.newRPSession();
+      this.loadRPSessions();
     },
 
     onGreetingChange() {
@@ -995,7 +984,107 @@ const AppDefinition = {
       this.rpMessages = [];
       this.rpLorebookSentKey = null;
       this.showToast('Roleplay session cleared.', 'info');
+      this.loadRPSessions();
       this.refreshIcons();
+    },
+
+    formatSessionTime(seconds) {
+      return new Date(seconds * 1000).toLocaleString([], {
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+    },
+
+    toggleRPHistory() {
+      this.showRPHistory = !this.showRPHistory;
+      if (this.showRPHistory) this.loadRPSessions();
+    },
+
+    startRename(s) {
+      this.editingSessionId = s.session_id;
+      this.editingTitle = s.title || '';
+      this.$nextTick(() => {
+        const input = document.getElementById(`title-input-${s.session_id}`);
+        if (input) input.focus();
+      });
+    },
+
+    cancelRename() {
+      this.editingSessionId = null;
+    },
+
+    // kind is 'rp' or 'story'. Runs on Enter and on blur; the first call wins.
+    async saveRename(kind, s) {
+      if (this.editingSessionId !== s.session_id) return;
+      this.editingSessionId = null;
+      const title = this.editingTitle.trim();
+      if (title === (s.title || '')) return;
+      const base = kind === 'rp' ? '/api/v1/rp/sessions' : '/api/v1/story/sessions';
+      try {
+        const res = await fetch(`${base}/${encodeURIComponent(s.session_id)}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ title }),
+        });
+        if (!res.ok) throw new Error(`Server returned HTTP ${res.status}`);
+        s.title = title;
+      } catch (err) {
+        this.showToast(err.message || 'Failed to rename.', 'error');
+      }
+    },
+
+    async loadRPSessions() {
+      if (!this.rpCharId) {
+        this.rpSessions = [];
+        return;
+      }
+      try {
+        const res = await fetch(`/api/v1/rp/sessions?char_id=${encodeURIComponent(this.rpCharId)}`);
+        if (res.ok) this.rpSessions = await res.json();
+      } catch (err) {
+        console.warn('Failed to load roleplay history:', err);
+      }
+      this.refreshIcons();
+    },
+
+    async openRPSession(s) {
+      this.stopGeneratingRP();
+      try {
+        const res = await fetch(`/api/v1/rp/sessions/${encodeURIComponent(s.session_id)}/turns`);
+        if (!res.ok) throw new Error(`Server returned HTTP ${res.status}`);
+        const { turns } = await res.json();
+        const messages = turns.map((t) => ({
+          role: t.role === 'user' ? 'user' : 'assistant',
+          content: t.text,
+          timestamp: '',
+        }));
+        if (s.greeting) {
+          messages.unshift({ role: 'assistant', content: s.greeting, isGreeting: true, timestamp: '' });
+        }
+        this.rpSessionId = s.session_id;
+        this.rpMessages = messages;
+        this.rpUserName = s.user_name || 'User';
+        this.rpAuthorsNote = s.authors_note || '';
+        this.rpLorebookSentKey = null; // re-send the selected lorebook with the next message
+        this.showRPHistory = false;
+        this.refreshIcons();
+        this.scrollRPChatToBottom();
+      } catch (err) {
+        this.showToast(err.message || 'Failed to open chat.', 'error');
+      }
+    },
+
+    async deleteRPSession(s) {
+      if (!confirm('Delete this chat? This cannot be undone.')) return;
+      if (s.session_id === this.rpSessionId) {
+        await this.clearRPSession();
+        this.newRPSession();
+      } else {
+        await fetch(`/api/v1/rp/sessions/${encodeURIComponent(s.session_id)}`, { method: 'DELETE' });
+        this.loadRPSessions();
+      }
     },
 
     async copyMessage(text) {
@@ -1348,6 +1437,7 @@ const AppDefinition = {
       } finally {
         this.isGeneratingRP = false;
         this.rpAbortController = null;
+        this.loadRPSessions();
         this.scrollRPChatToBottom();
         this.refreshIcons();
       }
@@ -1364,14 +1454,54 @@ const AppDefinition = {
     },
 
     newStorySession() {
-      if (this.storyMessages.length > 0 && !confirm('Start a new story? The current chat will be cleared.')) {
-        return;
-      }
       this.stopGeneratingStory();
       this.storySessionId = 'story_' + Math.random().toString(36).substring(2, 10);
       this.storyMessages = [];
       this.storyInput = '';
       this.showToast('New story session initialized.', 'info');
+    },
+
+    async loadStorySessions() {
+      try {
+        const res = await fetch('/api/v1/story/sessions');
+        if (res.ok) this.storySessions = await res.json();
+      } catch (err) {
+        console.warn('Failed to load story history:', err);
+      }
+      this.refreshIcons();
+    },
+
+    toggleStoryHistory() {
+      this.showStoryHistory = !this.showStoryHistory;
+      if (this.showStoryHistory) this.loadStorySessions();
+    },
+
+    async openStorySession(s) {
+      this.stopGeneratingStory();
+      try {
+        const res = await fetch(`/api/v1/story/sessions/${encodeURIComponent(s.session_id)}/messages`);
+        if (!res.ok) throw new Error(`Server returned HTTP ${res.status}`);
+        const { messages, setup } = await res.json();
+        this.storyMessages = messages.map((m) => ({ ...m, timestamp: '' }));
+        if (this.storyMessages.length > 0) this.storyMessages[0].setup = setup;
+        this.storySessionId = s.session_id;
+        this.storyInput = '';
+        this.showStoryHistory = false;
+        this.scrollStoryChatToBottom();
+      } catch (err) {
+        this.showToast(err.message || 'Failed to open story.', 'error');
+      }
+    },
+
+    async deleteStorySession(s) {
+      if (!confirm('Delete this story? This cannot be undone.')) return;
+      await fetch(`/api/v1/story/sessions/${encodeURIComponent(s.session_id)}`, { method: 'DELETE' });
+      if (s.session_id === this.storySessionId) {
+        this.stopGeneratingStory();
+        this.storySessionId = 'story_' + Math.random().toString(36).substring(2, 10);
+        this.storyMessages = [];
+      }
+      this.loadStorySessions();
     },
 
     async startStory() {
@@ -1460,6 +1590,7 @@ const AppDefinition = {
       } finally {
         this.isGeneratingStory = false;
         this.storyAbortController = null;
+        this.loadStorySessions();
         this.scrollStoryChatToBottom();
       }
     },
@@ -1500,6 +1631,7 @@ const AppDefinition = {
     this.healthInterval = setInterval(() => this.checkHealth(), 10000);
     this.loadCharacters();
     this.loadLorebooks();
+    this.loadStorySessions();
     this.refreshIcons();
   },
 

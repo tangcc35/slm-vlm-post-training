@@ -134,11 +134,15 @@ async def test_session_turns_with_compaction_event(tmp_path):
 
     resp = client.get("/api/v1/rp/sessions/compacted_session/turns")
     assert resp.status_code == 200
+    # The summary is ADK-only; the chat still shows every raw message.
     turns = resp.json()["turns"]
-    assert len(turns) == 4
-    assert turns[2]["role"] == "compaction"
-    assert turns[2]["text"] == "Compacted conversation summary."
-    assert turns[2]["is_compaction"] is True
+    assert [(t["index"], t["text"]) for t in turns] == [(0, "Earlier turn"), (1, "Earlier response"), (2, "New turn")]
+
+    # Delete indexes count shown messages, so deleting message 2 removes "New turn", not the summary.
+    resp = client.post("/api/v1/rp/sessions/compacted_session/turns/delete", json={"turn_index": 2})
+    assert resp.json()["remaining_turns"] == 3
+    turns = client.get("/api/v1/rp/sessions/compacted_session/turns").json()["turns"]
+    assert [t["text"] for t in turns] == ["Earlier turn", "Earlier response"]
 
 
 class MockCompactionLlm(BaseLlm):

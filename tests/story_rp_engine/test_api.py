@@ -411,7 +411,13 @@ def test_rp_chat_authors_note_and_custom_user(tmp_path):
         assert kwargs["user_id"] == "User"
         assert kwargs["session_id"] == "session_special"
         assert kwargs["message"] == "Play the hidden song."
-        assert kwargs["state_delta"] == {"authors_note": "[Style: Melancholy]", "user_name": "Adventurer", "greeting": None}
+        assert kwargs["state_delta"] == {
+            "authors_note": "[Style: Melancholy]",
+            "user_name": "Adventurer",
+            "greeting": None,
+            "char_id": "lyra",
+            "last_message": "Play the hidden song.",
+        }
 
 
 
@@ -927,3 +933,84 @@ async def test_rp_session_turns_found_for_custom_user_name(tmp_path):
     client.post("/api/v1/rp/chat", json={"char_id": "ava", "session_id": "s1", "message": "Hi there", "user_name": "Alice"})
     turns = client.get("/api/v1/rp/sessions/s1/turns").json()["turns"]
     assert [t["text"] for t in turns] == ["Hi there", "Hm."]
+
+
+@pytest.mark.anyio
+async def test_rp_sessions_listed_per_character(tmp_path):
+    client, prompts = await _recording_rp_app(tmp_path)
+    registry = client.app.state.agent_registry
+    await client.app.state.store.save_character("bo", CharacterCard(char_id="bo", name="Bo"))
+    (await registry.get_or_create_rp_agent("bo")).model = (await registry.get_or_create_rp_agent("ava")).model
+    client.post("/api/v1/rp/chat", json={"char_id": "ava", "session_id": "s1", "message": "First chat", "greeting": "Hi!"})
+    client.post("/api/v1/rp/chat", json={"char_id": "ava", "session_id": "s2", "message": "Second chat"})
+    client.post("/api/v1/rp/chat", json={"char_id": "bo", "session_id": "s3", "message": "Other character"})
+
+    sessions = client.get("/api/v1/rp/sessions", params={"char_id": "ava"}).json()
+    assert [(s["session_id"], s["last_message"]) for s in sessions] == [("s2", "Second chat"), ("s1", "First chat")]
+    assert sessions[1]["greeting"] == "Hi!"
+
+    assert client.delete("/api/v1/rp/sessions/s2").status_code == 200
+    assert [s["session_id"] for s in client.get("/api/v1/rp/sessions", params={"char_id": "ava"}).json()] == ["s1"]
+
+
+@pytest.mark.anyio
+async def test_story_sessions_list_messages_and_delete(tmp_path):
+    from google.adk.events import Event
+    from google.genai import types
+
+    app = create_app(store=EngineStore(storage_dir=str(tmp_path)), config=EngineConfig())
+    service = app.state.agent_registry.get_story_runner().session_service
+    session = await service.create_session(
+        app_name="story_app", user_id="User", session_id="s1", state={"premise": "A lighthouse", "genre": "Mystery"}
+    )
+    for author, text in [("user", "Begin."), ("story_director", "notes"), ("story_writer", "The lamp went dark.")]:
+        role = "user" if author == "user" else "model"
+        await service.append_event(session, Event(author=author, content=types.Content(role=role, parts=[types.Part(text=text)])))
+    client = TestClient(app)
+
+    sessions = client.get("/api/v1/story/sessions").json()
+    assert [(s["session_id"], s["premise"]) for s in sessions] == [("s1", "A lighthouse")]
+
+    body = client.get("/api/v1/story/sessions/s1/messages").json()
+    assert body["messages"] == [
+        {"role": "user", "content": "Begin."},
+        {"role": "assistant", "content": "The lamp went dark."},
+    ]
+    assert body["setup"] == {"premise": "A lighthouse", "genre": "Mystery", "tone": None}
+
+    assert client.delete("/api/v1/story/sessions/s1").status_code == 200
+    assert client.get("/api/v1/story/sessions").json() == []
+    assert client.get("/api/v1/story/sessions/s1/messages").status_code == 404
+
+
+@pytest.mark.anyio
+async def test_rp_session_rename_keeps_chat_unchanged(tmp_path):
+    client, prompts = await _recording_rp_app(tmp_path)
+    client.post("/api/v1/rp/chat", json={"char_id": "ava", "session_id": "s1", "message": "Hello"})
+
+    assert client.patch("/api/v1/rp/sessions/s1", json={"title": " Lighthouse night "}).status_code == 200
+    assert client.get("/api/v1/rp/sessions", params={"char_id": "ava"}).json()[0]["title"] == "Lighthouse night"
+    assert [t["text"] for t in client.get("/api/v1/rp/sessions/s1/turns").json()["turns"]] == ["Hello", "Hm."]
+
+    # The title survives a turn delete, which rebuilds the session.
+    client.post("/api/v1/rp/sessions/s1/turns/delete", json={"turn_index": 1})
+    assert client.get("/api/v1/rp/sessions", params={"char_id": "ava"}).json()[0]["title"] == "Lighthouse night"
+    assert client.patch("/api/v1/rp/sessions/missing", json={"title": "x"}).status_code == 404
+
+
+@pytest.mark.anyio
+async def test_story_session_rename(tmp_path):
+    from google.adk.events import Event
+    from google.genai import types
+
+    app = create_app(store=EngineStore(storage_dir=str(tmp_path)), config=EngineConfig())
+    service = app.state.agent_registry.get_story_runner().session_service
+    session = await service.create_session(app_name="story_app", user_id="User", session_id="s1")
+    await service.append_event(
+        session, Event(author="story_writer", content=types.Content(role="model", parts=[types.Part(text="Once.")]))
+    )
+    client = TestClient(app)
+
+    assert client.patch("/api/v1/story/sessions/s1", json={"title": "The Lamp"}).status_code == 200
+    assert client.get("/api/v1/story/sessions").json()[0]["title"] == "The Lamp"
+    assert client.get("/api/v1/story/sessions/s1/messages").json()["messages"] == [{"role": "assistant", "content": "Once."}]

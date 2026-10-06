@@ -1,6 +1,8 @@
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
+from google.adk.events import Event, EventActions
 from google.adk.runners import Runner
+from pydantic import BaseModel
 from story_rp_engine.core.agent_utils import (
     execute_runner_turn,
     format_sse_stream,
@@ -88,3 +90,68 @@ async def expand_story_stream(req: StoryRequest, request: Request):
             "X-Accel-Buffering": "no",
         },
     )
+
+
+@router.get("/sessions")
+async def list_story_sessions(request: Request):
+    """Stories, newest first."""
+    runner = _get_story_runner(request)
+    response = await runner.session_service.list_sessions(app_name=runner.app_name, user_id="User")
+    return [
+        {
+            "session_id": s.id,
+            "updated_at": s.last_update_time,
+            "title": s.state.get("title"),
+            "premise": s.state.get("premise", ""),
+            "genre": s.state.get("genre"),
+            "tone": s.state.get("tone"),
+        }
+        for s in sorted(response.sessions, key=lambda s: s.last_update_time, reverse=True)
+    ]
+
+
+@router.get("/sessions/{session_id}/messages")
+async def get_story_messages(session_id: str, request: Request):
+    """The chat as the UI shows it: the user's messages and the writer's replies, without the director's notes
+    or compaction summaries (compaction keeps the raw events)."""
+    runner = _get_story_runner(request)
+    session = await runner.session_service.get_session(
+        app_name=runner.app_name, user_id="User", session_id=session_id
+    )
+    if not session:
+        raise HTTPException(status_code=404, detail="Story not found")
+    messages = []
+    for ev in session.events:
+        if ev.author not in ("user", "story_writer") or not ev.content or not ev.content.parts:
+            continue
+        text = "".join(p.text for p in ev.content.parts if p.text)
+        if text:
+            messages.append({"role": "user" if ev.author == "user" else "assistant", "content": text})
+    setup = {key: session.state.get(key) for key in ("premise", "genre", "tone")}
+    return {"messages": messages, "setup": setup}
+
+
+class RenameSessionRequest(BaseModel):
+    title: str
+
+
+@router.patch("/sessions/{session_id}")
+async def rename_story_session(session_id: str, req: RenameSessionRequest, request: Request):
+    runner = _get_story_runner(request)
+    session = await runner.session_service.get_session(
+        app_name=runner.app_name, user_id="User", session_id=session_id
+    )
+    if not session:
+        raise HTTPException(status_code=404, detail="Story not found")
+    # A state-only event (see routes_rp.rename_rp_session).
+    await runner.session_service.append_event(
+        session, Event(author="user", actions=EventActions(state_delta={"title": req.title.strip()}))
+    )
+    return {"status": "renamed", "session_id": session_id}
+
+
+@router.delete("/sessions/{session_id}")
+async def delete_story_session(session_id: str, request: Request):
+    runner = _get_story_runner(request)
+    await runner.session_service.delete_session(app_name=runner.app_name, user_id="User", session_id=session_id)
+    return {"status": "deleted", "session_id": session_id}

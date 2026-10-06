@@ -78,7 +78,7 @@ def test_root_html_serves_all_tabs_and_dependencies(client):
 
     # Verify static stylesheet and script links
     assert 'href="style.css"' in html
-    assert 'src="app.js?v=2"' in html
+    assert 'src="app.js?v=5"' in html
 
 
 def test_static_assets_delivery_and_content_types(client):
