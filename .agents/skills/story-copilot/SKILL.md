@@ -5,7 +5,7 @@ description: Use when designing, configuring, or modifying the Google ADK 2.0 St
 
 # Story Co-Pilot Skill
 
-Operational guide and guardrails for building, tuning, and extending the collaborative multi-agent storytelling pipeline in `story_rp_engine.story`, powered by Google ADK 2.0 declarative workflow graphs.
+Operational guide and guardrails for building, tuning, and extending the collaborative multi-agent storytelling pipeline in `story_rp_engine.story`, powered by a Google ADK 2.0 dynamic workflow.
 
 ---
 
@@ -15,28 +15,27 @@ Follow these sequential steps when designing, configuring, or debugging the Stor
 
 ```mermaid
 flowchart TD
-    A["1. Define Director & Writer Prompts"] --> B["2. Construct Declarative Workflow Graph"]
+    A["1. Define Director & Writer Prompts"] --> B["2. Construct the Dynamic Workflow"]
     B --> C["3. Wire Session State Delta Injection"]
-    C --> D["4. Configure Terminal Node Filtering & SSE Streaming"]
+    C --> D["4. Configure Writer-Only Filtering & SSE Streaming"]
     D --> E["5. Verify Branching States & Story Continuity"]
     E --> F["6. Run End-to-End Workflow Verification"]
 ```
 
 ### 1. Define Director & Writer Prompts
 - Author the Story Director instruction in `story_rp_engine.story.director_agent`:
-  - Enforce concise scene framing, emotional atmosphere, and pacing guidance.
-  - Constrain output to exactly 2–3 brief sentences.
+  - The director reads the whole (compacted) conversation and writes short free-form notes for the writer: what the next passage must do, its beats and where it stops, plus any earlier story facts the writer needs (the writer sees only the recent text).
   - Inject optional state parameters: `{premise?}`, `{genre?}`, `{tone?}`, `{current_text?}`.
+  - Keep `include_contents="default"`; without it the workflow gives the director no history.
 - Author the Story Writer instruction in `story_rp_engine.story.writer_agent`:
   - Direct the agent to write polished literary prose adhering to the Director's framing, user instruction, genre, and tone.
   - Enforce zero preamble and seamless continuation from `{current_text?}`.
 - Consult `references/director-writer-pipeline.md` for prompt templates, pacing rules, and anti-preamble constraints.
 
-### 2. Construct Declarative Workflow Graph
-- Define the multi-agent graph in `story_rp_engine.story.workflow.create_story_workflow`:
-  - Instantiate `director` and `writer` using `EngineConfig`.
-  - Assemble the workflow DAG using declarative edges: `edges=[("START", director, writer)]`.
-  - Ensure graph nodes resolve to `__START__`, `story_director`, and `story_writer`.
+### 2. Construct the Dynamic Workflow
+- `story_rp_engine.story.workflow.create_story_workflow` builds `Workflow(edges=[("START", story_turn)])`, where `story_turn` is an `@node(rerun_on_resume=True)` function:
+  - `notes = await ctx.run_node(director)`: no input, so the director reads the user's message from the history instead of seeing it twice.
+  - `return await ctx.run_node(writer, notes)`: the writer's only message is the director's notes.
 - Consult `references/story-workflow-graph.md` for DAG topologies, node execution sequence, and graph validation.
 
 ### 3. Wire Session State Delta Injection
@@ -44,18 +43,18 @@ flowchart TD
   - `premise`: Global story premise or background world lore.
   - `genre`: Primary genre taxonomy (e.g. `"Fantasy"`, `"Sci-Fi"`).
   - `tone`: Narrative tenor (e.g. `"Epic"`, `"Grimdark"`, `"Whimsical"`).
-  - `current_text`: Prose accumulated across preceding turns.
+  - `current_text`: The last `RECENT_TEXT_CHARS` (8000) characters of the story, which `routes_story` builds from the session's earlier `story_writer` replies.
+- The story UI is a chat. `premise`, `genre` and `tone` come with the first turn and stay in state; `routes_story` only writes the ones a request sets, so follow-ups send just `instruction`.
   - `instruction`: Immediate user directive guiding the upcoming scene beat.
 - Pass `state_delta` to `runner.run_async(user_id=..., session_id=..., new_message=..., state_delta=state_delta)`.
 
 ### 4. Configure Terminal Node Filtering & SSE Streaming
-- Use `story_rp_engine.core.agent_utils._get_terminal_node_name` to dynamically identify the terminal node (`story_writer`).
-- Filter intermediate events in `execute_runner_turn` and `stream_runner_turn` (`event.author != target_node`) so intermediate directorial memos do not contaminate user-facing prose.
+- Pass `author="story_writer"` to `execute_runner_turn` and `stream_runner_turn` so only the writer's events reach the user; the director's notes are skipped.
 - For interactive streaming, wrap the asynchronous generator in `format_sse_stream` with configurable token chunking.
 
 ### 5. Verify Branching States & Story Continuity
 - Support branching storylines by cloning session state under a new `session_id` (`f"{parent_session_id}_branch_{timestamp}"`).
-- Support scene re-rolls by executing new turns with identical `current_text` and modified `instruction` or `tone`.
+- Support scene re-rolls by executing new turns with a modified `instruction` or `tone`.
 - Verify that previous scene prose remains immutable on divergent paths.
 
 ### 6. Run End-to-End Workflow Verification
@@ -65,20 +64,20 @@ flowchart TD
 
 ## Critical Guardrails
 
-1. **Strict 2–3 Sentence Director Guidance**:
-   - The Director agent must never write prose, dialogue, or full scene drafts. Its output must remain strictly 2–3 sentences of scene framing, atmosphere, and pacing guidance.
-2. **Terminal Node Output Suppression**:
-   - Upstream directorial memos must be suppressed in end-user narrative feeds (`event.author == target_node`). Never leak Director planning text into the final prose output unless operating in dedicated HITL co-pilot mode.
+1. **Director Writes Notes, Not Prose**:
+   - The Director agent must never write prose, dialogue, or full scene drafts. Its output is short notes: the passage's goal, beats and stopping point, plus earlier story facts the writer needs.
+2. **Writer-Only Output**:
+   - Director notes must not reach end users: story routes pass `author="story_writer"` to the runner helpers. Never leak Director planning text into the final prose output unless operating in dedicated HITL co-pilot mode.
 3. **Anti-Preamble & Zero Meta-Commentary**:
    - The Writer agent must immediately generate narrative prose. Conversational filler (e.g. *"Here is the continuation:"*, *"Sure, I can write that!"*) is strictly prohibited.
 4. **Seamless Continuation (No Repetition)**:
    - The Writer must resume directly from the end of `current_text` without repeating the final sentence or re-introducing characters already present in the active scene.
 5. **Google ADK Optional State Syntax (`{var?}`)**:
    - All state variables in agent instructions must use the `{variable?}` optional syntax. Unmarked `{variable}` placeholders will crash the ADK prompt builder when fields are omitted from `state_delta`.
-6. **SLM Context Window Stewardship**:
-   - For 8B Small Language Models (SLMs) operating with 2K–8K context limits, prune or summarize `current_text` once history exceeds 1,500 tokens to prevent KV-cache exhaustion.
-7. **Declarative Workflow Integrity**:
-   - Workflows must use declarative ADK graph edges `("START", director, writer)`. Do not use deprecated procedural wrapper functions (`format_story_input`, `format_story_director_input`).
+6. **Context Window Stewardship**:
+   - Agents see only the last `RECENT_TEXT_CHARS` of `current_text`; earlier parts reach the director through session history and compaction summaries. `story_app` uses turn-count compaction only (no `token_threshold`), because token-threshold compaction can run between the director and the writer and summarize away the notes.
+7. **Workflow Shape**:
+   - Keep the director reading history and the writer reading only the notes. Don't feed the user message to the director as node input (it would see it twice), and don't use `mode="chat"` agents in a static graph (nodes after them never run).
 
 ---
 
@@ -103,4 +102,4 @@ uv run pytest tests/story_rp_engine/ -v
 
 Detailed technical specifications are available in the 1-level deep references:
 - `references/director-writer-pipeline.md`: Story Director prompt engineering, pacing/tone steering outputs, Story Writer prose constraints, anti-preamble rules, and SLM context budget management.
-- `references/story-workflow-graph.md`: Google ADK 2.0 declarative graph architecture, topological execution order, terminal node filtering, SSE streaming, branching scene trees, and human review loop patterns.
+- `references/story-workflow-graph.md`: Google ADK 2.0 dynamic workflow architecture, what each agent sees, writer-only filtering, SSE streaming, story compaction, branching scene trees, and human review loop patterns.

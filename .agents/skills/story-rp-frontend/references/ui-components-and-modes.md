@@ -115,47 +115,39 @@ flowchart LR
 A collaborative multi-agent creative writing environment interfacing with Google ADK 2.0 `story_director` and `story_writer` agents.
 
 ```mermaid
-flowchart LR
+flowchart TB
     subgraph StoryTab["Story Co-Pilot (activeTab === 'story')"]
         direction TB
-        Controls["Left Sidebar (w-80 lg:w-96)
-        - Session ID (storySessionId)
-        - Story Premise (storyPremise)
-        - Genre Selector & Custom Input
-        - Tone Selector & Custom Input
-        - Next Turn Instruction (storyInstruction)
-        - Stream Chunk Slider (storyChunkSize)
-        - Expand Story / Stop Generating Button"]
-        Canvas["Right Story Canvas & Workspace
-        - Document Stats (Words & Tokens)
-        - Toolbar: Clear, Undo, Copy, .md, .txt
-        - Distraction-Free Serif Textarea (storyCurrentText)
-        - Collapsible Director Scene Beats Inspector"]
-        Controls --- Canvas
+        Toolbar["Toolbar
+        - Session ID, word & token counts
+        - Chunk slider (storyChunkSize)
+        - Copy, .md, .txt, New Story"]
+        Feed["Chat Feed (#story-chat-feed)
+        - Setup card while storyMessages is empty
+        - Then user / Co-Pilot bubbles; the first user bubble shows the setup"]
+        Input["Follow-up Input (storyInput)
+        - Enter to send, Stop Generating"]
+        Toolbar --- Feed --- Input
     end
 ```
 
-### Story Directives & Controls
-- **Story Session ID (`storySessionId`)**: Auto-generated (`story_<random>`).
-- **Story Premise (`storyPremise`)**: Overarching narrative context or world setup.
+### Setup Card (first turn)
+Shown in the feed while `storyMessages` is empty. `startStory()` sends the setup with the opening instruction; the backend keeps the setup in session state.
+- **Premise (`storyPremise`)**: Overarching narrative context or world setup.
 - **Genre Selector (`storyGenre`, `customGenre`)**:
   - Presets: Fiction, Fantasy, Sci-Fi, Cyberpunk, Mystery, Horror, Romance, Slice of Life, Custom.
   - Computed `effectiveGenre` resolves custom input when "Custom" is selected.
 - **Tone Selector (`storyTone`, `customTone`)**:
   - Presets: Balanced, Gritty, Dark, Whimsical, Tense, Poetic, Sensual, Epic, Custom.
   - Computed `effectiveTone` resolves custom input.
-- **Next Turn Instruction (`storyInstruction`)**: Direct scene steering instruction (e.g. `"Describe the eerie mist rising"`).
-- **Stream Chunk Size Slider (`storyChunkSize`)**: Token chunk buffering (1–64 tokens, default 16).
-- **Expand Story Button (`expandStory()`)**: Dispatches streaming request to `/api/v1/story/expand/stream`.
+- **Opening Instruction (`storyInstruction`)**: How the story should begin (defaults to "Begin the story.").
 
-### Document Toolbar & Story Canvas
-- **Word & Token Counter**: Real-time stats computing `wordCount` and `estimatedTokens` (`Math.round(wordCount * 1.3)`).
-- **Undo Expansion (`undoLastExpansion()`)**: Reverts to `previousStoryText` and pops from `storyHistory` stack.
-- **Exporting**:
-  - `.md`: Downloads draft as markdown file using client-side `Blob` and `URL.createObjectURL`.
-  - `.txt`: Downloads draft as plain text.
-- **Distraction-Free Canvas**: Full-height auto-scaling textarea with serif font (`font-serif text-base md:text-lg`).
-- **ADK Director Beats Inspector**: Collapsible bottom accordion (`showDirectorBeats`) displaying structured scene beats (`directorBeats` array) emitted during the multi-agent expansion workflow.
+### Chat Turns & Toolbar
+- **Follow-ups (`sendStoryMessage()`)**: Each message is the next turn's `instruction`: continue, steer or revise.
+- **Streaming (`_streamStoryReply()`)**: Posts to `/api/v1/story/expand/stream` and appends deltas to a new Co-Pilot bubble.
+- **Story text (`storyText`)**: The Co-Pilot replies joined in order; it drives `wordCount`, `estimatedTokens` (`Math.round(wordCount * 1.3)`), Copy and export.
+- **Exporting**: `.md` / `.txt` downloads of `storyText` via `Blob` and `URL.createObjectURL`.
+- **New Story (`newStorySession()`)**: New `storySessionId`, empty chat, setup card again.
 
 ---
 

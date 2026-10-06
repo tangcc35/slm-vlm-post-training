@@ -78,22 +78,18 @@ const AppDefinition = {
       // Story Co-Pilot Reactive State (Task 7)
       // =======================================================================
       storySessionId: 'story_' + Math.random().toString(36).substring(2, 10),
+      // Setup fields: sent with the first turn only, the backend keeps them in session state.
       storyPremise: '',
       storyGenre: 'Fiction',
-      storyCustomGenre: '',
       customGenre: '',
       storyTone: 'Balanced',
-      storyCustomTone: '',
       customTone: '',
-      storyInstruction: 'Continue the story naturally from the current point.',
+      storyInstruction: '',
+      storyInput: '',
       storyChunkSize: 1,
-      storyCurrentText: '',
-      previousStoryText: null,
-      storyHistory: [],
+      storyMessages: [], // { role: 'user' | 'assistant', content, timestamp, setup? }
       isGeneratingStory: false,
       storyAbortController: null,
-      showDirectorBeats: false,
-      directorBeats: [],
     };
   },
 
@@ -154,9 +150,16 @@ const AppDefinition = {
       return char ? char.name : 'Assistant';
     },
 
-    // Story Word & Token Counters
+    // The story so far: the Co-Pilot's replies in order.
+    storyText() {
+      return this.storyMessages
+        .filter((m) => m.role === 'assistant')
+        .map((m) => m.content.trim())
+        .join('\n\n');
+    },
+
     wordCount() {
-      const text = (this.storyCurrentText || '').trim();
+      const text = this.storyText.trim();
       return text ? text.split(/\s+/).length : 0;
     },
 
@@ -165,20 +168,11 @@ const AppDefinition = {
     },
 
     effectiveGenre() {
-      const custom = this.storyCustomGenre || this.customGenre || '';
-      return this.storyGenre === 'Custom' ? custom : this.storyGenre;
+      return this.storyGenre === 'Custom' ? this.customGenre.trim() : this.storyGenre;
     },
 
     effectiveTone() {
-      const custom = this.storyCustomTone || this.customTone || '';
-      return this.storyTone === 'Custom' ? custom : this.storyTone;
-    },
-
-    canUndo() {
-      return (
-        (this.previousStoryText !== null && this.previousStoryText !== undefined) ||
-        (Array.isArray(this.storyHistory) && this.storyHistory.length > 0)
-      );
+      return this.storyTone === 'Custom' ? this.customTone.trim() : this.storyTone;
     },
   },
 
@@ -201,26 +195,6 @@ const AppDefinition = {
     'charForm.tags_str'(newVal) {
       if (newVal !== this.charTagsInput) {
         this.charTagsInput = newVal || '';
-      }
-    },
-    customGenre(newVal) {
-      if (newVal !== this.storyCustomGenre) {
-        this.storyCustomGenre = newVal || '';
-      }
-    },
-    storyCustomGenre(newVal) {
-      if (newVal !== this.customGenre) {
-        this.customGenre = newVal || '';
-      }
-    },
-    customTone(newVal) {
-      if (newVal !== this.storyCustomTone) {
-        this.storyCustomTone = newVal || '';
-      }
-    },
-    storyCustomTone(newVal) {
-      if (newVal !== this.customTone) {
-        this.customTone = newVal || '';
       }
     },
   },
@@ -1378,309 +1352,132 @@ const AppDefinition = {
     },
 
     // =========================================================================
-    // Story Co-Pilot Workbench & Expansion Stream (Task 7)
+    // Story Co-Pilot Chat: a setup card starts the story, then it is a chat
     // =========================================================================
+    scrollStoryChatToBottom() {
+      this.$nextTick(() => {
+        const feed = document.getElementById('story-chat-feed');
+        if (feed) feed.scrollTop = feed.scrollHeight;
+      });
+    },
+
     newStorySession() {
-      if (this.isGeneratingStory) {
-        this.stopGeneratingStory();
+      if (this.storyMessages.length > 0 && !confirm('Start a new story? The current chat will be cleared.')) {
+        return;
       }
-      if (this.storyCurrentText && this.storyCurrentText.trim()) {
-        const confirmed =
-          typeof confirm === 'function'
-            ? confirm('Start a new story session? Any unsaved text will be cleared.')
-            : true;
-        if (!confirmed) return;
-      }
-      this.previousStoryText = this.storyCurrentText;
-      if (Array.isArray(this.storyHistory)) {
-        this.storyHistory.push(this.storyCurrentText);
-      }
+      this.stopGeneratingStory();
       this.storySessionId = 'story_' + Math.random().toString(36).substring(2, 10);
-      this.storyCurrentText = '';
-      this.directorBeats = [];
+      this.storyMessages = [];
+      this.storyInput = '';
       this.showToast('New story session initialized.', 'info');
-      this.refreshIcons();
     },
 
-    clearStoryText() {
-      if (this.isGeneratingStory) {
-        this.stopGeneratingStory();
-      }
-      if (!this.storyCurrentText) return;
-      this.previousStoryText = this.storyCurrentText;
-      if (Array.isArray(this.storyHistory)) {
-        this.storyHistory.push(this.storyCurrentText);
-      }
-      this.storyCurrentText = '';
-      this.showToast('Story canvas cleared. Click Undo to restore.', 'info');
-      this.refreshIcons();
-    },
-
-    async expandStory() {
+    async startStory() {
       if (this.isGeneratingStory) return;
-
-      // Cache current draft for undo support
-      this.previousStoryText = this.storyCurrentText;
-      if (Array.isArray(this.storyHistory)) {
-        this.storyHistory.push(this.storyCurrentText);
-      }
-
-      if (!this.storySessionId) {
-        this.storySessionId = 'story_' + Math.random().toString(36).substring(2, 10);
-      }
-
-      this.isGeneratingStory = true;
-      this.storyAbortController = new AbortController();
-      this.refreshIcons();
-
-      const payload = {
-        session_id: this.storySessionId,
-        premise: this.storyPremise ? this.storyPremise.trim() : '',
+      const instruction = this.storyInstruction.trim() || 'Begin the story.';
+      const setup = {
+        premise: this.storyPremise.trim(),
         genre: this.effectiveGenre || 'Fiction',
         tone: this.effectiveTone || 'Balanced',
-        current_text: this.storyCurrentText || '',
-        instruction: this.storyInstruction
-          ? this.storyInstruction.trim()
-          : 'Continue the story naturally from the current point.',
-        chunk_size: Number(this.storyChunkSize) || 1,
       };
+      this.storyMessages.push({ role: 'user', content: instruction, setup, timestamp: this._timeNow() });
+      await this._streamStoryReply({ ...setup, instruction });
+    },
 
-      let appendedInThisTurn = '';
+    async sendStoryMessage() {
+      if (this.isGeneratingStory) return;
+      const text = this.storyInput.trim();
+      if (!text) return;
+      this.storyInput = '';
+      this.storyMessages.push({ role: 'user', content: text, timestamp: this._timeNow() });
+      await this._streamStoryReply({ instruction: text });
+    },
+
+    _timeNow() {
+      return new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    },
+
+    async _streamStoryReply(fields) {
+      this.storyMessages.push({ role: 'assistant', content: '', timestamp: this._timeNow() });
+      // Read it back through the reactive array so streamed text re-renders.
+      const reply = this.storyMessages[this.storyMessages.length - 1];
+      this.isGeneratingStory = true;
+      this.storyAbortController = new AbortController();
+      this.scrollStoryChatToBottom();
 
       try {
         const res = await fetch('/api/v1/story/expand/stream', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
+          body: JSON.stringify({
+            session_id: this.storySessionId,
+            chunk_size: Number(this.storyChunkSize) || 1,
+            ...fields,
+          }),
           signal: this.storyAbortController.signal,
         });
-
         if (!res.ok) {
-          let errDetail = `Server returned HTTP ${res.status}`;
-          try {
-            const errJson = await res.json();
-            if (errJson.detail) errDetail = errJson.detail;
-          } catch (_) {}
-          throw new Error(errDetail);
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.detail || `Server returned HTTP ${res.status}`);
         }
 
-        if (!res.body) {
-          throw new Error('ReadableStream not supported on response');
-        }
-
+        // Each SSE event is one `data:` line: {"delta"}, then {"full_text", "done"}, then [DONE].
         const reader = res.body.getReader();
         const decoder = new TextDecoder('utf-8');
         let buffer = '';
-
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
           buffer += decoder.decode(value, { stream: true });
-          buffer = buffer.replace(/\r\n/g, '\n');
-
-          const events = buffer.split('\n\n');
-          buffer = events.pop();
-
-          for (const block of events) {
-            const trimmed = block.trim();
-            if (!trimmed) continue;
-            for (const line of trimmed.split('\n')) {
-              const l = line.trim();
-              if (l.startsWith('data:')) {
-                const rawData = l.slice(5).trim();
-                if (rawData === '[DONE]') {
-                  continue;
-                }
-                try {
-                  const data = JSON.parse(rawData);
-                  if (data.director_beats) {
-                    this.directorBeats = Array.isArray(data.director_beats)
-                      ? data.director_beats
-                      : [data.director_beats];
-                  } else if (data.beats) {
-                    this.directorBeats = Array.isArray(data.beats)
-                      ? data.beats
-                      : [data.beats];
-                  }
-
-                  if (data.delta) {
-                    if (
-                      !appendedInThisTurn &&
-                      this.storyCurrentText &&
-                      !/\s$/.test(this.storyCurrentText) &&
-                      !/^\s/.test(data.delta)
-                    ) {
-                      this.storyCurrentText += ' ';
-                    }
-                    this.storyCurrentText += data.delta;
-                    appendedInThisTurn += data.delta;
-                  } else if (data.full_text && !appendedInThisTurn) {
-                    if (
-                      this.storyCurrentText &&
-                      !/\s$/.test(this.storyCurrentText) &&
-                      !/^\s/.test(data.full_text)
-                    ) {
-                      this.storyCurrentText += ' ';
-                    }
-                    this.storyCurrentText += data.full_text;
-                    appendedInThisTurn += data.full_text;
-                  }
-                } catch (jsonErr) {
-                  // Ignore non-JSON or partial chunk
-                }
-              }
+          const lines = buffer.split('\n');
+          buffer = lines.pop();
+          for (const line of lines) {
+            if (!line.startsWith('data:')) continue;
+            const raw = line.slice(5).trim();
+            if (raw === '[DONE]') continue;
+            const data = JSON.parse(raw);
+            if (data.delta) {
+              reply.content += data.delta;
+            } else if (data.full_text && !reply.content) {
+              reply.content = data.full_text;
             }
+            this.scrollStoryChatToBottom();
           }
         }
-
-        // Process any trailing buffered data
-        if (buffer && buffer.trim()) {
-          for (const line of buffer.trim().split('\n')) {
-            const l = line.trim();
-            if (l.startsWith('data:')) {
-              const rawData = l.slice(5).trim();
-              if (rawData !== '[DONE]') {
-                try {
-                  const data = JSON.parse(rawData);
-                  if (data.director_beats) {
-                    this.directorBeats = Array.isArray(data.director_beats)
-                      ? data.director_beats
-                      : [data.director_beats];
-                  } else if (data.beats) {
-                    this.directorBeats = Array.isArray(data.beats)
-                      ? data.beats
-                      : [data.beats];
-                  }
-
-                  if (data.delta) {
-                    if (
-                      !appendedInThisTurn &&
-                      this.storyCurrentText &&
-                      !/\s$/.test(this.storyCurrentText) &&
-                      !/^\s/.test(data.delta)
-                    ) {
-                      this.storyCurrentText += ' ';
-                    }
-                    this.storyCurrentText += data.delta;
-                    appendedInThisTurn += data.delta;
-                  } else if (data.full_text && !appendedInThisTurn) {
-                    if (
-                      this.storyCurrentText &&
-                      !/\s$/.test(this.storyCurrentText) &&
-                      !/^\s/.test(data.full_text)
-                    ) {
-                      this.storyCurrentText += ' ';
-                    }
-                    this.storyCurrentText += data.full_text;
-                    appendedInThisTurn += data.full_text;
-                  }
-                } catch (_) {}
-              }
-            }
-          }
-        }
-
-        if (!this.directorBeats || this.directorBeats.length === 0) {
-          this.directorBeats = [
-            `Framing: ${this.storyInstruction || 'Continue narrative scene'}`,
-            `Atmosphere: ${this.effectiveTone} ${this.effectiveGenre} pacing`,
-            'Progression: Transition smoothly into next scene beat',
-          ];
-        }
-
-        this.showToast('Story expansion complete.', 'success');
+        if (!reply.content.trim()) reply.content = '*(No response)*';
       } catch (err) {
         if (err.name === 'AbortError') {
           this.showToast('Story generation stopped.', 'info');
+          if (!reply.content) reply.content = '*(Generation stopped)*';
         } else {
-          console.error('Story expansion error:', err);
-          this.showToast(err.message || 'Error generating story expansion.', 'error');
+          console.error('Story generation error:', err);
+          this.showToast(err.message || 'Error generating story.', 'error');
+          if (!reply.content) reply.content = `*(Error: ${err.message || 'Failed to generate story'})*`;
         }
       } finally {
         this.isGeneratingStory = false;
         this.storyAbortController = null;
-        this.refreshIcons();
+        this.scrollStoryChatToBottom();
       }
     },
 
     stopGeneratingStory() {
-      if (this.storyAbortController) {
-        try {
-          this.storyAbortController.abort();
-        } catch (_) {}
-        this.storyAbortController = null;
-      }
+      if (this.storyAbortController) this.storyAbortController.abort();
+      this.storyAbortController = null;
       this.isGeneratingStory = false;
-      this.refreshIcons();
-    },
-
-    undoLastExpansion() {
-      if (this.previousStoryText !== null && this.previousStoryText !== undefined) {
-        this.storyCurrentText = this.previousStoryText;
-        this.previousStoryText = null;
-        if (Array.isArray(this.storyHistory) && this.storyHistory.length > 0) {
-          this.storyHistory.pop();
-        }
-        this.showToast('Reverted to previous story draft.', 'info');
-        this.refreshIcons();
-      } else if (Array.isArray(this.storyHistory) && this.storyHistory.length > 0) {
-        this.storyCurrentText = this.storyHistory.pop();
-        this.showToast('Reverted to previous story draft.', 'info');
-        this.refreshIcons();
-      } else {
-        this.showToast('Nothing to undo.', 'info');
-      }
-    },
-
-    async copyStoryDraft() {
-      const text = this.storyCurrentText || '';
-      try {
-        if (
-          typeof navigator !== 'undefined' &&
-          navigator.clipboard &&
-          typeof navigator.clipboard.writeText === 'function'
-        ) {
-          await navigator.clipboard.writeText(text);
-          this.showToast('Story draft copied to clipboard.', 'info');
-          return;
-        }
-      } catch (err) {
-        console.warn('Clipboard API writeText failed, using fallback:', err);
-      }
-      try {
-        if (typeof document !== 'undefined' && document.createElement) {
-          const el = document.createElement('textarea');
-          el.value = text;
-          el.setAttribute('readonly', '');
-          el.style.position = 'fixed';
-          el.style.opacity = '0';
-          document.body.appendChild(el);
-          el.select();
-          document.execCommand('copy');
-          document.body.removeChild(el);
-          this.showToast('Story draft copied to clipboard.', 'info');
-          return;
-        }
-      } catch (err) {}
-      this.showToast('Story draft copied to clipboard.', 'info');
     },
 
     exportStory(format) {
-      const text = this.storyCurrentText || '';
-      const isMd = format === 'md';
-      const mimeType = isMd ? 'text/markdown' : 'text/plain';
-      const ext = isMd ? 'md' : 'txt';
-      if (typeof Blob !== 'undefined' && typeof URL !== 'undefined' && URL.createObjectURL) {
-        const blob = new Blob([text], { type: mimeType });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `${this.storySessionId || 'story'}.${ext}`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-      }
+      const ext = format === 'md' ? 'md' : 'txt';
+      const blob = new Blob([this.storyText], { type: ext === 'md' ? 'text/markdown' : 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${this.storySessionId || 'story'}.${ext}`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
       this.showToast(`Story exported as .${ext}`, 'info');
     },
   },

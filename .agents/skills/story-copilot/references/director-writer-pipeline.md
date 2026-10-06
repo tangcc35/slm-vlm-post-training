@@ -30,13 +30,14 @@ The **Story Co-Pilot** pipeline decomposes creative writing into a two-agent Goo
 
 ```mermaid
 flowchart LR
-    A["User Input & State<br/>(premise, genre, tone, text, instruction)"] --> B["Story Director<br/>(Scene Framing & Pacing)"]
-    B -->|"2–3 sentences guidance"| C["Story Writer<br/>(Literary Prose Drafting)"]
+    H["Session History<br/>(compacted)"] --> B
+    A["User Input & State<br/>(premise, genre, tone, recent text, instruction)"] --> B["Story Director<br/>(Notes for the Writer)"]
+    B -->|"free-form notes"| C["Story Writer<br/>(Literary Prose Drafting)"]
     C --> D["Final Story Prose<br/>(Terminal Output)"]
 ```
 
-1. **Story Director (`story_director`)**: Analyzes the current story state, premise, tone, and user prompt. Emits a concise 2–3 sentence directorial memo dictating scene framing, emotional resonance, and pacing acceleration/deceleration.
-2. **Story Writer (`story_writer`)**: Ingests the Director's memo alongside the story parameters, picking up seamlessly from existing prose (`current_text`) to generate polished literary narrative without conversational filler.
+1. **Story Director (`story_director`)**: Reads the whole session history (past instructions, its earlier notes, the writer's passages, compaction summaries) plus the story parameters and recent text. Emits short free-form notes: what the next passage must do, its beats and stopping point, and earlier story facts the writer needs.
+2. **Story Writer (`story_writer`)**: Sees no history. Its only message is the Director's notes; the story parameters, user instruction and recent text (`current_text`, the last 8000 characters) come through its system prompt. It continues the prose without conversational filler.
 
 ---
 
@@ -49,40 +50,12 @@ The Director operates strictly at the architectural level. It does **not** write
 - **Scene Progression**: How the beat advances the story arc (e.g. escalating a confrontation, delivering a revelation, lingering in an emotional aftermath).
 
 ### System Instruction & State Interpolation
-The Director's prompt utilizes Google ADK optional state placeholders (`{variable?}`) that are populated at runtime via session state:
+The Director's prompt (`story_rp_engine.story.director_agent`) uses Google ADK optional state placeholders (`{variable?}`) filled from session state: `{premise?}`, `{genre?}`, `{tone?}` and `{current_text?}` (the recent text). The agent is created with `include_contents="default"`: agents run inside a workflow otherwise get no history, and the director needs the whole conversation.
 
-```python
-from google.adk.agents import LlmAgent
-from story_rp_engine.core.config import EngineConfig
-from story_rp_engine.core.model_provider import get_adk_model
-
-def create_director_agent(config: EngineConfig) -> LlmAgent:
-    instruction = (
-        "You are an expert Story Director. Your job is to provide concise scene framing, tonal direction, "
-        "and narrative pacing guidance. Given a story premise, existing prose, prior dialogue/generation history, "
-        "and user instruction (which may expand, continue, or modify previous scenes), "
-        "output 2-3 brief sentences guiding the Writer on focus, emotional atmosphere, and scene progression.\n\n"
-        "### Story Parameters\n"
-        "- Premise: {premise?}\n"
-        "- Genre: {genre?}\n"
-        "- Tone: {tone?}\n\n"
-        "### Existing Text\n"
-        "{current_text?}"
-    )
-    return LlmAgent(
-        name="story_director",
-        model=get_adk_model(config),
-        instruction=instruction,
-    )
-```
-
-### Pacing and Tone Guidance Output Format
-The Director's response must conform to strict structural conventions:
-- **Length**: Exactly 2 to 3 concise sentences.
-- **Content Blocks**:
-  1. *Immediate Focus & Perspective*: Identify the focal element (e.g., character sensory perception or environmental omen).
-  2. *Atmospheric & Tonal Steering*: Calibrate emotional temperature aligned with `{tone?}` and `{genre?}`.
-  3. *Beat Trajectory*: Dictate where the scene should transition before yielding back to the user.
+### Notes Format
+The Director replies with short notes only, no prose. They cover:
+1. *Goal, beats and stopping point* of the next passage.
+2. *Earlier story facts the writer needs*: names, appearances, places, promises, unresolved threads. The writer sees only the recent text, so anything older must come through the notes.
 
 ### Exemplar Director Outputs
 
@@ -90,13 +63,13 @@ The Director's response must conform to strict structural conventions:
 - **Premise**: An ancient subterranean vault sealed by blood wards.
 - **Current Text**: *"The iron door groaned under the weight of centuries as the final rune flickered and died."*
 - **User Instruction**: *"Vaelen steps across the threshold into the dark."*
-- **Director Memo**:
+- **Director Notes**:
   > *"Direct the writer to highlight Vaelen's hesitation at the threshold, focusing on the sensory shock of stagnant, freezing air and the smell of ancient incense. Keep the pacing tense and measured, magnifying the acoustic echoes of his bootsteps against silent stone. Conclude the beat just as a faint luminescence stirs deeper within the chamber."*
 
 #### Example 2: Sci-Fi Noir / Introspective
 - **Premise**: An orbital detective investigating illegal synthetic memories.
 - **Tone**: Gritty, melancholic.
-- **Director Memo**:
+- **Director Notes**:
   > *"Frame the scene tightly around Silas inspecting the cracked memory chip beneath the neon glare of his cramped workshop. Emphasize the rhythmic hum of failing air scrubbers and his growing cynical fatigue. Guide the scene toward an unexpected data glitch that reveals a timestamp he recognizes."*
 
 ---
@@ -159,21 +132,22 @@ The ADK Runner passes state down the graph via `state_delta`. Both agents share 
 
 | State Variable | Data Type | Source | Description |
 | :--- | :--- | :--- | :--- |
-| `premise` | `str` | `StoryRequest.premise` | Overarching narrative foundation and high-level premise. |
-| `genre` | `str` | `StoryRequest.genre` | Primary genre label (e.g. `"Fantasy"`, `"Sci-Fi"`, `"Thriller"`). |
-| `tone` | `str` | `StoryRequest.tone` | Guiding mood and emotional tenor (e.g. `"Epic"`, `"Noir"`, `"Balanced"`). |
-| `current_text` | `str` | `StoryRequest.current_text` | Preceding prose accumulated across prior generation turns. |
+| `premise` | `str` | `StoryRequest.premise` (first turn) | Overarching narrative foundation and high-level premise. |
+| `genre` | `str` | `StoryRequest.genre` (first turn) | Primary genre label (e.g. `"Fantasy"`, `"Sci-Fi"`, `"Thriller"`). |
+| `tone` | `str` | `StoryRequest.tone` (first turn) | Guiding mood and emotional tenor (e.g. `"Epic"`, `"Noir"`, `"Balanced"`). |
+| `current_text` | `str` | Earlier `story_writer` events in the session | The last `RECENT_TEXT_CHARS` (8000) characters of the story. |
 | `instruction` | `str` | `StoryRequest.instruction` | Immediate user directive guiding the current turn. |
 
 When a turn executes:
 ```python
 state_delta = {
-    "premise": req.premise or "Not specified",
-    "genre": req.genre or "Fiction",
-    "tone": req.tone or "Balanced",
-    "current_text": req.current_text or "",
-    "instruction": req.instruction or "Expand the story based on the context.",
+    "current_text": "\n\n".join(writer_passages)[-RECENT_TEXT_CHARS:],
+    "instruction": instruction,
 }
+# The setup fields come with the first turn and stay in state; later turns leave them out.
+for key in ("premise", "genre", "tone"):
+    if getattr(req, key):
+        state_delta[key] = getattr(req, key)
 ```
 
 ADK automatically interpolates `{variable?}` syntax into the agents' `instruction` during prompt preparation. If a variable is missing or empty, `{variable?}` evaluates to an empty string without raising key errors.
@@ -184,10 +158,10 @@ ADK automatically interpolates `{variable?}` syntax into the agents' `instructio
 
 When operating with 8B-parameter Small Language Models (e.g. Llama 3.1 8B, Gemma 2 9B), preserving context budget is critical:
 
-1. **Director Guidance Brevity**:
-   - Keeping Director memos capped at 2–3 sentences (approx. 50–90 tokens) minimizes intermediate history overhead.
-2. **Current Text Pruning / Rolling Window**:
-   - When cumulative `current_text` exceeds 1,500 tokens, pass only the premise, a short summary of preceding events, and the last 500–800 tokens of immediate prose to prevent context starvation.
+1. **Director Note Brevity**:
+   - Short Director notes keep both the writer's prompt and the director's own history small.
+2. **Recent Text Window + Compaction**:
+   - Agents see only the last `RECENT_TEXT_CHARS` of the story (`current_text`). The director covers earlier parts through session history, which `story_app` compacts every `compaction_interval` turns using `STORY_SUMMARY_PROMPT`.
 3. **Loss-Free Prompt Packing**:
    - System instructions for Director and Writer are kept concise (<150 tokens each), leaving >90% of the active context window for narrative prose and generation rollouts.
 

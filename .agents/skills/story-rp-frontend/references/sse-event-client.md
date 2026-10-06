@@ -22,10 +22,6 @@ sequenceDiagram
         API-->>User: data: {"delta": "..."}\n\n
         User->>User: Buffer & parse event block, append delta, scroll/render
     end
-    opt Director Beats Event (Story Mode)
-        API-->>User: data: {"director_beats": ["..."]}\n\n
-        User->>User: Populate directorBeats accordion
-    end
     API-->>User: data: {"full_text": "...", "done": true}\n\n
     API-->>User: data: [DONE]\n\n
     User->>User: reader.read() completes (done: true), finalize state
@@ -108,15 +104,13 @@ if (buffer && buffer.trim()) {
 
 The application provides two distinct streaming workflows tailored to roleplay conversation turns and narrative story generation:
 
-| Characteristic | Roleplay Chat (`_streamAssistantReply`) | Story Co-Pilot (`expandStory`) |
+| Characteristic | Roleplay Chat (`_streamAssistantReply`) | Story Co-Pilot (`_streamStoryReply`) |
 | :--- | :--- | :--- |
 | **Endpoint** | `POST /api/v1/rp/chat/stream` | `POST /api/v1/story/expand/stream` |
-| **Request Model** | `RPStreamChatRequest` (`char_id`, `session_id`, `message`, `authors_note`, `user_name`, `chunk_size`) | `StoryStreamExpandRequest` (`session_id`, `premise`, `genre`, `tone`, `current_text`, `instruction`, `chunk_size`) |
-| **Target Destination** | Appends to assistant turn in `rpMessages` array | Appends to `storyCurrentText` draft canvas |
-| **Preamble Formatting** | Direct character utterance | Leading whitespace insertion (`" "`) if `current_text` does not end with space |
-| **Director Metadata** | N/A | Emits `director_beats` array parsed into `this.directorBeats` |
+| **Request Model** | `RPStreamChatRequest` (`char_id`, `session_id`, `message`, `authors_note`, `user_name`, `chunk_size`) | `StoryRequest` (`session_id`, `instruction`, `chunk_size`; `premise`, `genre`, `tone` on the first turn only) |
+| **Target Destination** | Appends to assistant turn in `rpMessages` array | Appends to assistant turn in `storyMessages` array |
 | **Cancellation** | `this.rpAbortController.abort()` | `this.storyAbortController.abort()` |
-| **UI Indicator** | Animated `▌` cursor inside active bubble | Animated `▌` cursor below canvas + status text |
+| **UI Indicator** | Animated `▌` cursor inside active bubble | Animated `▌` cursor inside active bubble |
 
 ---
 
@@ -131,21 +125,14 @@ data: {"delta": "The silver mist drifted silently across the hollow."}
 
 ```
 
-### 2. Director Scene Beats Event (Story Mode Only)
-Emitted by the multi-agent story graph when the Director Agent finishes outlining beats:
-```text
-data: {"director_beats": ["Framing: Confrontation at the bridge", "Atmosphere: Tense suspense", "Progression: Guard demands identification"]}
-
-```
-
-### 3. Consolidated Completion Event
+### 2. Consolidated Completion Event
 Contains the fully assembled generation and status flag:
 ```text
 data: {"full_text": "Complete generated text...", "done": true}
 
 ```
 
-### 4. Termination Sentinel
+### 3. Termination Sentinel
 Indicates stream termination; signals client loop completion:
 ```text
 data: [DONE]
@@ -175,16 +162,6 @@ scrollRPChatToBottom() {
 Chat bubbles pass raw streamed text through Marked.js:
 - Sanitizes and parses markdown headings, lists, bold text, italics, and code fences.
 - Provides a secure plain-text fallback replacing HTML entities (`&`, `<`, `>`, `"`) and mapping `\n` to `<br>` if Marked.js is unavailable or parsing fails.
-
-### Seamless Textarea Continuity (Story Co-Pilot)
-When continuing an existing story draft, the client avoids awkward glued words by ensuring a boundary space exists between existing text and incoming tokens:
-```javascript
-if (!appendedInThisTurn && this.storyCurrentText && !/\s$/.test(this.storyCurrentText) && !/^\s/.test(data.delta)) {
-  this.storyCurrentText += ' ';
-}
-this.storyCurrentText += data.delta;
-appendedInThisTurn += data.delta;
-```
 
 ---
 

@@ -122,8 +122,20 @@ class AgentRegistry:
     def get_story_runner(self) -> Runner:
         """Retrieves or creates a cached ADK Runner for the story workflow."""
         if self._story_runner is None:
+            from story_rp_engine.story.workflow import STORY_SUMMARY_PROMPT
             workflow = self.get_story_workflow()
-            compaction_config = self._build_compaction_config()
+            compaction_config = None
+            if self.config.compaction_enabled:
+                # Turn-count compaction only. Token-threshold compaction also runs before each model call,
+                # so it can fire between the director and the writer and summarize away the director's notes.
+                compaction_config = EventsCompactionConfig(
+                    compaction_interval=self.config.compaction_interval,
+                    overlap_size=self.config.compaction_overlap_size,
+                    summarizer=LlmEventSummarizer(
+                        llm=get_adk_model(self.config),
+                        prompt_template=self.config.compaction_prompt_template or STORY_SUMMARY_PROMPT,
+                    ),
+                )
             app = App(
                 name="story_app",
                 root_agent=workflow,

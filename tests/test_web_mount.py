@@ -65,32 +65,29 @@ def test_web_static_assets():
         "_streamAssistantReply",
         "renderMarkdown",
         "copyMessage",
-        # Story Co-Pilot workbench methods & state (Task 7)
+        # Story Co-Pilot chat methods & state
         "storySessionId",
         "storyPremise",
         "storyGenre",
-        "storyCustomGenre",
+        "customGenre",
         "storyTone",
-        "storyCustomTone",
+        "customTone",
         "storyInstruction",
+        "storyInput",
         "storyChunkSize",
-        "storyCurrentText",
-        "previousStoryText",
+        "storyMessages",
+        "storyText",
         "isGeneratingStory",
         "storyAbortController",
-        "showDirectorBeats",
-        "directorBeats",
         "wordCount",
         "estimatedTokens",
         "effectiveGenre",
         "effectiveTone",
-        "canUndo",
         "newStorySession",
-        "clearStoryText",
-        "expandStory",
+        "startStory",
+        "sendStoryMessage",
+        "_streamStoryReply",
         "stopGeneratingStory",
-        "undoLastExpansion",
-        "copyStoryDraft",
         "exportStory",
     ]
     for kw in required_keywords:
@@ -213,7 +210,7 @@ def test_story_co_pilot_api_flow(tmp_path):
     session_id = "test_story_expansion_sess"
 
     # 1. Expand story non-streaming
-    async def mock_execute(runner, user_id, session_id, message, state_delta):
+    async def mock_execute(runner, user_id, session_id, message, state_delta, author):
         return "The silver mist drifted silently across the hollow."
 
     with patch(
@@ -239,7 +236,7 @@ def test_story_co_pilot_api_flow(tmp_path):
         assert "silver mist" in data["expansion"]
 
     # 2. Expand story streaming
-    async def mock_stream(runner, user_id, session_id, message, state_delta):
+    async def mock_stream(runner, user_id, session_id, message, state_delta, author):
         yield "The silver "
         yield "mist settled."
 

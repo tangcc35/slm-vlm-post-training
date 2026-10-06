@@ -38,11 +38,11 @@ class ChatMessage(BaseModel):
 
 class StoryRequest(BaseModel):
     session_id: str = Field(..., min_length=1, description="Session ID for tracking multi-turn story state.")
+    # Story setup: sent with the first turn and kept in session state; later turns may leave these out.
     premise: Optional[str] = None
-    current_text: str = ""
+    genre: Optional[str] = None
+    tone: Optional[str] = None
     instruction: Optional[str] = "Continue the story naturally from the current point."
-    genre: Optional[str] = "Fiction"
-    tone: Optional[str] = "Balanced"
     max_tokens: int = Field(default=512, ge=1, le=131072)
     chunk_size: Optional[int] = Field(default=16, ge=1, le=100, description="Number of tokens to buffer before yielding in streaming mode.")
 

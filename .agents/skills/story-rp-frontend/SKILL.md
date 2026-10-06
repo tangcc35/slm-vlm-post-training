@@ -53,7 +53,7 @@ flowchart TD
 ### 4. Implement & Buffer Client SSE Stream Readers
 - Consume streaming endpoints via `fetch` with `ReadableStream`, `TextDecoder`, and `AbortController`:
   - Roleplay Chat: `POST /api/v1/rp/chat/stream` appending tokens to `rpMessages`.
-  - Story Co-Pilot: `POST /api/v1/story/expand/stream` appending prose to `storyCurrentText` and capturing `director_beats`.
+  - Story Co-Pilot: `POST /api/v1/story/expand/stream` appending prose to the latest assistant turn in `storyMessages`.
 - Buffer incoming bytes across packet chunks, split on `\n\n` boundaries, parse `data: {...}` JSON deltas, and skip the `data: [DONE]` sentinel.
 - Flush any remaining buffer text after stream termination.
 - Consult `references/sse-event-client.md` for stream reader implementation, chunk buffering loops, and abort handling.
@@ -89,8 +89,8 @@ flowchart TD
    - Never allow unhandled exceptions in `marked.parse()` to crash Vue component rendering. `renderMarkdown()` must enclose parsing in a `try/catch` block and fall back to HTML entity escaping (`&`, `<`, `>`, `"`) with `\n` to `<br>` conversion.
 7. **Two-Way Watcher Synchronization**:
    - When introducing search filters or custom dropdown options, maintain two-way synchronization between primary state keys and backwards-compatible aliases (e.g., `charSearchQuery` and `charSearch`).
-8. **Word Spacing Boundary Check on Expansion**:
-   - When streaming story continuations, inspect boundary whitespace between `current_text` and incoming tokens. If `current_text` does not end with whitespace and the first token does not begin with whitespace, insert a single space to avoid concatenating words.
+8. **Story Mode Is a Chat**:
+   - The first story turn comes from the setup card (premise, genre, tone, opening instruction) and is the only turn that sends the setup fields; follow-ups send only `instruction`. The backend builds the story text from the session, so the client never sends it.
 
 ---
 

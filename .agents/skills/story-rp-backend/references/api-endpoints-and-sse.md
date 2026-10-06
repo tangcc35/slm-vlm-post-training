@@ -161,11 +161,11 @@ Executes synchronous collaborative prose expansion using the Director-Writer mul
 
 - **Request Body**: `StoryRequest` (JSON)
   - `session_id` (str, required): Multi-turn story session ID.
-  - `premise` (str, optional): Narrative background context.
-  - `current_text` (str, optional): Accumulated scene prose.
-  - `instruction` (str, optional): Immediate beat directive (default: `"Continue the story naturally from the current point."`).
-  - `genre` (str, optional): Literary genre (e.g., `"Cyberpunk"`, `"Fantasy"`).
-  - `tone` (str, optional): Narrative mood (e.g., `"Grimdark"`, `"Witty"`).
+  - `instruction` (str, optional): The user's chat message for this turn (default: `"Continue the story naturally from the current point."`).
+  - `premise` (str, optional): Narrative background context. Sent with the first turn; kept in session state.
+  - `genre` (str, optional): Literary genre (e.g., `"Cyberpunk"`, `"Fantasy"`). First turn; kept in state.
+  - `tone` (str, optional): Narrative mood (e.g., `"Grimdark"`, `"Witty"`). First turn; kept in state.
+  - The story text isn't sent: the backend builds it from the session's earlier `story_writer` replies.
   - `max_tokens` (int, optional): Generation cap (1–131072, default: 512).
   - `chunk_size` (int, optional): Streaming token batching (default: 16).
 - **Response**: `200 OK`
@@ -305,13 +305,12 @@ All ID parameters (`char_id`, `session_id`, `lorebook_id`) are validated using `
 ### 4.1 JavaScript / Browser SSE Consumption
 
 ```typescript
-async function streamStory(sessionId: string, currentText: string, instruction: string) {
+async function streamStory(sessionId: string, instruction: string) {
   const response = await fetch('/api/v1/story/expand/stream', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       session_id: sessionId,
-      current_text: currentText,
       instruction: instruction,
       chunk_size: 4
     })

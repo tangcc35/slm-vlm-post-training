@@ -209,7 +209,6 @@ def test_story_expand_endpoint(tmp_path):
             json={
                 "session_id": "story_sess_1",
                 "premise": "A clockwork tower.",
-                "current_text": "Tick tock.",
                 "instruction": "Continue.",
                 "genre": "Steampunk",
                 "tone": "Dark",
@@ -227,8 +226,30 @@ def test_story_expand_endpoint(tmp_path):
         assert call_kwargs["state_delta"]["premise"] == "A clockwork tower."
         assert call_kwargs["state_delta"]["genre"] == "Steampunk"
         assert call_kwargs["state_delta"]["tone"] == "Dark"
-        assert call_kwargs["state_delta"]["current_text"] == "Tick tock."
+        assert call_kwargs["state_delta"]["current_text"] == ""
         assert call_kwargs["state_delta"]["instruction"] == "Continue."
+
+
+@pytest.mark.anyio
+async def test_story_follow_up_uses_end_of_writer_replies(tmp_path):
+    from google.adk.events import Event
+    from google.genai import types
+    from story_rp_engine.api.routes_story import RECENT_TEXT_CHARS
+
+    app = create_app(store=EngineStore(storage_dir=str(tmp_path)), config=EngineConfig())
+    service = app.state.agent_registry.get_story_runner().session_service
+    session = await service.create_session(app_name="story_app", user_id="User", session_id="s1")
+    for author, text in [("story_director", "notes"), ("story_writer", "old " + "x" * RECENT_TEXT_CHARS)]:
+        await service.append_event(
+            session, Event(author=author, content=types.Content(role="model", parts=[types.Part(text=text)]))
+        )
+
+    with patch("story_rp_engine.api.routes_story.execute_runner_turn", new_callable=AsyncMock, return_value="") as mock_exec:
+        res = TestClient(app).post("/api/v1/story/expand", json={"session_id": "s1", "instruction": "Go on."})
+    assert res.status_code == 200
+    state_delta = mock_exec.call_args.kwargs["state_delta"]
+    assert state_delta == {"current_text": "x" * RECENT_TEXT_CHARS, "instruction": "Go on."}
+    assert mock_exec.call_args.kwargs["author"] == "story_writer"
 
 
 def test_story_expand_endpoint_missing_session_id_fails(tmp_path):
@@ -240,7 +261,6 @@ def test_story_expand_endpoint_missing_session_id_fails(tmp_path):
         "/api/v1/story/expand",
         json={
             "premise": "A clockwork tower.",
-            "current_text": "Tick tock.",
         },
     )
     assert res.status_code == 400
@@ -273,7 +293,6 @@ def test_story_expand_endpoint_empty_session_id_fails(tmp_path):
         json={
             "session_id": "   ",
             "premise": "A clockwork tower.",
-            "current_text": "Tick tock.",
         },
     )
     assert res.status_code == 400
@@ -298,7 +317,6 @@ def test_story_expand_stream_endpoint(tmp_path):
             json={
                 "session_id": "story_sess_stream_1",
                 "premise": "Dawn at sea.",
-                "current_text": "Morning came.",
                 "instruction": "Describe the sun.",
                 "chunk_size": 4,
             },
@@ -317,7 +335,6 @@ def test_story_expand_stream_endpoint(tmp_path):
         assert call_kwargs["session_id"] == "story_sess_stream_1"
         assert call_kwargs["message"] == "Describe the sun."
         assert call_kwargs["state_delta"]["premise"] == "Dawn at sea."
-        assert call_kwargs["state_delta"]["current_text"] == "Morning came."
         assert call_kwargs["state_delta"]["instruction"] == "Describe the sun."
 
 
@@ -338,7 +355,6 @@ def test_story_expand_stream_custom_chunk_size(tmp_path):
             "/api/v1/story/expand/stream",
             json={
                 "session_id": "story_sess_stream_2",
-                "current_text": "Morning came.",
                 "instruction": "Describe the sun.",
                 "chunk_size": 2,
             },
@@ -652,10 +668,7 @@ async def test_native_runner_stream_execution(tmp_path):
 
 
 @pytest.mark.anyio
-async def test_native_runner_story_execution(tmp_path):
-    store = EngineStore(storage_dir=str(tmp_path))
-    app = create_app(store=store, config=EngineConfig())
-
+async def test_native_runner_story_execution(tmp_path, monkeypatch):
     from google.adk.models.base_llm import BaseLlm
     from google.adk.models.llm_response import LlmResponse
     from google.genai import types
@@ -672,30 +685,31 @@ async def test_native_runner_story_execution(tmp_path):
                 content=types.Content(parts=[types.Part.from_text(text=f"{self.prefix} narrative")]),
             )
 
-    wf = app.state.agent_registry.get_story_workflow()
-    for node in wf.graph.nodes:
-        if node.name == "story_director":
-            node.model = MockStoryLlm(prefix="director")
-        elif node.name == "story_writer":
-            node.model = MockStoryLlm(prefix="writer")
+    from story_rp_engine.story import director_agent, writer_agent
+    monkeypatch.setattr(director_agent, "get_adk_model", lambda config: MockStoryLlm(prefix="director"))
+    monkeypatch.setattr(writer_agent, "get_adk_model", lambda config: MockStoryLlm(prefix="writer"))
+    store = EngineStore(storage_dir=str(tmp_path))
+    app = create_app(store=store, config=EngineConfig())
 
     client = TestClient(app)
     res = client.post(
         "/api/v1/story/expand",
-        json={
-            "session_id": "story_sess_inspect",
-            "premise": "A journey north.",
-            "current_text": "The wind howled.",
-            "instruction": "Describe the frost.",
-        },
+        json={"session_id": "story_sess_inspect", "premise": "A journey north.", "instruction": "Describe the frost."},
     )
     assert res.status_code == 200
     assert res.json()["expansion"] == "writer narrative"
     assert res.json()["session_id"] == "story_sess_inspect"
     assert "Premise: A journey north." in captured["director"]
-    assert "The wind howled." in captured["director"]
+
+    # A follow-up chat turn sends only the message: the premise stays in state and the writer's
+    # first reply becomes the recent text.
+    res = client.post("/api/v1/story/expand", json={"session_id": "story_sess_inspect", "instruction": "Go on."})
+    assert res.status_code == 200
+    assert "Premise: A journey north." in captured["director"]
+    assert "writer narrative" in captured["director"]
     assert "A journey north." in captured["writer"]
-    assert "The wind howled." in captured["writer"]
+    assert "writer narrative" in captured["writer"]
+    assert "Go on." in captured["writer"]
 
 
 def test_story_expand_without_registry_errors(tmp_path):
@@ -710,7 +724,6 @@ def test_story_expand_without_registry_errors(tmp_path):
         json={
             "session_id": "test_sess",
             "premise": "A journey north.",
-            "current_text": "The wind howled.",
             "instruction": "Describe the frost.",
         },
     )
@@ -730,7 +743,6 @@ def test_story_expand_stream_without_registry_errors(tmp_path):
         json={
             "session_id": "test_sess",
             "premise": "A journey north.",
-            "current_text": "The wind howled.",
             "instruction": "Describe the frost.",
         },
     )
@@ -745,7 +757,7 @@ def test_story_expand_multi_turn_stateful(tmp_path):
 
     session_ids_received = []
 
-    async def mock_execute(runner, user_id, session_id, message, state_delta):
+    async def mock_execute(runner, user_id, session_id, message, state_delta, author):
         session_ids_received.append((session_id, message, state_delta.get("current_text")))
         return f"Continuation after {message}"
 
@@ -759,7 +771,6 @@ def test_story_expand_multi_turn_stateful(tmp_path):
             json={
                 "session_id": "sess_story_chain",
                 "premise": "Trapped in the ice.",
-                "current_text": "The blizzard roared outside.",
                 "instruction": "Describe lighting a fire.",
             },
         )
@@ -772,7 +783,6 @@ def test_story_expand_multi_turn_stateful(tmp_path):
             "/api/v1/story/expand",
             json={
                 "session_id": "sess_story_chain",
-                "current_text": "The blizzard roared outside.\nThe match caught, sparks flying.",
                 "instruction": "Now make the shadows on the wall shift ominously.",
             },
         )

@@ -58,7 +58,6 @@ def test_full_engine_lifecycle(tmp_path):
             json={
                 "session_id": "sess_story_e2e",
                 "premise": "Surviving the high winter pass.",
-                "current_text": "Rowan tightened the straps on his pack.",
                 "instruction": "Describe the view from the pass.",
                 "genre": "Adventure",
                 "tone": "Gritty",

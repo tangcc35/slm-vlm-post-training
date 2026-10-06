@@ -9,6 +9,7 @@ from story_rp_engine.core.config import EngineConfig
 from story_rp_engine.core.agent_registry import AgentRegistry
 from story_rp_engine.core.types import CharacterCard
 from story_rp_engine.storage.store import EngineStore
+from story_rp_engine.story.workflow import STORY_SUMMARY_PROMPT
 
 
 def test_engine_config_compaction_defaults():
@@ -68,11 +69,12 @@ def test_agent_registry_story_app_compaction_config(tmp_path):
     assert runner.app.events_compaction_config is not None
     cfg = runner.app.events_compaction_config
     assert isinstance(cfg, EventsCompactionConfig)
-    assert cfg.token_threshold == 4000
-    assert cfg.event_retention_size == 5
+    # Turn-count only: a token-threshold compaction could summarize away the director's notes mid-turn.
+    assert cfg.token_threshold is None
     assert cfg.compaction_interval == 10
     assert cfg.overlap_size == 2
     assert isinstance(cfg.summarizer, LlmEventSummarizer)
+    assert cfg.summarizer._prompt_template == STORY_SUMMARY_PROMPT
 
 
 @pytest.mark.anyio

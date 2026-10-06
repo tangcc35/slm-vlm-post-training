@@ -1,18 +1,8 @@
 import json
-from typing import Any, AsyncIterator, Optional
+from typing import AsyncIterator, Optional
 from google.adk.agents.run_config import RunConfig, StreamingMode
 from google.adk.runners import Runner
 from google.genai import types
-
-
-def _get_terminal_node_name(agent: Any) -> Optional[str]:
-    """Finds the terminal node name in a Workflow graph if present."""
-    if hasattr(agent, "graph") and hasattr(agent.graph, "edges") and hasattr(agent.graph, "nodes"):
-        from_nodes = {e.from_node.name for e in agent.graph.edges}
-        for n in agent.graph.nodes:
-            if n.name != "__START__" and n.name not in from_nodes:
-                return n.name
-    return None
 
 
 async def execute_runner_turn(
@@ -21,10 +11,13 @@ async def execute_runner_turn(
     session_id: str,
     message: str,
     state_delta: Optional[dict] = None,
+    author: Optional[str] = None,
 ) -> str:
-    """Executes a turn asynchronously via ADK Runner and returns final assistant text."""
+    """Executes a turn asynchronously via ADK Runner and returns final assistant text.
+
+    When `author` is set, only that agent's events count (e.g. the story writer, not the director).
+    """
     content = types.Content(role="user", parts=[types.Part.from_text(text=message)])
-    target_node = _get_terminal_node_name(runner.agent)
     final_text = ""
     accumulated_partial = []
 
@@ -34,7 +27,7 @@ async def execute_runner_turn(
         new_message=content,
         state_delta=state_delta,
     ):
-        if target_node and event.author and event.author != target_node:
+        if author and event.author != author:
             continue
 
         text = ""
@@ -62,10 +55,13 @@ async def stream_runner_turn(
     session_id: str,
     message: str,
     state_delta: Optional[dict] = None,
+    author: Optional[str] = None,
 ) -> AsyncIterator[str]:
-    """Streams output token deltas/chunks from a turn asynchronously via ADK Runner."""
+    """Streams output token deltas/chunks from a turn asynchronously via ADK Runner.
+
+    When `author` is set, only that agent's events are streamed.
+    """
     content = types.Content(role="user", parts=[types.Part.from_text(text=message)])
-    target_node = _get_terminal_node_name(runner.agent)
     run_cfg = RunConfig(streaming_mode=StreamingMode.SSE)
     yielded_any_partial = False
 
@@ -76,7 +72,7 @@ async def stream_runner_turn(
         state_delta=state_delta,
         run_config=run_cfg,
     ):
-        if target_node and event.author and event.author != target_node:
+        if author and event.author != author:
             continue
 
         text = ""

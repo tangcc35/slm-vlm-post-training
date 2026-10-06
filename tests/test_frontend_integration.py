@@ -102,10 +102,9 @@ def test_static_assets_delivery_and_content_types(client):
         # Story workbench
         "storySessionId",
         "storyPremise",
-        "storyCurrentText",
-        "expandStory",
-        "undoLastExpansion",
-        "directorBeats",
+        "storyMessages",
+        "startStory",
+        "sendStoryMessage",
         # Character management
         "loadCharacters",
         "saveCharacter",
@@ -328,7 +327,6 @@ def test_story_expand_endpoint_integration(client):
         "/api/v1/story/expand",
         json={
             "premise": "A mysterious spire in the cloud sea.",
-            "current_text": "The wind howled across the terrace.",
         },
     )
     assert invalid_res.status_code == 400
@@ -348,7 +346,6 @@ def test_story_expand_endpoint_integration(client):
             json={
                 "session_id": session_id,
                 "premise": "A mysterious spire in the cloud sea.",
-                "current_text": "The wind howled across the terrace.",
                 "instruction": "Describe the figure emerging from the mist.",
                 "genre": "Fantasy",
                 "tone": "Atmospheric",
@@ -388,7 +385,6 @@ def test_story_expand_stream_endpoint_integration(client):
             json={
                 "session_id": session_id,
                 "premise": "An abandoned fortress in the winter mountains.",
-                "current_text": "Snow blanketed the courtyard.",
                 "instruction": "Describe the gates opening.",
                 "chunk_size": 4,
             },
