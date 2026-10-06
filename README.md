@@ -132,6 +132,15 @@ curl -N -X POST http://localhost:8000/api/v1/rp/chat/stream -H "Content-Type: ap
 
 Story sessions work the same way: the first turn sends the setup (`premise`, `genre`, `tone`) with an `instruction`, and it stays in session state, so later turns send only `session_id` and `instruction`. The engine rebuilds the story text from the session's earlier passages; there's no `current_text` field.
 
+### Examples
+
+[`examples/story_rp/`](examples/story_rp/) has three character cards, three lorebooks, and five scripted demos (three roleplay chats and two stories). Each demo turn has a `showcase` note that names the engine feature it exercises: per-turn lorebook injection with key aliases, phrase keys, `insertion_order` and disabled entries; author's notes; card text with `{braces}` passed through ADK verbatim; Director-to-Writer lore hand-off; and long-range story memory across compaction.
+
+```bash
+uv run python scripts/story_rp_examples.py                # save the cards and lorebooks to a running engine
+uv run python scripts/story_rp_examples.py --demo all     # also play every demo (calls the model; titled sessions appear in the UI)
+```
+
 ## Agent Skills
 
 [`.agents/skills/`](.agents/skills/) holds [agentskills.io](https://agentskills.io) skills that help AI coding agents work in this repo: `unsloth-sft`, `grpo-reasoning-rl`, `model-export-gguf`, `character-rp`, `story-copilot`, `story-rp-backend` and `story-rp-frontend`. `uv run pytest tests/test_agent_skills.py` checks their format and links.
@@ -141,6 +150,7 @@ Story sessions work the same way: the first turn sends the setup (`premise`, `ge
 ```text
 configs/{sft,grpo}/        training recipes
 data/dummy/                sample datasets for smoke tests
+examples/story_rp/         sample characters, lorebooks and demo sessions for the engine
 src/slm_post_train/        cli · data · models · trainers · rewards · export
 src/story_rp_engine/       api · core · rp · story · storage · web
 run_sh/                    engine and training launch scripts

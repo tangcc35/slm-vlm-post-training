@@ -1,0 +1,42 @@
+{
+  "name": "Rainport",
+  "description": "A noir harbor city under eleven years of rain. Shared by the iris_kale character and the Grate story demo.",
+  "entries": [
+    {
+      "keys": ["Rainport"],
+      "content": "Rainport is a harbor city where it has rained without a break for eleven years, since the night the Halloran weather tower exploded. Umbrellas are a status symbol; the poor wear oilcloth. Trams run along the old sea wall.",
+      "insertion_order": 10,
+      "enabled": true
+    },
+    {
+      "keys": ["Ninth Street"],
+      "content": "Ninth Street has noodle bars, pawnshops and Iris Kale's office. The Ninth Street bridge crosses the Sluice, and whatever goes off the bridge ends up at the Grate downstream.",
+      "insertion_order": 20,
+      "enabled": true
+    },
+    {
+      "keys": ["Halloran", "weather tower", "the mayor"],
+      "content": "Eleven years ago Councilman Victor Halloran's weather-control tower exploded and the rain began. Iris Kale, then a police detective, proved it was sabotage; the department buried her report and she quit. Halloran is now the mayor.",
+      "insertion_order": 30,
+      "enabled": true
+    },
+    {
+      "keys": ["Grate"],
+      "content": "The Grate is the iron storm grate where the Sluice drains into the harbor. Its night-shift keeper, Moss, fishes out whatever the river brings and sells what he finds before he reports what's left.",
+      "insertion_order": 40,
+      "enabled": true
+    },
+    {
+      "keys": ["Lucky Fan", "Mrs. Teo"],
+      "content": "The Lucky Fan is the noodle bar under Iris Kale's office, run by Mrs. Teo. She hears everything through the floorboards and charges for gossip in dumplings.",
+      "insertion_order": 50,
+      "enabled": true
+    },
+    {
+      "keys": ["Blue Umbrella", "chalk umbrella"],
+      "content": "The Blue Umbrella is Rainport's syndicate. It marks debtors' doors with a chalk umbrella. Members carry blue umbrellas with ivory handles, and carrying one without the right is a fatal mistake.",
+      "insertion_order": 60,
+      "enabled": true
+    }
+  ]
+}

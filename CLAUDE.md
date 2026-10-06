@@ -73,5 +73,6 @@ Two packages under `src/` ship in one wheel but share no code. The engine can se
 
 - `vercel/`: the build step copies `src/story_rp_engine` into `vercel/src/`, and `vercel/api/index.py` sets serverless defaults (`/tmp` storage, no warmup, NullPool, Phoenix off). `vercel/requirements.txt` is maintained separately from `pyproject.toml`, so new engine runtime deps must go in both. It leaves out `litellm` on purpose: Vercel only runs Gemini models.
 - `.agents/skills/`: [agentskills.io](https://agentskills.io) skills covering each subsystem (SFT, GRPO, GGUF export, character RP, story co-pilot, backend, frontend). `tests/test_agent_skills.py` checks their format and links.
+- `examples/story_rp/`: sample cards, lorebooks and scripted demos, loaded and played by `scripts/story_rp_examples.py`. `tests/story_rp_engine/test_examples.py` checks that file names match IDs and that the demos trigger every enabled lorebook entry.
 - `docs/superpowers/{specs,plans}/`: dated design specs and implementation plans for past features.
 - `unsloth_notebook_reference/`: the Unsloth notebooks (Gemma SFT, GRPO Sudoku) the recipes are based on.

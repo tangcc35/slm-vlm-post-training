@@ -1,0 +1,41 @@
+{
+  "title": "Halcyon Deep, day 19",
+  "mode": "rp",
+  "char_id": "halcyon",
+  "session_id": "demo-rp-halcyon",
+  "lorebook_id": "halcyon_deep",
+  "user_name": "Sato",
+  "greeting_index": 0,
+  "turns": [
+    {
+      "message": "Halcyon, I'm from the surface ship. The station has been silent for days. Where's the crew?",
+      "showcase": "'the station' pulls in the deck layout. The card's [DECK {deck} | O2 {o2} ...] template reaches the model verbatim because the instruction is a callable, not an ADK {state} template."
+    },
+    {
+      "message": "Take me to Dr. Okonkwo's quarters.",
+      "showcase": "'Okonkwo' pulls in the station chief entry and her note."
+    },
+    {
+      "message": "Your O2 readings are dropping. What's wrong with the scrubbers?",
+      "showcase": "Short keys match on word boundaries and ignore case ('O2'); both keys belong to one entry, added once."
+    },
+    {
+      "message": "I'm going down to Deck 4. What did the hydrophones pick up?",
+      "showcase": "The hydrophone entry gives the model the secret HALCYON is withholding."
+    },
+    {
+      "message": "*I freeze.* Halcyon. Count them.",
+      "authors_note": "The knocking starts again beneath the floor: eleven knocks, a pause, then a twelfth.",
+      "showcase": "The author's note injects an event; it is added to this message, so the system prompt and its cache are untouched."
+    },
+    {
+      "message": "The Tern made it to the surface, right? How many people climbed out?",
+      "authors_note": "",
+      "showcase": "The Tern entry lands the twist."
+    },
+    {
+      "message": "Prep the Petrel. We're leaving, and you're coming with us if I have to pull your core.",
+      "showcase": "The Petrel entry supplies battery and ascent times for the escape."
+    }
+  ]
+}
