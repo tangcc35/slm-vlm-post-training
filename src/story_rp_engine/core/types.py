@@ -15,6 +15,7 @@ class CharacterCard(BaseModel):
     alternate_greetings: List[str] = Field(default_factory=list)
     creator_notes: Optional[str] = None
     tags: List[str] = Field(default_factory=list)
+    lorebook_id: Optional[str] = Field(default=None, description="Lorebook selected by default when a new chat with this character starts.")
 
 
 class LorebookEntry(BaseModel):

@@ -914,6 +914,19 @@ async def test_rp_chat_empty_lorebook_id_clears_session_lorebook(tmp_path):
 
 
 @pytest.mark.anyio
+async def test_rp_session_list_returns_lorebook_id(tmp_path):
+    client, _ = await _recording_rp_app(tmp_path)
+    chat = {"char_id": "ava", "session_id": "s1", "message": "Hi"}
+
+    assert client.post("/api/v1/rp/chat", json={**chat, "lorebook_id": "world"}).status_code == 200
+    assert client.post("/api/v1/rp/chat", json=chat).status_code == 200
+    assert client.get("/api/v1/rp/sessions?char_id=ava").json()[0]["lorebook_id"] == "world"
+
+    assert client.post("/api/v1/rp/chat", json={**chat, "lorebook_id": ""}).status_code == 200
+    assert client.get("/api/v1/rp/sessions?char_id=ava").json()[0]["lorebook_id"] is None
+
+
+@pytest.mark.anyio
 async def test_rp_chat_unknown_lorebook_id_returns_404(tmp_path):
     client, prompts = await _recording_rp_app(tmp_path)
     res = client.post(

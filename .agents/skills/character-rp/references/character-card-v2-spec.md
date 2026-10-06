@@ -45,6 +45,7 @@ The schema is defined in `story_rp_engine.core.types.CharacterCard`:
 | `alternate_greetings` | `list[string]` | No | `[]` | List of alternative opening messages for varied scenarios, scene rerolls, or branching storylines. |
 | `creator_notes` | `string \| null` | No | `None` | Author advice, recommended temperature/sampler parameters, or worldbuilding tips (non-injected metadata). |
 | `tags` | `list[string]` | No | `[]` | Categorical metadata for search and discovery (e.g., `["fantasy", "ranger", "survival"]`). |
+| `lorebook_id` | `string \| null` | No | `None` | Default lorebook: the web UI selects it when a new chat with this character starts. Engine-specific, not part of V2. |
 
 ---
 

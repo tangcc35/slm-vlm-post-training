@@ -31,6 +31,8 @@ async def _rp_state_delta(req: RPChatRequest, request: Request) -> dict:
             if lorebook is None:
                 raise HTTPException(status_code=404, detail="Lorebook not found")
         state_delta["lorebook"] = lorebook.model_dump() if lorebook else None
+        # Read by the history list, so reopening a chat reselects its lorebook.
+        state_delta["lorebook_id"] = req.lorebook_id or None
     return state_delta
 
 
@@ -174,6 +176,7 @@ async def list_rp_sessions(char_id: str, request: Request):
             "greeting": s.state.get("greeting"),
             "user_name": s.state.get("user_name"),
             "authors_note": s.state.get("authors_note"),
+            "lorebook_id": s.state.get("lorebook_id"),
         }
         for s in sorted(response.sessions, key=lambda s: s.last_update_time, reverse=True)
         if s.state.get("char_id") == char_id

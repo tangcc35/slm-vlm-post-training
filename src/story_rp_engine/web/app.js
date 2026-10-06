@@ -43,6 +43,7 @@ const AppDefinition = {
         system_prompt: '',
         post_history_instructions: '',
         creator_notes: '',
+        lorebook_id: '',
       },
 
       // =======================================================================
@@ -337,6 +338,7 @@ const AppDefinition = {
           system_prompt: char.system_prompt || '',
           post_history_instructions: char.post_history_instructions || '',
           creator_notes: char.creator_notes || '',
+          lorebook_id: char.lorebook_id || '',
         };
         this.charTagsInput = this.charForm.tags_str;
       }
@@ -359,6 +361,7 @@ const AppDefinition = {
         system_prompt: '',
         post_history_instructions: '',
         creator_notes: '',
+        lorebook_id: '',
       };
       this.charTagsInput = '';
       this.refreshIcons();
@@ -421,6 +424,7 @@ const AppDefinition = {
         creator_notes: this.charForm.creator_notes
           ? this.charForm.creator_notes.trim()
           : null,
+        lorebook_id: this.charForm.lorebook_id || null,
         tags: tags,
       };
 
@@ -520,6 +524,7 @@ const AppDefinition = {
             system_prompt: data.system_prompt || '',
             post_history_instructions: data.post_history_instructions || '',
             creator_notes: data.creator_notes || '',
+            lorebook_id: data.lorebook_id || '',
           };
           this.charTagsInput = this.charForm.tags_str;
           this.selectedCharId = charId;
@@ -555,6 +560,7 @@ const AppDefinition = {
         system_prompt: this.charForm.system_prompt || null,
         post_history_instructions: this.charForm.post_history_instructions || null,
         creator_notes: this.charForm.creator_notes || null,
+        lorebook_id: this.charForm.lorebook_id || null,
         tags: tags,
       };
 
@@ -939,6 +945,7 @@ const AppDefinition = {
       this.rpSessionId = 'sess_' + Math.random().toString(36).substring(2, 10);
       this.rpMessages = [];
       const char = this.characters.find((c) => c.char_id === this.rpCharId);
+      this.rpLorebookId = (char && char.lorebook_id) || '';
       if (char) {
         let text = char.first_mes || '';
         if (
@@ -1068,6 +1075,7 @@ const AppDefinition = {
         this.rpMessages = messages;
         this.rpUserName = s.user_name || 'User';
         this.rpAuthorsNote = s.authors_note || '';
+        this.rpLorebookId = s.lorebook_id || '';
         this.rpLorebookSentKey = null; // re-send the selected lorebook with the next message
         this.showRPHistory = false;
         this.refreshIcons();

@@ -934,6 +934,18 @@
                 placeholder="Usage guidelines, author credits, and recommended temperature/settings..."
                 class="w-full bg-neutral-900 border border-neutral-800 rounded-md px-3 py-2 text-xs text-neutral-200 placeholder-neutral-600 focus:border-indigo-500"></textarea>
             </div>
+
+            <div class="space-y-1.5">
+              <label class="block text-xs font-medium text-neutral-300">Default Lorebook</label>
+              <select
+                v-model="charForm.lorebook_id"
+                class="w-full bg-neutral-900 border border-neutral-800 rounded-md px-3 py-1.5 text-xs text-neutral-200 focus:border-indigo-500">
+                <option value="">None (No Lorebook)</option>
+                <option v-for="(lb, id) in lorebooks" :key="id" :value="id">
+                  {{ lb.name || id }}
+                </option>
+              </select>
+            </div>
           </div>
 
         </div>

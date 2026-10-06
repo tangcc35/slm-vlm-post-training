@@ -36,6 +36,7 @@ Creates or updates a character card persona stored as JSON.
   - `alternate_greetings` (list[str], optional): Additional opening greetings.
   - `creator_notes` (str, optional): Metadata notes.
   - `tags` (list[str], optional): Category tags.
+  - `lorebook_id` (str, optional): Lorebook the web UI selects when a new chat with this character starts.
 - **Response**: `200 OK`
   ```json
   {
