@@ -14,8 +14,8 @@ Two packages in one repo:
 - **Export**: LoRA adapter, merged 16-bit or 4-bit checkpoints, or GGUF (`q4_k_m`, `q8_0`, `f16`, …).
 
 **Story & roleplay engine**
-- **Roleplay**: Character Card V2 fields, `{{char}}`/`{{user}}` macros, and per-turn context added through an ADK `before_model_callback`: keyword-triggered lorebook entries, the opening greeting, and an author's note.
-- **Story co-pilot**: an ADK `Workflow` graph where a **Director** frames the scene and a **Writer** continues the prose.
+- **Roleplay**: Character Card V2 fields, `{{char}}`/`{{user}}` macros, and the opening greeting in a system prompt that stays the same every turn (so prompt caching works). An ADK `before_model_callback` appends per-turn context to the latest user message: keyword-triggered lorebook entries and an author's note.
+- **Story co-pilot**: a chat-style ADK `Workflow`. Each turn, a **Director** reads the whole session and writes notes; a **Writer** sees only those notes plus the end of the story and writes the next passage.
 - **State**: ADK `DatabaseSessionService` (SQLite locally, Postgres/Neon via `DATABASE_URL`) with automatic context compaction.
 - **Models**: Gemini through the native client; anything else (Ollama, llama.cpp, vLLM, OpenAI-compatible) through LiteLLM.
 - **Serving**: SSE streaming, a built-in web UI, Arize Phoenix tracing, and a Vercel deployment in `vercel/`.
@@ -61,11 +61,11 @@ Add `length_penalty` to a GRPO config's `rewards:` list. Names are looked up in 
 ### Export
 
 ```bash
-uv run slm-post-train export --model-path outputs/gemma_sft \
+uv run slm-post-train export --model-path outputs/gemma_sft/<YYYYMMDD-HHMMSS> \
     --output-dir exports/gemma_gguf --format gguf --quant q4_k_m
 ```
 
-`--format` takes `lora`, `merged_16bit`, `merged_4bit` or `gguf`. `--quant` applies only to GGUF and defaults to `q4_k_m`. Load the `.gguf` into Ollama with a `Modelfile`, or run it directly with llama.cpp.
+SFT saves each run into a timestamped subdirectory of `output.output_dir`, and export does the same under `--output-dir`. `--format` takes `lora`, `merged_16bit`, `merged_4bit` or `gguf`. `--quant` applies only to GGUF and defaults to `q4_k_m`. Load the `.gguf` into Ollama with a `Modelfile`, or run it directly with llama.cpp.
 
 ### 8 GB VRAM settings
 
@@ -84,7 +84,7 @@ flowchart LR
     UI[Web UI / client] -->|SSE| API[FastAPI]
     API --> RP["RP agent (character card)"]
     API --> WF["Story workflow: Director → Writer"]
-    INJ["lorebook · greeting · author's note"] -. before_model_callback .-> RP
+    INJ["lorebook · author's note"] -. before_model_callback .-> RP
     RP --> LLM[Gemini / LiteLLM]
     WF --> LLM
     RP --> DB[("ADK sessions: SQLite / Postgres")]
@@ -118,7 +118,7 @@ The web UI is at http://localhost:8000 and the API docs at `/docs`. To use your 
 | `POST·GET·DELETE /api/v1/lorebooks[/{id}]` | Lorebooks |
 | `POST /api/v1/rp/chat[/stream]` | Roleplay turn |
 | `GET /api/v1/rp/sessions/{id}/turns`, `POST …/turns/delete`, `DELETE /api/v1/rp/sessions/{id}` | View, rewind or clear chat history |
-| `POST /api/v1/story/expand[/stream]` | Story continuation |
+| `POST /api/v1/story/expand[/stream]` | Story chat turn |
 
 ```bash
 curl -N -X POST http://localhost:8000/api/v1/rp/chat/stream -H "Content-Type: application/json" -d '{
@@ -129,6 +129,8 @@ curl -N -X POST http://localhost:8000/api/v1/rp/chat/stream -H "Content-Type: ap
 ```
 
 `lorebook_id` is loaded into the session once: leave it out on later turns, and send `""` to remove it. Lorebook entries are added when one of their keys appears in the user's latest message.
+
+Story sessions work the same way: the first turn sends the setup (`premise`, `genre`, `tone`) with an `instruction`, and it stays in session state, so later turns send only `session_id` and `instruction`. The engine rebuilds the story text from the session's earlier passages; there's no `current_text` field.
 
 ## Agent Skills
 
