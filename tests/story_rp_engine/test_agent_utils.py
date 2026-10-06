@@ -82,3 +82,17 @@ async def test_format_sse_stream_ignores_empty_chunks():
     assert '{"delta": "Valid chunk."}' in events[0]
     assert '{"full_text": "Valid chunk.", "done": true}' in events[1]
     assert events[2] == "data: [DONE]\n\n"
+
+
+@pytest.mark.anyio
+async def test_format_sse_stream_reports_model_error():
+    async def mock_gen():
+        yield "Partial"
+        raise RuntimeError("429 RESOURCE_EXHAUSTED")
+
+    events = [ev async for ev in format_sse_stream(mock_gen(), chunk_size=1)]
+    assert events == [
+        'data: {"delta": "Partial"}\n\n',
+        'data: {"error": "429 RESOURCE_EXHAUSTED"}\n\n',
+        "data: [DONE]\n\n",
+    ]

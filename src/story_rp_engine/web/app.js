@@ -1287,17 +1287,19 @@ const AppDefinition = {
                 if (rawData === '[DONE]') {
                   continue;
                 }
+                let data;
                 try {
-                  const data = JSON.parse(rawData);
-                  if (data.delta) {
-                    assistantMsg.content += data.delta;
-                    this.scrollRPChatToBottom();
-                  } else if (data.full_text && !assistantMsg.content) {
-                    assistantMsg.content = data.full_text;
-                    this.scrollRPChatToBottom();
-                  }
+                  data = JSON.parse(rawData);
                 } catch (jsonErr) {
-                  // Ignore malformed chunk
+                  continue; // Ignore malformed chunk
+                }
+                if (data.error) throw new Error(data.error);
+                if (data.delta) {
+                  assistantMsg.content += data.delta;
+                  this.scrollRPChatToBottom();
+                } else if (data.full_text && !assistantMsg.content) {
+                  assistantMsg.content = data.full_text;
+                  this.scrollRPChatToBottom();
                 }
               }
             }
@@ -1421,7 +1423,7 @@ const AppDefinition = {
           throw new Error(err.detail || `Server returned HTTP ${res.status}`);
         }
 
-        // Each SSE event is one `data:` line: {"delta"}, then {"full_text", "done"}, then [DONE].
+        // Each SSE event is one `data:` line: {"delta"}, then {"full_text", "done"} (or {"error"}), then [DONE].
         const reader = res.body.getReader();
         const decoder = new TextDecoder('utf-8');
         let buffer = '';
@@ -1436,6 +1438,7 @@ const AppDefinition = {
             const raw = line.slice(5).trim();
             if (raw === '[DONE]') continue;
             const data = JSON.parse(raw);
+            if (data.error) throw new Error(data.error);
             if (data.delta) {
               reply.content += data.delta;
             } else if (data.full_text && !reply.content) {

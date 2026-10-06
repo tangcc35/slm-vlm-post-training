@@ -1,8 +1,11 @@
 import json
+import logging
 from typing import AsyncIterator, Optional
 from google.adk.agents.run_config import RunConfig, StreamingMode
 from google.adk.runners import Runner
 from google.genai import types
+
+logger = logging.getLogger(__name__)
 
 
 async def execute_runner_turn(
@@ -104,21 +107,28 @@ async def format_sse_stream(
     chunk_threshold = max(1, chunk_size or 4)
     buffered_tokens = 0
 
-    async for chunk in generator:
-        if not chunk:
-            continue
-        buffer.append(chunk)
-        full_text_chunks.append(chunk)
+    try:
+        async for chunk in generator:
+            if not chunk:
+                continue
+            buffer.append(chunk)
+            full_text_chunks.append(chunk)
 
-        words = chunk.strip().split()
-        chunk_tokens = len(words) if words else 1
-        buffered_tokens += chunk_tokens
+            words = chunk.strip().split()
+            chunk_tokens = len(words) if words else 1
+            buffered_tokens += chunk_tokens
 
-        if chunk_threshold <= 1 or buffered_tokens >= chunk_threshold or len(buffer) >= chunk_threshold or "\n" in chunk:
-            combined = "".join(buffer)
-            yield f"data: {json.dumps({'delta': combined}, ensure_ascii=False)}\n\n"
-            buffer.clear()
-            buffered_tokens = 0
+            if chunk_threshold <= 1 or buffered_tokens >= chunk_threshold or len(buffer) >= chunk_threshold or "\n" in chunk:
+                combined = "".join(buffer)
+                yield f"data: {json.dumps({'delta': combined}, ensure_ascii=False)}\n\n"
+                buffer.clear()
+                buffered_tokens = 0
+    except Exception as e:
+        # The 200 response has already started, so report model errors (e.g. Gemini API errors) in-stream.
+        logger.exception("Model turn failed")
+        yield f"data: {json.dumps({'error': str(e)}, ensure_ascii=False)}\n\n"
+        yield "data: [DONE]\n\n"
+        return
 
     if buffer:
         combined = "".join(buffer)
