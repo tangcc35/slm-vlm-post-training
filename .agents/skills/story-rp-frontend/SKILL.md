@@ -1,6 +1,6 @@
 ---
 name: story-rp-frontend
-description: Use when creating, modifying, or styling the browser interface for the Story and RP engine in src/story_rp_engine/web/, including tab switching (roleplay, group chat, story co-pilot, characters, groups, lorebooks), client-side SSE streaming readers, markdown rendering, character card import modals, or CSS layout improvements.
+description: Use when creating, modifying, or styling the browser interface for the Story and RP engine in src/story_rp_engine/web/, including tab switching (roleplay, group chat, story co-pilot, characters, groups, lorebooks, personas), client-side SSE streaming readers, markdown rendering, character card import modals, or CSS layout improvements.
 ---
 
 # Story & RP Frontend Skill
@@ -33,7 +33,7 @@ flowchart TD
 
 ### 2. Bind Reactive State & Tab Navigation
 - Maintain centralized Vue 3 reactive state in `src/story_rp_engine/web/app.js` (`AppDefinition`):
-  - Global navigation: `activeTab` (`'roleplay'`, `'group'`, `'story'`, `'characters'`, `'groups'`, `'lorebooks'`). `'group'` is the Group Chat tab and `'groups'` is the Groups editor.
+  - Global navigation: `activeTab` (`'roleplay'`, `'group'`, `'story'`, `'characters'`, `'groups'`, `'lorebooks'`, `'personas'`). `'group'` is the Group Chat tab and `'groups'` is the Groups editor.
   - Application health: `backendOnline` toggled via `checkHealth()` polling `/health` every 10 seconds.
   - Toast feedback: `toast` object with auto-dismiss timer.
 - Keep bidirectional watchers in sync for property aliases (e.g., `charSearchQuery` <-> `charSearch`, `lorebookSearchQuery` <-> `lbSearch`, `customGenre` <-> `storyCustomGenre`, `customTone` <-> `storyCustomTone`).
@@ -51,6 +51,9 @@ flowchart TD
 - **Groups** (Groups tab):
   - Load via `GET /api/v1/groups` into `groups` (keyed by `group_id`); save via `POST /api/v1/groups` and delete via `DELETE /api/v1/groups/{id}`.
   - `groupForm` holds `group_id`, `name`, `char_ids` (toggled with `toggleGroupMember`; selection order is the fallback speaking order), `scenario` and `lorebook_ids`. Groups have no opening message: the user's first message opens the scene.
+- **Personas** (Personas tab):
+  - Load via `GET /api/v1/personas` into `personas` (keyed by `persona_id`); save via `POST /api/v1/personas` and delete via `DELETE /api/v1/personas/{id}`.
+  - `personaForm` holds `persona_id`, `name` and `description` (the description goes into the character prompts; `{{user}}`/`{{char}}` macros work).
 - Consult `references/ui-components-and-modes.md` for form fields, validation requirements, and JSON mapping schemas.
 
 ### 4. Implement & Buffer Client SSE Stream Readers
@@ -121,5 +124,5 @@ uv run pytest tests/test_agent_skills.py -v
 ## Reference Guides
 
 Detailed technical specifications are available in the 1-level deep references:
-- `references/ui-components-and-modes.md`: HTML layout hierarchy, the six tabs (Roleplay, Group Chat, Story Co-Pilot, Characters, Groups, Lorebooks), character card importer modal/editor, lorebook and group editors, CSS variables, and theme styling.
+- `references/ui-components-and-modes.md`: HTML layout hierarchy, the seven tabs (Roleplay, Group Chat, Story Co-Pilot, Characters, Groups, Lorebooks, Personas), character card importer modal/editor, lorebook, group and persona editors, CSS variables, and theme styling.
 - `references/sse-event-client.md`: Client-side SSE reader via `fetch` ReadableStream / `TextDecoder` (including the group chat `speaker` deltas), chunk buffering, real-time Markdown rendering, disconnect/error handling, AbortController cancellation, and turn rewind/regeneration mechanics.

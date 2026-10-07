@@ -482,3 +482,11 @@ def test_group_chat_tab_is_served(client):
     js = client.get("/app.js").text
     assert "/api/v1/group/chat/stream" in js
     assert "/api/v1/group/sessions" in js
+
+
+def test_personas_tab_is_served(client):
+    html = client.get("/").text
+    assert "activeTab === 'personas'" in html
+    assert "savePersona" in html
+    js = client.get("/app.js").text
+    assert "'/api/v1/personas'" in js

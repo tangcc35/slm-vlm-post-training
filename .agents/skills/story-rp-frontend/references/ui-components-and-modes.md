@@ -24,6 +24,7 @@ flowchart TD
     Main --> Tab3["Characters Directory & Editor (activeTab === 'characters')"]
     Main --> TabGroups["Groups Directory & Editor (activeTab === 'groups')"]
     Main --> Tab4["Lorebooks Directory & Editor (activeTab === 'lorebooks')"]
+    Main --> TabPersonas["Personas Directory & Editor (activeTab === 'personas')"]
     Index --> Toast["Global Toast Banner (v-if='toast.show')"]
     AppJS["app.js (Vue 3 Reactive AppDefinition)"] -.->|State & Handlers| Index
     StyleCSS["style.css (Animations & Prose Styling)"] -.->|CSS Classes| Index
@@ -41,13 +42,14 @@ Located at `<header class="h-14 border-b border-neutral-800 bg-neutral-900/90 ba
    - Title: **Story & Roleplay Workbench** (`text-sm md:text-base font-bold`).
    - Subtitle: `ADK Dual-Engine Playground` (`text-[10px] font-mono text-neutral-400`).
 2. **Navigation Tabs**:
-   - Six tab buttons, in this order:
+   - Seven tab buttons, in this order:
      - `roleplay` (`lucide="message-square"`)
      - `group` (`lucide="messages-square"`, Group Chat)
      - `story` (`lucide="feather"`)
      - `characters` (`lucide="users"`)
      - `groups` (`lucide="contact"`, Groups editor)
      - `lorebooks` (`lucide="book-open"`)
+     - `personas` (`lucide="user"`, Personas editor)
    - Active tab state indicated by `bg-indigo-600 text-white font-medium shadow-sm`.
 3. **Backend Health Indicator**:
    - Status badge polling `/health` every 10 seconds via `setInterval` in `mounted()`.
@@ -233,7 +235,18 @@ Editor for saved groups of characters.
 
 ---
 
-## 9. CSS Custom Properties and Theme Styling (`style.css`)
+## 9. Personas Management (`personas`)
+
+Editor for who the user plays as in Roleplay and Group Chat.
+
+### Layout & Features
+- **Sidebar Directory**: one card per persona (name and a two-line description preview); **New Persona (`newPersona()`)** clears the form. No search box.
+- **Form Editor** (`personaForm`): `persona_id` (slug), `name`, and `description` (added to the character prompts; `{{user}}` and `{{char}}` macros work).
+- **Actions**: Save Persona (`POST /api/v1/personas`), Delete (`DELETE /api/v1/personas/{id}`).
+
+---
+
+## 10. CSS Custom Properties and Theme Styling (`style.css`)
 
 ### Core Rules
 - **Directive Cloaking**:

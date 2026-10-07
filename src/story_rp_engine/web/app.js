@@ -11,7 +11,7 @@ const AppDefinition = {
   data() {
     return {
       // Global navigation & application health
-      activeTab: 'roleplay', // 'roleplay' | 'group' | 'story' | 'characters' | 'groups' | 'lorebooks'
+      activeTab: 'roleplay', // 'roleplay' | 'group' | 'story' | 'characters' | 'groups' | 'lorebooks' | 'personas'
       backendOnline: false,
       healthInterval: null,
       toast: {
@@ -66,6 +66,13 @@ const AppDefinition = {
       selectedGroupId: null,
       groupSearchQuery: '',
       groupForm: { group_id: '', name: '', char_ids: [], scenario: '', lorebook_ids: [] },
+
+      // =======================================================================
+      // Personas Management State
+      // =======================================================================
+      personas: {}, // Object mapping persona_id -> Persona
+      selectedPersonaId: null,
+      personaForm: { persona_id: '', name: '', description: '' },
 
       // =======================================================================
       // Roleplay Tab Reactive State (Task 6)
@@ -1020,6 +1027,73 @@ const AppDefinition = {
         }
       } catch (err) {
         this.showToast('Network error while deleting group', 'error');
+      }
+    },
+
+    async loadPersonas() {
+      try {
+        const res = await fetch('/api/v1/personas');
+        if (res.ok) this.personas = await res.json();
+      } catch (err) {
+        console.error('Failed to load personas:', err);
+      }
+      this.refreshIcons();
+    },
+
+    selectPersona(id) {
+      const p = this.personas[id];
+      if (!p) return;
+      this.selectedPersonaId = id;
+      this.personaForm = { persona_id: p.persona_id, name: p.name || '', description: p.description || '' };
+      this.refreshIcons();
+    },
+
+    newPersona() {
+      this.selectedPersonaId = null;
+      this.personaForm = { persona_id: '', name: '', description: '' };
+      this.refreshIcons();
+    },
+
+    async savePersona() {
+      const personaId = (this.personaForm.persona_id || '').trim();
+      const name = (this.personaForm.name || '').trim();
+      if (!personaId || !name) {
+        this.showToast('Persona ID and name are required.', 'error');
+        return;
+      }
+      try {
+        const res = await fetch('/api/v1/personas', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ persona_id: personaId, name: name, description: this.personaForm.description || '' }),
+        });
+        if (res.ok) {
+          this.showToast(`Persona "${name}" saved!`, 'success');
+          this.selectedPersonaId = personaId;
+          await this.loadPersonas();
+        } else {
+          const err = await res.json().catch(() => ({ detail: 'Failed to save persona' }));
+          this.showToast(err.detail || 'Save failed', 'error');
+        }
+      } catch (err) {
+        this.showToast('Network error while saving persona', 'error');
+      }
+    },
+
+    async deletePersona(id) {
+      if (!id || !confirm(`Are you sure you want to delete persona "${id}"?`)) return;
+      try {
+        const res = await fetch(`/api/v1/personas/${encodeURIComponent(id)}`, { method: 'DELETE' });
+        if (res.ok) {
+          this.showToast(`Persona "${id}" deleted.`, 'success');
+          if (this.selectedPersonaId === id) this.newPersona();
+          await this.loadPersonas();
+        } else {
+          const err = await res.json().catch(() => ({ detail: 'Failed to delete' }));
+          this.showToast(err.detail || 'Delete failed', 'error');
+        }
+      } catch (err) {
+        this.showToast('Network error while deleting persona', 'error');
       }
     },
 
@@ -1997,6 +2071,7 @@ const AppDefinition = {
     this.loadCharacters();
     this.loadLorebooks();
     this.loadGroups();
+    this.loadPersonas();
     this.loadStorySessions();
     this.refreshIcons();
   },
