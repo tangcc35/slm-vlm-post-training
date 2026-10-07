@@ -1,4 +1,4 @@
-# Web UI Components and Dual-Mode Architecture
+# Web UI Components and Tabs
 
 Technical reference for the single-page application (SPA) browser interface in `src/story_rp_engine/web/` (`index.html`, `app.js`, `style.css`).
 
@@ -18,10 +18,12 @@ The Story and Roleplay Workbench is implemented as a lightweight, zero-build-ste
 flowchart TD
     Index["index.html (Single Page App Shell)"] --> Header["Top Navigation Header & Health Monitor"]
     Index --> Main["Main Workspace (<main class='flex-1 relative'>)"]
-    Main --> Tab1["Tab 1: Roleplay Workbench (activeTab === 'roleplay')"]
-    Main --> Tab2["Tab 2: Story Co-Pilot (activeTab === 'story')"]
-    Main --> Tab3["Tab 3: Characters Directory & Editor (activeTab === 'characters')"]
-    Main --> Tab4["Tab 4: Lorebooks Directory & Editor (activeTab === 'lorebooks')"]
+    Main --> Tab1["Roleplay Workbench (activeTab === 'roleplay')"]
+    Main --> TabGroup["Group Chat (activeTab === 'group')"]
+    Main --> Tab2["Story Co-Pilot (activeTab === 'story')"]
+    Main --> Tab3["Characters Directory & Editor (activeTab === 'characters')"]
+    Main --> TabGroups["Groups Directory & Editor (activeTab === 'groups')"]
+    Main --> Tab4["Lorebooks Directory & Editor (activeTab === 'lorebooks')"]
     Index --> Toast["Global Toast Banner (v-if='toast.show')"]
     AppJS["app.js (Vue 3 Reactive AppDefinition)"] -.->|State & Handlers| Index
     StyleCSS["style.css (Animations & Prose Styling)"] -.->|CSS Classes| Index
@@ -39,10 +41,12 @@ Located at `<header class="h-14 border-b border-neutral-800 bg-neutral-900/90 ba
    - Title: **Story & Roleplay Workbench** (`text-sm md:text-base font-bold`).
    - Subtitle: `ADK Dual-Engine Playground` (`text-[10px] font-mono text-neutral-400`).
 2. **Navigation Tabs**:
-   - Four interactive mode buttons:
+   - Six tab buttons, in this order:
      - `roleplay` (`lucide="message-square"`)
+     - `group` (`lucide="messages-square"`, Group Chat)
      - `story` (`lucide="feather"`)
      - `characters` (`lucide="users"`)
+     - `groups` (`lucide="contact"`, Groups editor)
      - `lorebooks` (`lucide="book-open"`)
    - Active tab state indicated by `bg-indigo-600 text-white font-medium shadow-sm`.
 3. **Backend Health Indicator**:
@@ -193,7 +197,43 @@ Codex manager for keyword-triggered world context entries injected dynamically d
 
 ---
 
-## 7. CSS Custom Properties and Theme Styling (`style.css`)
+## 7. Group Chat (`group`)
+
+Chat with a saved group of characters. Each turn the backend's speaker selector picks who replies, and every reply streams into its own labelled bubble.
+
+### Left Sidebar Controls
+- **Active Group** (`groupChatId`): `<select>` over `groups`; changing it calls `onGroupChatChange()`, which starts a new chat and reloads history. The member names show under the picker.
+- **Chat**: "New" (`newGroupSession()`, which seeds the group's `first_mes` as an `isGreeting` bubble and preselects its default lorebook) and a history dropdown (`groupSessions` from `GET /api/v1/group/sessions?group_id=`) with open, rename (`saveRename('group', s)`) and delete (`deleteGroupSession(s)`).
+- **User Persona Name** (`groupUserName`), **Active Lorebook** (`groupLorebookId`, sent only when the session or selection changed, tracked by `groupLorebookSentKey`), **Author's Note** (`groupAuthorsNote`) and **SSE Chunk Size** (`groupChunkSize`).
+
+### Right Chat Feed (`#group-chat-feed`)
+- `groupMessages` entries are `{ role, speaker, content, timestamp, isGreeting? }`; `speaker` is a `char_id` (null for the user and the greeting).
+- Bubble labels come from `groupSpeakerName(msg)`: the user name, the group name for the greeting, otherwise `characterName(msg.speaker)`.
+- `_streamGroupReplies()` posts to `POST /api/v1/group/chat/stream` and opens a new bubble whenever a delta's `speaker` changes.
+- Each bubble has Copy and Delete (`deleteGroupTurn(idx)`, which posts `turns/delete` with the greeting offset). There is no regenerate or rewind.
+- Reopening a chat (`openGroupSession(s)`) rebuilds the bubbles from `GET /api/v1/group/sessions/{id}/turns`.
+
+---
+
+## 8. Groups Management (`groups`)
+
+Editor for saved groups of characters.
+
+### Layout & Features
+- **Sidebar Directory**:
+  - Search filter input (`groupSearchQuery`, filtered by `filteredGroups` over name, ID and scenario).
+  - Cards show the group name, member count and member names (`characterName`).
+  - **New Group (`newGroup()`)**: Clears the form.
+- **Form Editor** (`groupForm`):
+  1. **Identity**: `group_id` (slug) and `name`.
+  2. **Members**: a grid of saved characters; clicking toggles membership (`toggleGroupMember(char_id)`), and the badge number is the selection order, which is the fallback speaking order.
+  3. **Scene**: `scenario` (replaces each member's own scenario in group chats) and `first_mes` (opening message).
+  4. **Default Lorebook**: `lorebook_id`, preselected for new chats.
+  5. **Actions**: Save Group (`POST /api/v1/groups`), Delete Group (`DELETE /api/v1/groups/{id}`).
+
+---
+
+## 9. CSS Custom Properties and Theme Styling (`style.css`)
 
 ### Core Rules
 - **Directive Cloaking**:

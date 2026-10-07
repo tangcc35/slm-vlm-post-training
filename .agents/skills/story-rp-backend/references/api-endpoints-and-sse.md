@@ -273,6 +273,8 @@ sequenceDiagram
    ```http
    data: {"speaker": "bob", "delta": "Bob "}
 
+   data: {"speaker": "bob", "delta": "line"}
+
    data: {"speaker": "alice", "delta": "Alice line"}
 
    data: {"replies": [{"speaker": "bob", "text": "Bob line"}, {"speaker": "alice", "text": "Alice line"}], "done": true}

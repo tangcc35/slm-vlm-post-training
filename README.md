@@ -16,6 +16,7 @@ Two packages in one repo:
 **Story & roleplay engine**
 - **Roleplay**: Character Card V2 fields, `{{char}}`/`{{user}}` macros, and the opening greeting in a system prompt that stays the same every turn (so prompt caching works). An ADK `before_model_callback` appends per-turn context to the latest user message: keyword-triggered lorebook entries and an author's note.
 - **Story co-pilot**: a chat-style ADK `Workflow`. Each turn, a **Director** reads the whole session and writes notes; a **Writer** sees only those notes plus the end of the story and writes the next passage.
+- **Group chat**: a saved group puts several characters in one scene. Each turn, a **speaker selector** agent returns the list of characters who reply (structured output), and each one answers in order, seeing the others' lines but never the selector's.
 - **State**: ADK `DatabaseSessionService` (SQLite locally, Postgres/Neon via `DATABASE_URL`) with automatic context compaction.
 - **Models**: Gemini through the native client; anything else (Ollama, llama.cpp, vLLM, OpenAI-compatible) through LiteLLM.
 - **Serving**: SSE streaming, a built-in web UI, Arize Phoenix tracing, and a Vercel deployment in `vercel/`.
@@ -84,11 +85,15 @@ flowchart LR
     UI[Web UI / client] -->|SSE| API[FastAPI]
     API --> RP["RP agent (character card)"]
     API --> WF["Story workflow: Director → Writer"]
+    API --> GW["Group workflow: speaker selector → characters"]
     INJ["lorebook · author's note"] -. before_model_callback .-> RP
+    INJ -. before_model_callback .-> GW
     RP --> LLM[Gemini / LiteLLM]
     WF --> LLM
+    GW --> LLM
     RP --> DB[("ADK sessions: SQLite / Postgres")]
     WF --> DB
+    GW --> DB
 ```
 
 ```bash
