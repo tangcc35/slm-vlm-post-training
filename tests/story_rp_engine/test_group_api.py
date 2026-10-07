@@ -136,3 +136,22 @@ async def test_characters_never_see_selector_json_across_persisted_turns(tmp_pat
     texts = ["".join(p.text or "" for p in c.parts) for c in group_models.requests["Alice"][-1].contents]
     assert any("[char_bob] said:" in t for t in texts)
     assert not any('"speakers"' in t for t in texts)
+
+
+@pytest.mark.anyio
+async def test_group_chat_persona_reaches_member_prompts(tmp_path, group_models):
+    client = await _group_client(tmp_path)
+    group_models.plan = {"speakers": ["alice"]}
+    sam = {"persona_id": "sam", "name": "Sam", "description": "{{user}} owes {{char}} money."}
+    assert client.post("/api/v1/personas", json=sam).status_code == 200
+
+    assert _chat(client, "Hello!", persona_id="sam").status_code == 200
+    instruction = group_models.requests["Alice"][-1].config.system_instruction
+    assert instruction.startswith("You are Alice in a group roleplay with Sam, Bob.")
+    assert "Sam owes Alice money." in instruction
+    assert "group roleplay between Sam and" in group_models.requests["speaker_selector"][-1].config.system_instruction
+    assert client.get("/api/v1/group/sessions?group_id=tavern").json()[0]["persona_id"] == "sam"
+
+    res = _chat(client, "Hello?", persona_id="ghost")
+    assert res.status_code == 404
+    assert res.json()["detail"] == "Persona not found: ghost"

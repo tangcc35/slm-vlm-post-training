@@ -107,7 +107,7 @@ Dynamic prompts allow character cards to remain reusable across different user h
 | Macro Placeholder | Replaced With | Case Handling |
 | :--- | :--- | :--- |
 | `{{char}}` | `card.name` | Case-insensitive (`{{char}}`, `{{Char}}`, `{{CHAR}}`) |
-| `{{user}}` | User's configured name (`user_name`, defaults to `"User"`) | Case-insensitive (`{{user}}`, `{{User}}`, `{{USER}}`) |
+| `{{user}}` | The selected persona's name, else `user_name` (defaults to `"User"`) | Case-insensitive (`{{user}}`, `{{User}}`, `{{USER}}`) |
 
 ### Substitution Engine (`story_rp_engine.rp.prompt_builder.replace_macros`)
 

@@ -24,7 +24,10 @@ def create_rp_agent(
         # A callable instruction skips ADK's {state_var} templating, which would
         # otherwise raise KeyError on braces in card text such as {{time}}.
         instruction=lambda ctx: build_rp_system_instruction(
-            card, user_name=ctx.state.get("user_name") or user_name, greeting=ctx.state.get("greeting")
+            card,
+            user_name=ctx.state.get("user_name") or user_name,
+            greeting=ctx.state.get("greeting"),
+            user_persona=ctx.state.get("user_persona") or "",
         ),
         generate_content_config=get_generate_config(config),
         before_model_callback=rp_before_model_callback,

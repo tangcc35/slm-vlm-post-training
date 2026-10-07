@@ -432,7 +432,9 @@ def test_rp_chat_authors_note_and_custom_user(tmp_path):
         assert kwargs["message"] == "Play the hidden song."
         assert kwargs["state_delta"] == {
             "authors_note": "[Style: Melancholy]",
+            "persona_id": None,
             "user_name": "Adventurer",
+            "user_persona": "",
             "greeting": None,
             "char_id": "lyra",
             "last_message": "Play the hidden song.",
@@ -1065,3 +1067,48 @@ def test_persona_crud(tmp_path):
     assert client.delete("/api/v1/personas/sam").json() == {"status": "deleted", "persona_id": "sam"}
     assert client.get("/api/v1/personas/sam").status_code == 404
     assert client.delete("/api/v1/personas/sam").status_code == 404
+
+
+SAM = {"persona_id": "sam", "name": "Sam", "description": "{{user}} is a cartographer who owes {{char}} money."}
+
+
+@pytest.mark.anyio
+async def test_rp_chat_persona_sets_name_and_description(tmp_path):
+    client, prompts = await _recording_rp_app(tmp_path)
+    assert client.post("/api/v1/personas", json=SAM).status_code == 200
+    chat = {"char_id": "ava", "session_id": "s1", "message": "Hi"}
+
+    assert client.post("/api/v1/rp/chat", json={**chat, "persona_id": "sam"}).status_code == 200
+    assert "Ava owes Sam a favor." in prompts[-1]
+    assert "Sam is a cartographer who owes Ava money." in prompts[-1]
+    assert client.get("/api/v1/rp/sessions?char_id=ava").json()[0]["persona_id"] == "sam"
+
+    # Without persona_id the chat falls back to user_name and drops the description.
+    assert client.post("/api/v1/rp/chat", json={**chat, "user_name": "Alice"}).status_code == 200
+    assert "Ava owes Alice a favor." in prompts[-1]
+    assert "cartographer" not in prompts[-1]
+    assert client.get("/api/v1/rp/sessions?char_id=ava").json()[0]["persona_id"] is None
+
+
+@pytest.mark.anyio
+async def test_rp_chat_uses_edited_persona_on_next_turn(tmp_path):
+    client, prompts = await _recording_rp_app(tmp_path)
+    chat = {"char_id": "ava", "session_id": "s1", "message": "Hi", "persona_id": "sam"}
+    client.post("/api/v1/personas", json=SAM)
+    assert client.post("/api/v1/rp/chat", json=chat).status_code == 200
+
+    # Braces that aren't macros reach the prompt as-is; ADK's {state} templating never sees the description.
+    client.post("/api/v1/personas", json={**SAM, "name": "Samantha", "description": "Carries a {lucky} coin."})
+    assert client.post("/api/v1/rp/chat", json=chat).status_code == 200
+    assert "Carries a {lucky} coin." in prompts[-1]
+    assert "Ava owes Samantha a favor." in prompts[-1]
+    assert "cartographer" not in prompts[-1]
+
+
+@pytest.mark.anyio
+async def test_rp_chat_unknown_persona_returns_404(tmp_path):
+    client, prompts = await _recording_rp_app(tmp_path)
+    res = client.post("/api/v1/rp/chat", json={"char_id": "ava", "session_id": "s1", "message": "Hi", "persona_id": "ghost"})
+    assert res.status_code == 404
+    assert res.json()["detail"] == "Persona not found: ghost"
+    assert prompts == []

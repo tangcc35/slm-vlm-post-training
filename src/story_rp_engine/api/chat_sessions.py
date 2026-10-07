@@ -40,12 +40,21 @@ async def load_lorebooks(request: Request, lorebook_ids: List[str]) -> List[dict
 async def chat_state_delta(req, request: Request, **fields) -> dict:
     """Session state changes for a chat turn; lorebooks are copied in only when lorebook_ids is sent.
 
-    `fields` adds the chat's own keys (char_id and greeting, or group_id). The owner ID and last_message are
-    read by the history list, which gets session state but no events.
+    A persona_id sets the user's name and description from that saved persona, re-read every turn so edits apply;
+    without one the name comes from user_name and the description is cleared. `fields` adds the chat's own keys
+    (char_id and greeting, or group_id). The owner ID and last_message are read by the history list, which gets
+    session state but no events.
     """
+    persona = None
+    if req.persona_id:
+        persona = await request.app.state.store.get_persona(req.persona_id)
+        if persona is None:
+            raise HTTPException(status_code=404, detail=f"Persona not found: {req.persona_id}")
     state_delta = {
         "authors_note": req.authors_note,
-        "user_name": req.user_name or "User",
+        "persona_id": req.persona_id,
+        "user_name": persona.name if persona else (req.user_name or "User"),
+        "user_persona": persona.description if persona else "",
         **fields,
         "last_message": req.message[:80],
     }
@@ -83,6 +92,7 @@ async def list_chat_sessions(session_service, app_name: str, owner_key: str, own
             "last_message": s.state.get("last_message", ""),
             "greeting": s.state.get("greeting"),
             "user_name": s.state.get("user_name"),
+            "persona_id": s.state.get("persona_id"),
             "authors_note": s.state.get("authors_note"),
             "lorebook_ids": s.state.get("lorebook_ids") or [],
         }

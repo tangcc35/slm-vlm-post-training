@@ -56,6 +56,7 @@ class RPChatRequest(BaseModel):
     authors_note: Optional[str] = None
     lorebook_ids: Optional[List[str]] = Field(default=None, description="Loads these lorebooks into the session; omit to keep the current ones, empty list to clear them.")
     user_name: Optional[str] = "User"
+    persona_id: Optional[str] = Field(default=None, description="Plays as this saved persona; overrides user_name.")
     greeting: Optional[str] = Field(default=None, description="Opening message shown to the user before their first message.")
     chunk_size: Optional[int] = Field(default=16, ge=1, le=100, description="Number of tokens to buffer before yielding in streaming mode.")
 
@@ -83,5 +84,6 @@ class GroupChatRequest(BaseModel):
     authors_note: Optional[str] = None
     lorebook_ids: Optional[List[str]] = Field(default=None, description="Loads these lorebooks into the session; omit to keep the current ones, empty list to clear them.")
     user_name: Optional[str] = "User"
+    persona_id: Optional[str] = Field(default=None, description="Plays as this saved persona; overrides user_name.")
     chunk_size: Optional[int] = Field(default=16, ge=1, le=100, description="Number of tokens to buffer before yielding in streaming mode.")
 

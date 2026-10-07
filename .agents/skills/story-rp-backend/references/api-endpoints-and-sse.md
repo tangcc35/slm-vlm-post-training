@@ -97,6 +97,7 @@ Executes a synchronous roleplay chat turn via Google ADK Runner.
   - `message` (str, required): User message text.
   - `authors_note` (str, optional): Steering guidance injected into prompt context.
   - `user_name` (str, optional): User persona name (defaults to `"User"`).
+  - `persona_id` (str, optional): Saved persona to play as; sets the user's name and adds its description to the prompt, overriding `user_name`. `404` if it doesn't exist.
   - `chunk_size` (int, optional): Buffer size (default: 16).
 - **Response**: `200 OK`
   ```json
@@ -204,7 +205,7 @@ A group puts several characters in one scene; a speaker selector picks who repli
 - `GET /api/v1/groups`: Returns all groups keyed by `group_id`.
 - `GET /api/v1/groups/{group_id}`: Retrieves one group (`404` if missing).
 - `DELETE /api/v1/groups/{group_id}`: Deletes the group and evicts its cached runner (`404` if missing).
-- `POST /api/v1/group/chat/stream`: Streams one group turn over SSE (see section 2.1). Body `GroupChatRequest`: `group_id`, `session_id`, `message` (required); `authors_note`, `user_name`, `lorebook_ids`, `chunk_size` (optional, as in `RPChatRequest`; there is no `greeting`). `404` if the group or lorebook is missing; `400` if the group has no characters or the session ID is invalid.
+- `POST /api/v1/group/chat/stream`: Streams one group turn over SSE (see section 2.1). Body `GroupChatRequest`: `group_id`, `session_id`, `message` (required); `authors_note`, `user_name`, `persona_id`, `lorebook_ids`, `chunk_size` (optional, as in `RPChatRequest`; there is no `greeting`). `404` if the group, lorebook or persona is missing; `400` if the group has no characters or the session ID is invalid.
 - `GET /api/v1/group/sessions?group_id=`: Chats with one group, newest first.
 - `GET /api/v1/group/sessions/{session_id}/turns`: Same shape as the RP turns plus `speaker` (the `char_id`, `null` for the user); the selector's events are hidden.
 - `PATCH /api/v1/group/sessions/{session_id}`: Renames the chat (`{"title": ...}`).
