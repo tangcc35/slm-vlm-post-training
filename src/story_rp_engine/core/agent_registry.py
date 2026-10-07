@@ -1,4 +1,4 @@
-from typing import Dict, Optional
+from typing import Dict, List, Optional, Tuple
 from google.adk.agents import LlmAgent
 from google.adk.apps import App
 from google.adk.apps.app import EventsCompactionConfig
@@ -8,7 +8,7 @@ from google.adk import Workflow
 from story_rp_engine.core.config import EngineConfig
 from story_rp_engine.core.model_provider import get_adk_model
 from story_rp_engine.storage.store import EngineStore
-from story_rp_engine.core.types import CharacterCard, Lorebook
+from story_rp_engine.core.types import CharacterCard, GroupCard, Lorebook
 from story_rp_engine.rp.agent import create_rp_agent
 
 
@@ -25,6 +25,8 @@ class AgentRegistry:
         self._rp_agent_cards: Dict[str, CharacterCard] = {}
         self._story_workflow: Optional[Workflow] = None
         self._story_runner: Optional[Runner] = None
+        # Group runners with the (group, member cards) they were built from.
+        self._group_runners: Dict[str, Tuple[Tuple[GroupCard, List[CharacterCard]], Runner]] = {}
 
     async def get_or_create_rp_agent(
         self,
@@ -84,6 +86,20 @@ class AgentRegistry:
             summarizer=summarizer,
         )
 
+    def _turn_count_compaction_config(self, prompt_template: str) -> Optional[EventsCompactionConfig]:
+        """Compaction for workflow apps: turn-count only. Token-threshold compaction also runs before each model
+        call, so it could fire between two agents of one turn and summarize away what the first one wrote."""
+        if not self.config.compaction_enabled:
+            return None
+        return EventsCompactionConfig(
+            compaction_interval=self.config.compaction_interval,
+            overlap_size=self.config.compaction_overlap_size,
+            summarizer=LlmEventSummarizer(
+                llm=get_adk_model(self.config),
+                prompt_template=self.config.compaction_prompt_template or prompt_template,
+            ),
+        )
+
     async def get_or_create_rp_runner(self, char_id: str) -> Runner:
         """Retrieves or creates a cached ADK Runner for the specified character agent."""
         # Resolving the agent first evicts the runner if the agent had to be rebuilt.
@@ -124,18 +140,7 @@ class AgentRegistry:
         if self._story_runner is None:
             from story_rp_engine.story.workflow import STORY_SUMMARY_PROMPT
             workflow = self.get_story_workflow()
-            compaction_config = None
-            if self.config.compaction_enabled:
-                # Turn-count compaction only. Token-threshold compaction also runs before each model call,
-                # so it can fire between the director and the writer and summarize away the director's notes.
-                compaction_config = EventsCompactionConfig(
-                    compaction_interval=self.config.compaction_interval,
-                    overlap_size=self.config.compaction_overlap_size,
-                    summarizer=LlmEventSummarizer(
-                        llm=get_adk_model(self.config),
-                        prompt_template=self.config.compaction_prompt_template or STORY_SUMMARY_PROMPT,
-                    ),
-                )
+            compaction_config = self._turn_count_compaction_config(STORY_SUMMARY_PROMPT)
             app = App(
                 name="story_app",
                 root_agent=workflow,
@@ -150,3 +155,40 @@ class AgentRegistry:
 
     def register_story_runner(self, runner: Runner) -> None:
         self._story_runner = runner
+
+    async def get_or_create_group_runner(self, group_id: str) -> Runner:
+        """Retrieves or creates the ADK Runner for a group chat.
+
+        The store may be shared with other instances, so the group and its member cards are re-read each time and
+        the runner is rebuilt when they changed. Members whose cards were deleted are left out.
+        """
+        group = await self.store.get_group(group_id)
+        if group is None:
+            self.forget_group(group_id)
+            raise ValueError(f"Group {group_id} not found")
+        cards = []
+        for char_id in group.char_ids:
+            card = await self.store.get_character(char_id)
+            if card is not None:
+                cards.append(card)
+        if not cards:
+            raise ValueError(f"Group {group_id} has no characters")
+
+        cached = self._group_runners.get(group_id)
+        if cached is not None and cached[0] == (group, cards):
+            return cached[1]
+
+        from story_rp_engine.group.prompt_builder import group_summary_prompt
+        from story_rp_engine.group.workflow import create_group_workflow
+        app = App(
+            name="group_app",
+            root_agent=create_group_workflow(group, cards, self.config),
+            events_compaction_config=self._turn_count_compaction_config(group_summary_prompt(cards)),
+        )
+        runner = Runner(app=app, session_service=self.store.session_service, auto_create_session=True)
+        self._group_runners[group_id] = ((group, cards), runner)
+        return runner
+
+    def forget_group(self, group_id: str) -> None:
+        """Drops the cached runner for a group (e.g. after deletion)."""
+        self._group_runners.pop(group_id, None)
