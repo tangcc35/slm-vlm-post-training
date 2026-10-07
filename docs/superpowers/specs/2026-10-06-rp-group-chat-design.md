@@ -50,9 +50,10 @@ class GroupChatRequest(BaseModel):
 ### Registry (`core/agent_registry.py`)
 
 - `get_or_create_group_runner(group_id) -> Runner` loads the group and its member cards from the store on every call. The cached workflow and runner are kept with the `(group, cards)` snapshot they were built from, and both are rebuilt when the snapshot differs.
-- If a member's card no longer exists, that member is skipped. If the group is missing, or no members remain, it raises `ValueError("Group <id> not found")`, which the route maps to 404.
+- If a member's card no longer exists, that member is skipped. A missing group raises `ValueError("Group <id> not found")`, which the route maps to 404. A group with no remaining members raises `ValueError("Group <id> has no characters")`, which the route maps to 400.
 - `forget_group(group_id)` drops the cached workflow and runner. The group delete route calls it.
-- The runner uses `App(name="group_app", root_agent=workflow, events_compaction_config=...)`. Compaction is turn-count only, like `story_app`, because token-threshold compaction could run between two characters' model calls. The summarizer uses the new `GROUP_SUMMARY_PROMPT`. It asks for a summary of the scene for the characters (who is present, events in order, relationships, unresolved threads, user preferences) and tells the summarizer to ignore `speaker_selector` output.
+- The runner uses `App(name="group_app", root_agent=workflow, events_compaction_config=...)`. Compaction is turn-count only, like `story_app`, because token-threshold compaction could run between two characters' model calls. Story and group share a `_turn_count_compaction_config(prompt_template)` helper.
+- The summarizer prompt comes from `group_summary_prompt(cards)`, built per group. It lists each agent name with its character's name and tells the summarizer to ignore `speaker_selector` lines. It then asks for a summary of the scene for the characters: who is present, the events in order, relationships, unresolved threads and user preferences.
 
 ## 2. Workflow, selector, character prompts
 
@@ -61,27 +62,29 @@ New package `src/story_rp_engine/group/`.
 ### Workflow (`group/workflow.py`)
 
 ```python
+SCENE_BRANCH = "group"
+
 def create_group_workflow(group, cards, config) -> Workflow:
     selector = create_speaker_selector(group, cards, config)
     agents = {c.char_id: create_group_char_agent(c, group, cards, config) for c in cards}
 
     @node(rerun_on_resume=True)
     async def group_turn(ctx: Context):
-        # Sub-branch: the selector reads the main conversation, but characters never see its JSON.
-        plan = await ctx.run_node(selector, use_sub_branch=True)
-        for char_id in pick_speakers(plan, [c.char_id for c in cards]):
-            await ctx.run_node(agents[char_id])
+        plan = await ctx.run_node(selector, use_sub_branch=True, override_branch=SCENE_BRANCH)
+        for char_id in pick_speakers(plan, list(agents)):
+            await ctx.run_node(agents[char_id], override_branch=SCENE_BRANCH)
 
     return Workflow(name="group_workflow", edges=[("START", group_turn)])
 ```
 
-- Characters run one after another on the main branch, so each one sees the user's message and the replies before it. They must not run in parallel: `asyncio.gather` runs would get sub-branches and hide the replies from each other.
-- With `use_sub_branch=True`, the selector's events go on a sub-branch. `_is_event_belongs_to_branch` shows main-branch events to the selector but hides the selector's events from main-branch characters. Each turn's selector branch is a sibling of the others, so the selector doesn't see its own earlier picks either.
-- `pick_speakers(plan, member_ids)` keeps the IDs that are members, drops duplicates, keeps the order, and returns `member_ids` when the result is empty. If the selector returns JSON that doesn't parse, ADK raises and the error is reported in the stream like any model error. There's no retry.
+- Characters run one after another on the branch `group`, so each one sees the user's message and the replies before it. They must not run in parallel: `asyncio.gather` runs would get sub-branches and hide the replies from each other.
+- The selector runs on the sub-branch `group.speaker_selector@<n>`. ADK (`contents._is_event_belongs_to_branch`) shows an agent the events of its own branch and its ancestors, plus events with no branch (the user's messages and compaction summaries). So the selector sees the characters' lines, while the characters never see the selector's JSON. `use_sub_branch=True` alone isn't enough: a node with no branch sees every event, so characters must run on a named branch too (verified with a spike against ADK 2.7.0).
+- The selector does see its own earlier picks, because every turn reuses the same sub-branch. That's harmless.
+- `pick_speakers(plan, member_ids)` drops repeats, keeps the order, and returns `member_ids` when the list is empty or the selector gave no output. The `Literal` schema already rejects IDs that aren't members: a reply that isn't valid JSON, or that names a non-member, raises in ADK (`DynamicNodeFailError`) and is reported in the stream like any model error. There's no retry.
 
 ### Agent names
 
-A character agent is named `char_<char_id with [^a-zA-Z0-9_] replaced by _>`. Agent names must be identifiers. `char_id`s are stable while display names may be non-ASCII, and deriving names from `char_id` rather than member position keeps saved event authors correct after the group is edited. `group_agent_name(char_id)` is the single helper that computes this; the routes use it to map event authors back to `char_id`. Two IDs that sanitize to the same name are a known limitation that isn't handled.
+A character agent is named `"char_" + re.sub(r"\W", "_", char_id)`. ADK only requires `str.isidentifier()`, which accepts non-ASCII letters, so CJK IDs such as `思琪` stay distinct (`char_思琪`). Names come from `char_id` rather than member position, so a saved author name stays correct after the group is edited. `group_agent_name(char_id)` is the single helper that computes this. The routes use `group_speakers(group)` to map event authors back to `char_id`. Two IDs that differ only in punctuation (`a-b` and `a_b`) collide; that's a known limitation that isn't handled.
 
 ### Speaker selector (`group/selector_agent.py`)
 
@@ -134,12 +137,12 @@ New `api/routes_group.py`, registered in `api/app.py`.
 | Method | Path | Notes |
 |---|---|---|
 | GET | `/api/v1/group/sessions?group_id=` | same fields as the RP list, filtered on `group_id` |
-| GET | `/api/v1/group/sessions/{id}/turns` | each turn has `speaker` (`char_id`, or `null` for user), and selector events are excluded |
+| GET | `/api/v1/group/sessions/{id}/turns` | each turn has `speaker` (`char_id`, or `null` for user; the raw agent name for a member who has since left the group), and selector events are excluded |
 | PATCH | `/api/v1/group/sessions/{id}` | rename |
 | DELETE | `/api/v1/group/sessions/{id}` | delete |
 | POST | `/api/v1/group/sessions/{id}/turns/delete` | same semantics as RP |
 
-The RP session route bodies, which hardcode `rp_app`, move into helpers that take `app_name`. `_message_event_indexes` also takes a set of authors to skip. `routes_rp` and `routes_group` both call these helpers, and RP URLs and responses don't change.
+The RP session route bodies, which hardcode `rp_app`, move into `api/chat_sessions.py`, whose helpers take `app_name`: `chat_state_delta`, `message_event_indexes` (which also takes the authors to skip), `list_chat_sessions`, `rename_chat`, `delete_chat_turn`, and the `RenameSessionRequest` / `DeleteTurnRequest` models. `routes_rp` and `routes_group` both call these helpers, and RP URLs and responses don't change.
 
 ## 4. UI (`web/index.html`, `web/app.js`)
 
@@ -147,15 +150,16 @@ Two new top-level tabs. The Roleplay tab is not changed.
 
 - **Groups** (editor, like Lorebooks): a list with search, and a form with `group_id`, name, members (multi-select of saved characters; selection order is the fallback order), scenario, opening message and default lorebook. Save and delete.
 - **Group Chat** (layout copied from Roleplay):
-  - **Sidebar:** group picker, history list with rename and delete, user name, lorebook (preselected from the group's default) and author's note.
-  - **Chat:** the group's `first_mes` is shown as the opening message. Each character reply is its own bubble, labelled with the character's name (looked up from `char_id`). During streaming, a new bubble opens when `speaker` changes. Reopening a chat rebuilds the bubbles from `/turns`, and deleting a message uses `turns/delete`.
+  - **Sidebar:** group picker, a "New" chat button, history list with rename and delete, user name, lorebook (preselected from the group's default) and author's note. There's no "Clear" button; deleting from history covers it.
+  - **Chat:** the group's `first_mes` is shown as the opening message. Each character reply is its own bubble, labelled with the character's name (looked up from `char_id`). During streaming, a new bubble opens when `speaker` changes. Reopening a chat rebuilds the bubbles from `/turns`. Each message has copy and delete actions; delete uses `turns/delete`. There's no regenerate or rewind.
   - **Code:** new state and functions use a `group` prefix in `app.js`. The group SSE parser is its own function, so the RP path is untouched.
 
 ## 5. Testing and docs
 
 Tests use fake ADK `BaseLlm`s and `InMemorySessionService`, as the existing engine tests do.
 
-- **Workflow:** the selector returns `{"speakers": ["b", "a"]}`, and B then A reply in that order. B's `LlmRequest` contains A's line and no selector JSON. `pick_speakers` drops unknown and duplicate IDs and falls back to group order on an empty list.
+- **Workflow:** the selector returns `{"speakers": ["b", "a"]}`, and B then A reply in that order. A's `LlmRequest` contains B's line and no selector JSON. The selector's schema rejects non-members. `pick_speakers` drops repeats and falls back to group order on an empty list.
+- **Selector failure:** a selector reply that isn't JSON produces an `error` event in the stream, which then ends with `[DONE]`.
 - **Prompt:** `build_group_system_instruction` uses the group scenario, not the card's, names the other members and includes the group opening message.
 - **Registry:** the runner is cached across calls and rebuilt when a member card changes. A missing member is skipped, and a group with no remaining members raises.
 - **Store:** group CRUD round-trips in the file backend, and in the Postgres test when `STORY_RP_TEST_PG_URL` is set.
