@@ -49,6 +49,16 @@ flowchart TD
 
 ---
 
+## Group Chat
+
+A saved `GroupCard` (`group_id`, `name`, `char_ids`, `scenario`, `first_mes`, `lorebook_id`) puts several characters in one scene; the code lives in `story_rp_engine/group/`.
+- Each turn the `speaker_selector` agent returns `{"speakers": [char_id, ...]}`, then each chosen character's agent replies in order (`group/workflow.py`).
+- Character agents use `build_group_system_instruction`: the group's `scenario` replaces the card's, and the other members are introduced by name. They reuse `rp_before_model_callback` for lore and the Author's Note.
+- Agents are named `group_agent_name(char_id)`; another member's line reaches a character as `[char_<id>] said: ...`.
+- Test with `uv run pytest tests/story_rp_engine/test_group_prompt_builder.py tests/story_rp_engine/test_group_workflow.py tests/story_rp_engine/test_group_api.py -v`.
+
+---
+
 ## Critical Guardrails
 
 1. **Case-Insensitive Macro Replacement**:
