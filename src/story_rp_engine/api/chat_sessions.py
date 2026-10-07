@@ -26,17 +26,16 @@ def checked_session_id(session_id: str) -> str:
         raise HTTPException(status_code=400, detail=str(e))
 
 
-async def chat_state_delta(req, request: Request, **owner) -> dict:
+async def chat_state_delta(req, request: Request, **fields) -> dict:
     """Session state changes for a chat turn; a lorebook is copied in only when lorebook_id is sent.
 
-    `owner` (char_id=... or group_id=...) and last_message are read by the history list, which gets session
-    state but no events.
+    `fields` adds the chat's own keys (char_id and greeting, or group_id). The owner ID and last_message are
+    read by the history list, which gets session state but no events.
     """
     state_delta = {
         "authors_note": req.authors_note,
         "user_name": req.user_name or "User",
-        "greeting": req.greeting,
-        **owner,
+        **fields,
         "last_message": req.message[:80],
     }
     if req.lorebook_id is not None:

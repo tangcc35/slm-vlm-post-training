@@ -50,7 +50,7 @@ flowchart TD
   - Save via `POST /api/v1/lorebooks` and delete via `DELETE /api/v1/lorebooks/{id}`.
 - **Groups** (Groups tab):
   - Load via `GET /api/v1/groups` into `groups` (keyed by `group_id`); save via `POST /api/v1/groups` and delete via `DELETE /api/v1/groups/{id}`.
-  - `groupForm` holds `group_id`, `name`, `char_ids` (toggled with `toggleGroupMember`; selection order is the fallback speaking order), `scenario`, `first_mes` and `lorebook_id`.
+  - `groupForm` holds `group_id`, `name`, `char_ids` (toggled with `toggleGroupMember`; selection order is the fallback speaking order), `scenario` and `lorebook_id`. Groups have no opening message: the user's first message opens the scene.
 - Consult `references/ui-components-and-modes.md` for form fields, validation requirements, and JSON mapping schemas.
 
 ### 4. Implement & Buffer Client SSE Stream Readers
@@ -84,7 +84,7 @@ flowchart TD
 2. **Strict SSE Chunk Buffering & Flushes**:
    - Never assume an incoming stream chunk contains an entire SSE frame. Always buffer incoming chunks, split on `\n\n`, keep the trailing fragment in the buffer, and flush remaining buffer content when `done === true`.
 3. **Turn Offset Alignment for Greetings**:
-   - In roleplay mode, the initial assistant greeting (`first_mes`) is displayed in the UI as `rpMessages[0]` with `isGreeting: true` before any messages are sent to the backend. When deleting turns (`deleteTurn`, `deleteFromHere`, `regenerateTurn`), offset backend turn indices by -1 (`backendIndex = hasGreeting ? index - 1 : index`) so backend event indices remain synchronized. Group Chat does the same in `deleteGroupTurn` with the group's opening message.
+   - In roleplay mode, the initial assistant greeting (`first_mes`) is displayed in the UI as `rpMessages[0]` with `isGreeting: true` before any messages are sent to the backend. When deleting turns (`deleteTurn`, `deleteFromHere`, `regenerateTurn`), offset backend turn indices by -1 (`backendIndex = hasGreeting ? index - 1 : index`) so backend event indices remain synchronized. Group Chat has no greeting, so `deleteGroupTurn` sends the UI index as is.
 4. **Graceful Interruptibility (`AbortController`)**:
    - The RP, Group Chat and Story streaming readers must each maintain an active `AbortController`. Clicking "Stop Generating" must abort the fetch signal and catch `AbortError` cleanly without erasing partial text already received.
 5. **Dynamic Icon Lifecycle Synchronization**:

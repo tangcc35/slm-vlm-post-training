@@ -19,7 +19,7 @@ def create_group_char_agent(
         model=get_adk_model(config),
         # Callable, like the RP agent's: card text may contain braces such as {{user}}.
         instruction=lambda ctx: build_group_system_instruction(
-            card, group, cards, user_name=ctx.state.get("user_name") or "User", greeting=ctx.state.get("greeting")
+            card, group, cards, user_name=ctx.state.get("user_name") or "User"
         ),
         generate_content_config=get_generate_config(config),
         include_contents="default",

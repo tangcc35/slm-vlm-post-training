@@ -23,7 +23,6 @@ def build_group_system_instruction(
     group: GroupCard,
     cards: List[CharacterCard],
     user_name: str = "User",
-    greeting: Optional[str] = None,
 ) -> str:
     """Builds a group member's system prompt: its own card, with the group's scenario and the other members."""
     char_name = card.name
@@ -70,11 +69,6 @@ def build_group_system_instruction(
         "- Vary your wording; don't reuse phrases or openings from earlier replies.\n"
         f"- If {user_name} writes (OOC: ...), answer briefly out of character."
     )
-    if greeting:
-        sections.append(
-            f"<opening_message>\n{fill(greeting)}\n</opening_message>\n"
-            f"This message opened the scene before {user_name}'s first message."
-        )
     if card.post_history_instructions:
         sections.append(fill(card.post_history_instructions))
 

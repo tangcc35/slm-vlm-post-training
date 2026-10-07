@@ -10,7 +10,6 @@ TAVERN = {
     "name": "Tavern",
     "char_ids": ["alice", "bob"],
     "scenario": "A rainy night.",
-    "first_mes": "The door swings open.",
 }
 
 
@@ -63,14 +62,13 @@ async def test_group_chat_streams_replies_by_speaker(tmp_path, group_models):
 
 
 @pytest.mark.anyio
-async def test_group_chat_loads_lorebook_scenario_and_greeting(tmp_path, group_models):
+async def test_group_chat_loads_lorebook_and_scenario(tmp_path, group_models):
     client = await _group_client(tmp_path)
     group_models.plan = {"speakers": ["alice"]}
 
-    assert _chat(client, "Is the forge lit?", lorebook_id="world", greeting="The door swings open.").status_code == 200
+    assert _chat(client, "Is the forge lit?", lorebook_id="world").status_code == 200
     request = group_models.requests["Alice"][-1]
     assert "The forge never cools." in "".join(p.text for p in request.contents[-1].parts)
-    assert "The door swings open." in request.config.system_instruction
     assert "A rainy night." in request.config.system_instruction
 
 
@@ -78,15 +76,13 @@ async def test_group_chat_loads_lorebook_scenario_and_greeting(tmp_path, group_m
 async def test_group_turns_name_speakers_and_hide_the_selector(tmp_path, group_models):
     client = await _group_client(tmp_path)
     group_models.plan = {"speakers": ["bob", "alice"]}
-    _chat(client, "Hello!", greeting="The door swings open.")
+    _chat(client, "Hello!")
 
     turns = client.get("/api/v1/group/sessions/s1/turns").json()["turns"]
     assert [(t["speaker"], t["text"]) for t in turns] == [(None, "Hello!"), ("bob", "Bob line"), ("alice", "Alice line")]
 
     sessions = client.get("/api/v1/group/sessions", params={"group_id": "tavern"}).json()
-    assert [(s["session_id"], s["last_message"], s["greeting"]) for s in sessions] == [
-        ("s1", "Hello!", "The door swings open.")
-    ]
+    assert [(s["session_id"], s["last_message"]) for s in sessions] == [("s1", "Hello!")]
     assert client.get("/api/v1/group/sessions", params={"group_id": "other"}).json() == []
 
 

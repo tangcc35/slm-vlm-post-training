@@ -65,7 +65,7 @@ const AppDefinition = {
       groups: {}, // Object mapping group_id -> GroupCard
       selectedGroupId: null,
       groupSearchQuery: '',
-      groupForm: { group_id: '', name: '', char_ids: [], scenario: '', first_mes: '', lorebook_id: '' },
+      groupForm: { group_id: '', name: '', char_ids: [], scenario: '', lorebook_id: '' },
 
       // =======================================================================
       // Roleplay Tab Reactive State (Task 6)
@@ -98,7 +98,7 @@ const AppDefinition = {
       groupLorebookId: '',
       groupLorebookSentKey: null, // "<session>|<lorebook>" last loaded into the backend session
       groupChunkSize: 1,
-      groupMessages: [], // { role: 'user' | 'assistant', speaker: char_id | null, content, timestamp, isGreeting? }
+      groupMessages: [], // { role: 'user' | 'assistant', speaker: char_id | null, content, timestamp }
       isGeneratingGroup: false,
       groupAbortController: null,
       groupInput: '',
@@ -950,7 +950,6 @@ const AppDefinition = {
         name: g.name || '',
         char_ids: [...(g.char_ids || [])],
         scenario: g.scenario || '',
-        first_mes: g.first_mes || '',
         lorebook_id: g.lorebook_id || '',
       };
       this.refreshIcons();
@@ -958,7 +957,7 @@ const AppDefinition = {
 
     newGroup() {
       this.selectedGroupId = null;
-      this.groupForm = { group_id: '', name: '', char_ids: [], scenario: '', first_mes: '', lorebook_id: '' };
+      this.groupForm = { group_id: '', name: '', char_ids: [], scenario: '', lorebook_id: '' };
       this.refreshIcons();
     },
 
@@ -986,7 +985,6 @@ const AppDefinition = {
         name: name,
         char_ids: [...this.groupForm.char_ids],
         scenario: this.groupForm.scenario || '',
-        first_mes: this.groupForm.first_mes || '',
         lorebook_id: this.groupForm.lorebook_id || null,
       };
       try {
@@ -1611,7 +1609,6 @@ const AppDefinition = {
 
     groupSpeakerName(msg) {
       if (msg.role === 'user') return this.groupUserName || 'User';
-      if (msg.isGreeting) return this.activeGroup ? this.activeGroup.name : 'Narrator';
       return this.characterName(msg.speaker);
     },
 
@@ -1626,17 +1623,8 @@ const AppDefinition = {
       this.groupSessionId = 'group_' + Math.random().toString(36).substring(2, 10);
       this.groupMessages = [];
       this.groupLorebookSentKey = null;
-      const group = this.activeGroup;
-      this.groupLorebookId = (group && group.lorebook_id) || '';
-      if (group && group.first_mes) {
-        this.groupMessages.push({
-          role: 'assistant',
-          speaker: null,
-          content: group.first_mes,
-          isGreeting: true,
-          timestamp: this._timeNow(),
-        });
-      }
+      // A group chat has no greeting: the user's first message opens the scene.
+      this.groupLorebookId = (this.activeGroup && this.activeGroup.lorebook_id) || '';
       this.refreshIcons();
       this.scrollGroupChatToBottom();
     },
@@ -1672,9 +1660,6 @@ const AppDefinition = {
           content: t.text,
           timestamp: '',
         }));
-        if (s.greeting) {
-          messages.unshift({ role: 'assistant', speaker: null, content: s.greeting, isGreeting: true, timestamp: '' });
-        }
         this.groupSessionId = s.session_id;
         this.groupMessages = messages;
         this.groupUserName = s.user_name || 'User';
@@ -1705,20 +1690,16 @@ const AppDefinition = {
     async deleteGroupTurn(index) {
       const msg = this.groupMessages[index];
       if (!msg || this.isGeneratingGroup) return;
-      // The greeting lives only in the UI; the backend counts the messages after it.
-      if (!msg.isGreeting) {
-        const hasGreeting = !!this.groupMessages[0].isGreeting;
-        try {
-          const res = await fetch(`/api/v1/group/sessions/${encodeURIComponent(this.groupSessionId)}/turns/delete`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ turn_index: hasGreeting ? index - 1 : index, truncate_subsequent: false }),
-          });
-          if (!res.ok) throw new Error(`Server returned HTTP ${res.status}`);
-        } catch (err) {
-          this.showToast(err.message || 'Failed to delete message.', 'error');
-          return;
-        }
+      try {
+        const res = await fetch(`/api/v1/group/sessions/${encodeURIComponent(this.groupSessionId)}/turns/delete`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ turn_index: index, truncate_subsequent: false }),
+        });
+        if (!res.ok) throw new Error(`Server returned HTTP ${res.status}`);
+      } catch (err) {
+        this.showToast(err.message || 'Failed to delete message.', 'error');
+        return;
       }
       this.groupMessages.splice(index, 1);
     },
@@ -1741,13 +1722,10 @@ const AppDefinition = {
       this.groupAbortController = new AbortController();
       this.refreshIcons();
 
-      const firstMsg = this.groupMessages[0];
       const payload = {
         group_id: this.groupChatId,
         session_id: this.groupSessionId,
         message: promptText,
-        // The greeting lives only in the UI, so the backend gets it with each message.
-        greeting: firstMsg && firstMsg.isGreeting ? firstMsg.content : null,
         authors_note: this.groupAuthorsNote ? this.groupAuthorsNote.trim() : null,
         user_name: this.groupUserName ? this.groupUserName.trim() : 'User',
         chunk_size: Number(this.groupChunkSize) || 1,

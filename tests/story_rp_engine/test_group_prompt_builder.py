@@ -22,7 +22,7 @@ def test_group_agent_name_keeps_ids_distinct():
 
 
 def test_group_instruction_uses_group_scenario_and_introduces_the_others():
-    text = build_group_system_instruction(ALICE, GROUP, [ALICE, BOB, QI], user_name="Sam", greeting="The fire crackles.")
+    text = build_group_system_instruction(ALICE, GROUP, [ALICE, BOB, QI], user_name="Sam")
 
     assert text.startswith("You are Alice in a group roleplay with Sam, Bob, 思琪.")
     assert "Alice owes Sam a favor." in text
@@ -30,7 +30,8 @@ def test_group_instruction_uses_group_scenario_and_introduces_the_others():
     assert "Alice's own scenario." not in text
     assert "- Bob (shown as [char_bob_2]): A blacksmith." in text
     assert "[char_alice]" not in text
-    assert "The fire crackles." in text
+    # The scene opens with the user's first message, not a canned greeting.
+    assert "<opening_message>" not in text
 
 
 def test_selector_instruction_lists_member_ids():

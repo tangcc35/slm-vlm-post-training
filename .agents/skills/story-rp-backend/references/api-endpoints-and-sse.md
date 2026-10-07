@@ -199,11 +199,11 @@ Streams literary prose expansion via Server-Sent Events (SSE).
 
 A group puts several characters in one scene; a speaker selector picks who replies each turn.
 
-- `POST /api/v1/groups`: Saves a `GroupCard` (`group_id`, `name`, `char_ids`, `scenario`, `first_mes`, `lorebook_id`). Returns `{"status": "saved", "group_id": ...}`; `400` for an invalid `group_id`.
+- `POST /api/v1/groups`: Saves a `GroupCard` (`group_id`, `name`, `char_ids`, `scenario`, `lorebook_id`). Groups have no greeting; the user's first message opens the scene. Returns `{"status": "saved", "group_id": ...}`; `400` for an invalid `group_id`.
 - `GET /api/v1/groups`: Returns all groups keyed by `group_id`.
 - `GET /api/v1/groups/{group_id}`: Retrieves one group (`404` if missing).
 - `DELETE /api/v1/groups/{group_id}`: Deletes the group and evicts its cached runner (`404` if missing).
-- `POST /api/v1/group/chat/stream`: Streams one group turn over SSE (see section 2.1). Body `GroupChatRequest`: `group_id`, `session_id`, `message` (required); `authors_note`, `user_name`, `lorebook_id`, `greeting`, `chunk_size` (optional, as in `RPChatRequest`). `404` if the group or lorebook is missing; `400` if the group has no characters or the session ID is invalid.
+- `POST /api/v1/group/chat/stream`: Streams one group turn over SSE (see section 2.1). Body `GroupChatRequest`: `group_id`, `session_id`, `message` (required); `authors_note`, `user_name`, `lorebook_id`, `chunk_size` (optional, as in `RPChatRequest`; there is no `greeting`). `404` if the group or lorebook is missing; `400` if the group has no characters or the session ID is invalid.
 - `GET /api/v1/group/sessions?group_id=`: Chats with one group, newest first.
 - `GET /api/v1/group/sessions/{session_id}/turns`: Same shape as the RP turns plus `speaker` (the `char_id`, `null` for the user); the selector's events are hidden.
 - `PATCH /api/v1/group/sessions/{session_id}`: Renames the chat (`{"title": ...}`).

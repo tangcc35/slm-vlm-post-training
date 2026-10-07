@@ -79,7 +79,7 @@ async def chat_rp(req: RPChatRequest, request: Request):
     try:
         _sanitize_key(req.session_id)
         runner = await registry.get_or_create_rp_runner(req.char_id)
-        state_delta = await chat_state_delta(req, request, char_id=req.char_id)
+        state_delta = await chat_state_delta(req, request, char_id=req.char_id, greeting=req.greeting)
     except ValueError as e:
         if "not found" in str(e).lower():
             raise HTTPException(status_code=404, detail="Character not found")
@@ -103,7 +103,7 @@ async def chat_rp_stream(req: RPChatRequest, request: Request):
     try:
         _sanitize_key(req.session_id)
         runner = await registry.get_or_create_rp_runner(req.char_id)
-        state_delta = await chat_state_delta(req, request, char_id=req.char_id)
+        state_delta = await chat_state_delta(req, request, char_id=req.char_id, greeting=req.greeting)
     except ValueError as e:
         if "not found" in str(e).lower():
             raise HTTPException(status_code=404, detail="Character not found")

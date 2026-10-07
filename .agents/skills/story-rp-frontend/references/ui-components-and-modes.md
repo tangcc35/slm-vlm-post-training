@@ -203,14 +203,14 @@ Chat with a saved group of characters. Each turn the backend's speaker selector 
 
 ### Left Sidebar Controls
 - **Active Group** (`groupChatId`): `<select>` over `groups`; changing it calls `onGroupChatChange()`, which starts a new chat and reloads history. The member names show under the picker.
-- **Chat**: "New" (`newGroupSession()`, which seeds the group's `first_mes` as an `isGreeting` bubble and preselects its default lorebook) and a history dropdown (`groupSessions` from `GET /api/v1/group/sessions?group_id=`) with open, rename (`saveRename('group', s)`) and delete (`deleteGroupSession(s)`).
+- **Chat**: "New" (`newGroupSession()`, which starts an empty chat, since the user's first message opens the scene, and preselects the group's default lorebook) and a history dropdown (`groupSessions` from `GET /api/v1/group/sessions?group_id=`) with open, rename (`saveRename('group', s)`) and delete (`deleteGroupSession(s)`).
 - **User Persona Name** (`groupUserName`), **Active Lorebook** (`groupLorebookId`, sent only when the session or selection changed, tracked by `groupLorebookSentKey`), **Author's Note** (`groupAuthorsNote`) and **SSE Chunk Size** (`groupChunkSize`).
 
 ### Right Chat Feed (`#group-chat-feed`)
-- `groupMessages` entries are `{ role, speaker, content, timestamp, isGreeting? }`; `speaker` is a `char_id` (null for the user and the greeting).
-- Bubble labels come from `groupSpeakerName(msg)`: the user name, the group name for the greeting, otherwise `characterName(msg.speaker)`.
+- `groupMessages` entries are `{ role, speaker, content, timestamp }`; `speaker` is a `char_id` (null for the user).
+- Bubble labels come from `groupSpeakerName(msg)`: the user name, otherwise `characterName(msg.speaker)`.
 - `_streamGroupReplies()` posts to `POST /api/v1/group/chat/stream` and opens a new bubble whenever a delta's `speaker` changes.
-- Each bubble has Copy and Delete (`deleteGroupTurn(idx)`, which posts `turns/delete` with the greeting offset). There is no regenerate or rewind.
+- Each bubble has Copy and Delete (`deleteGroupTurn(idx)`, which posts `turns/delete` with the UI index; there is no greeting to offset). There is no regenerate or rewind.
 - Reopening a chat (`openGroupSession(s)`) rebuilds the bubbles from `GET /api/v1/group/sessions/{id}/turns`.
 
 ---
@@ -227,7 +227,7 @@ Editor for saved groups of characters.
 - **Form Editor** (`groupForm`):
   1. **Identity**: `group_id` (slug) and `name`.
   2. **Members**: a grid of saved characters; clicking toggles membership (`toggleGroupMember(char_id)`), and the badge number is the selection order, which is the fallback speaking order.
-  3. **Scene**: `scenario` (replaces each member's own scenario in group chats) and `first_mes` (opening message).
+  3. **Scene**: `scenario` (replaces each member's own scenario in group chats). There is no opening message; the user's first message opens the scene.
   4. **Default Lorebook**: `lorebook_id`, preselected for new chats.
   5. **Actions**: Save Group (`POST /api/v1/groups`), Delete Group (`DELETE /api/v1/groups/{id}`).
 
