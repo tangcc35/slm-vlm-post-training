@@ -91,3 +91,16 @@ def test_build_rp_system_instruction_includes_greeting_with_macros():
 def test_build_rp_system_instruction_includes_card_system_prompt():
     instruction = build_rp_system_instruction(_aria(), user_name="Alex")
     assert "Always speak in rhyme to Alex." in instruction
+
+
+def test_build_rp_system_instruction_adds_user_persona_after_scenario():
+    card = _aria().model_copy(update={"scenario": "A border fort."})
+    instruction = build_rp_system_instruction(
+        card, user_name="Sam", user_persona="{{user}} is a cartographer who owes {{char}} money."
+    )
+    assert "<user_persona>\nSam is a cartographer who owes Aria money.\n</user_persona>" in instruction
+    assert instruction.index("<scenario>") < instruction.index("<user_persona>")
+
+
+def test_build_rp_system_instruction_without_user_persona():
+    assert "<user_persona>" not in build_rp_system_instruction(_aria(), user_name="Sam")

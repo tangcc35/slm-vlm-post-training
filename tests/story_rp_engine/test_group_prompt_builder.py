@@ -50,3 +50,14 @@ def test_group_summary_prompt_formats_with_braces_in_names():
     assert "- char_alice: Alice" in filled
     assert "- char_odd: {Odd}" in filled
     assert filled.endswith("HISTORY")
+
+
+def test_group_instruction_adds_user_persona_for_each_speaker():
+    persona = "{{user}} is a cartographer who owes {{char}} money."
+    alice = build_group_system_instruction(ALICE, GROUP, [ALICE, BOB], user_name="Sam", user_persona=persona)
+    bob = build_group_system_instruction(BOB, GROUP, [ALICE, BOB], user_name="Sam", user_persona=persona)
+
+    assert "<user_persona>\nSam is a cartographer who owes Alice money.\n</user_persona>" in alice
+    assert alice.index("<scenario>") < alice.index("<user_persona>") < alice.index("<other_characters>")
+    assert "Sam is a cartographer who owes Bob money." in bob
+    assert "<user_persona>" not in build_group_system_instruction(ALICE, GROUP, [ALICE, BOB], user_name="Sam")

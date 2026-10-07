@@ -23,6 +23,7 @@ def build_group_system_instruction(
     group: GroupCard,
     cards: List[CharacterCard],
     user_name: str = "User",
+    user_persona: str = "",
 ) -> str:
     """Builds a group member's system prompt: its own card, with the group's scenario and the other members."""
     char_name = card.name
@@ -45,6 +46,8 @@ def build_group_system_instruction(
         sections.append(f"<personality>\n{fill(card.personality)}\n</personality>")
     if group.scenario:
         sections.append(f"<scenario>\n{fill(group.scenario)}\n</scenario>")
+    if user_persona:
+        sections.append(f"<user_persona>\n{fill(user_persona)}\n</user_persona>")
     if others:
         cast = "\n".join(
             f"- {c.name} (shown as [{group_agent_name(c.char_id)}]): "
