@@ -15,7 +15,7 @@ class CharacterCard(BaseModel):
     alternate_greetings: List[str] = Field(default_factory=list)
     creator_notes: Optional[str] = None
     tags: List[str] = Field(default_factory=list)
-    lorebook_id: Optional[str] = Field(default=None, description="Lorebook selected by default when a new chat with this character starts.")
+    lorebook_ids: List[str] = Field(default_factory=list, description="Lorebooks selected by default when a new chat with this character starts.")
 
 
 class LorebookEntry(BaseModel):
@@ -43,7 +43,7 @@ class StoryRequest(BaseModel):
     premise: Optional[str] = None
     genre: Optional[str] = None
     tone: Optional[str] = None
-    lorebook_id: Optional[str] = Field(default=None, description="Copies this lorebook into the session; like the other setup fields, sent with the first turn.")
+    lorebook_ids: List[str] = Field(default_factory=list, description="Copies these lorebooks into the session; like the other setup fields, sent with the first turn.")
     instruction: Optional[str] = "Continue the story naturally from the current point."
     max_tokens: int = Field(default=512, ge=1, le=131072)
     chunk_size: Optional[int] = Field(default=16, ge=1, le=100, description="Number of tokens to buffer before yielding in streaming mode.")
@@ -54,8 +54,36 @@ class RPChatRequest(BaseModel):
     session_id: str
     message: str
     authors_note: Optional[str] = None
-    lorebook_id: Optional[str] = Field(default=None, description="Loads this lorebook into the session; omit to keep the current one, empty string to clear it.")
+    lorebook_ids: Optional[List[str]] = Field(default=None, description="Loads these lorebooks into the session; omit to keep the current ones, empty list to clear them.")
     user_name: Optional[str] = "User"
+    persona_id: Optional[str] = Field(default=None, description="Plays as this saved persona; overrides user_name.")
     greeting: Optional[str] = Field(default=None, description="Opening message shown to the user before their first message.")
+    chunk_size: Optional[int] = Field(default=16, ge=1, le=100, description="Number of tokens to buffer before yielding in streaming mode.")
+
+
+class GroupCard(BaseModel):
+    group_id: str
+    name: str
+    char_ids: List[str] = Field(default_factory=list, description="Members, in the order they speak when the speaker selector picks no one.")
+    scenario: str = Field(default="", description="The shared scene; replaces each member card's own scenario.")
+    lorebook_ids: List[str] = Field(default_factory=list, description="Lorebooks selected by default when a new chat with this group starts.")
+
+
+class Persona(BaseModel):
+    """Who the user plays as in roleplay and group chats."""
+
+    persona_id: str
+    name: str
+    description: str = Field(default="", description="Added to the character prompts; {{user}} and {{char}} macros work.")
+
+
+class GroupChatRequest(BaseModel):
+    group_id: str
+    session_id: str
+    message: str
+    authors_note: Optional[str] = None
+    lorebook_ids: Optional[List[str]] = Field(default=None, description="Loads these lorebooks into the session; omit to keep the current ones, empty list to clear them.")
+    user_name: Optional[str] = "User"
+    persona_id: Optional[str] = Field(default=None, description="Plays as this saved persona; overrides user_name.")
     chunk_size: Optional[int] = Field(default=16, ge=1, le=100, description="Number of tokens to buffer before yielding in streaming mode.")
 

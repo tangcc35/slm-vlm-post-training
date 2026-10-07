@@ -5,7 +5,7 @@ from google.adk.agents import LlmAgent
 from story_rp_engine.core.config import EngineConfig
 from story_rp_engine.storage.store import EngineStore
 from story_rp_engine.core.agent_registry import AgentRegistry
-from story_rp_engine.core.types import CharacterCard, Lorebook, LorebookEntry
+from story_rp_engine.core.types import CharacterCard, GroupCard, Lorebook, LorebookEntry
 
 
 @pytest.mark.anyio
@@ -211,3 +211,56 @@ async def test_agent_registry_register_rp_runner_is_pinned(tmp_path):
     # Registered runners are served as-is, without a store lookup
     registry.register_rp_runner("not_in_store", runner)
     assert await registry.get_or_create_rp_runner("not_in_store") is runner
+
+
+async def _group_store(tmp_path, char_ids):
+    store = EngineStore(storage_dir=str(tmp_path))
+    for char_id in ("alice", "bob"):
+        await store.save_character(char_id, CharacterCard(char_id=char_id, name=char_id.title()))
+    await store.save_group("tavern", GroupCard(group_id="tavern", name="Tavern", char_ids=char_ids))
+    return store
+
+
+@pytest.mark.anyio
+async def test_group_runner_cached_and_rebuilt_when_a_member_changes(tmp_path):
+    store = await _group_store(tmp_path, ["alice", "bob"])
+    registry = AgentRegistry(config=EngineConfig(), store=store)
+
+    runner = await registry.get_or_create_group_runner("tavern")
+    assert runner.app_name == "group_app"
+    assert await registry.get_or_create_group_runner("tavern") is runner
+
+    await store.save_character("bob", CharacterCard(char_id="bob", name="Bob", description="Now a smith."))
+    rebuilt = await registry.get_or_create_group_runner("tavern")
+    assert rebuilt is not runner
+
+    registry.forget_group("tavern")
+    assert await registry.get_or_create_group_runner("tavern") is not rebuilt
+
+
+@pytest.mark.anyio
+async def test_group_runner_skips_deleted_members(tmp_path, group_models):
+    from google.genai import types
+
+    store = await _group_store(tmp_path, ["alice", "ghost"])
+    runner = await AgentRegistry(config=EngineConfig(), store=store).get_or_create_group_runner("tavern")
+
+    # The selector picks no one, so every remaining member speaks.
+    authors = [
+        ev.author
+        async for ev in runner.run_async(
+            user_id="User", session_id="s1", new_message=types.Content(role="user", parts=[types.Part.from_text(text="Hi")])
+        )
+    ]
+    assert authors == ["speaker_selector", "char_alice"]
+
+
+@pytest.mark.anyio
+async def test_group_runner_errors(tmp_path):
+    store = await _group_store(tmp_path, ["ghost"])
+    registry = AgentRegistry(config=EngineConfig(), store=store)
+
+    with pytest.raises(ValueError, match="Group missing not found"):
+        await registry.get_or_create_group_runner("missing")
+    with pytest.raises(ValueError, match="Group tavern has no characters"):
+        await registry.get_or_create_group_runner("tavern")

@@ -11,7 +11,7 @@ const AppDefinition = {
   data() {
     return {
       // Global navigation & application health
-      activeTab: 'roleplay', // 'roleplay' | 'story' | 'characters' | 'lorebooks'
+      activeTab: 'roleplay', // 'roleplay' | 'group' | 'story' | 'characters' | 'groups' | 'lorebooks' | 'personas'
       backendOnline: false,
       healthInterval: null,
       toast: {
@@ -43,7 +43,7 @@ const AppDefinition = {
         system_prompt: '',
         post_history_instructions: '',
         creator_notes: '',
-        lorebook_id: '',
+        lorebook_ids: [],
       },
 
       // =======================================================================
@@ -60,14 +60,29 @@ const AppDefinition = {
       },
 
       // =======================================================================
+      // Groups Management State
+      // =======================================================================
+      groups: {}, // Object mapping group_id -> GroupCard
+      selectedGroupId: null,
+      groupSearchQuery: '',
+      groupForm: { group_id: '', name: '', char_ids: [], scenario: '', lorebook_ids: [] },
+
+      // =======================================================================
+      // Personas Management State
+      // =======================================================================
+      personas: {}, // Object mapping persona_id -> Persona
+      selectedPersonaId: null,
+      personaForm: { persona_id: '', name: '', description: '' },
+
+      // =======================================================================
       // Roleplay Tab Reactive State (Task 6)
       // =======================================================================
       rpSessionId: 'sess_' + Math.random().toString(36).substring(2, 10),
       rpCharId: '',
-      rpUserName: 'User',
+      rpPersonaId: '', // '' plays as "User"
       rpAuthorsNote: '',
-      rpLorebookId: '',
-      rpLorebookSentKey: null, // "<session>|<lorebook>" last loaded into the backend session
+      rpLorebookIds: [],
+      rpLorebookSentKey: null, // "<session>|<lorebook ids>" last loaded into the backend session
       rpChunkSize: 1,
       rpMessages: [],
       selectedGreetingIndex: 0,
@@ -81,6 +96,23 @@ const AppDefinition = {
       editingTitle: '',
 
       // =======================================================================
+      // Group Chat Reactive State
+      // =======================================================================
+      groupChatId: '', // group being chatted with
+      groupSessionId: 'group_' + Math.random().toString(36).substring(2, 10),
+      groupPersonaId: '', // '' plays as "User"
+      groupAuthorsNote: '',
+      groupLorebookIds: [],
+      groupLorebookSentKey: null, // "<session>|<lorebook ids>" last loaded into the backend session
+      groupChunkSize: 1,
+      groupMessages: [], // { role: 'user' | 'assistant', speaker: char_id | null, content, timestamp }
+      isGeneratingGroup: false,
+      groupAbortController: null,
+      groupInput: '',
+      groupSessions: [], // past chats with the selected group, newest first
+      showGroupHistory: false,
+
+      // =======================================================================
       // Story Co-Pilot Reactive State (Task 7)
       // =======================================================================
       storySessionId: 'story_' + Math.random().toString(36).substring(2, 10),
@@ -90,7 +122,7 @@ const AppDefinition = {
       customGenre: '',
       storyTone: 'Balanced',
       customTone: '',
-      storyLorebookId: '',
+      storyLorebookIds: [],
       storyInstruction: '',
       storyInput: '',
       storyChunkSize: 1,
@@ -111,6 +143,13 @@ const AppDefinition = {
     storySessionTitle() {
       const s = this.storySessions.find((x) => x.session_id === this.storySessionId);
       return (s && (s.title || s.premise || s.session_id)) || 'New story';
+    },
+    groupSessionTitle() {
+      const s = this.groupSessions.find((x) => x.session_id === this.groupSessionId);
+      return (s && (s.title || s.last_message)) || 'New chat';
+    },
+    activeGroup() {
+      return this.groups[this.groupChatId] || null;
     },
 
     // Character Filtering
@@ -153,6 +192,15 @@ const AppDefinition = {
           });
         return nameMatch || descMatch || idMatch || entryMatch;
       });
+    },
+
+    filteredGroups() {
+      const query = (this.groupSearchQuery || '').toLowerCase().trim();
+      const list = Object.values(this.groups || {});
+      if (!query) return list;
+      return list.filter((g) =>
+        [g.name, g.group_id, g.scenario].some((s) => (s || '').toLowerCase().includes(query)),
+      );
     },
 
     // Active Character Alternate Greetings in RP tab
@@ -338,7 +386,7 @@ const AppDefinition = {
           system_prompt: char.system_prompt || '',
           post_history_instructions: char.post_history_instructions || '',
           creator_notes: char.creator_notes || '',
-          lorebook_id: char.lorebook_id || '',
+          lorebook_ids: [...(char.lorebook_ids || [])],
         };
         this.charTagsInput = this.charForm.tags_str;
       }
@@ -361,7 +409,7 @@ const AppDefinition = {
         system_prompt: '',
         post_history_instructions: '',
         creator_notes: '',
-        lorebook_id: '',
+        lorebook_ids: [],
       };
       this.charTagsInput = '';
       this.refreshIcons();
@@ -424,7 +472,7 @@ const AppDefinition = {
         creator_notes: this.charForm.creator_notes
           ? this.charForm.creator_notes.trim()
           : null,
-        lorebook_id: this.charForm.lorebook_id || null,
+        lorebook_ids: [...this.charForm.lorebook_ids],
         tags: tags,
       };
 
@@ -524,7 +572,7 @@ const AppDefinition = {
             system_prompt: data.system_prompt || '',
             post_history_instructions: data.post_history_instructions || '',
             creator_notes: data.creator_notes || '',
-            lorebook_id: data.lorebook_id || '',
+            lorebook_ids: [...(data.lorebook_ids || [])],
           };
           this.charTagsInput = this.charForm.tags_str;
           this.selectedCharId = charId;
@@ -560,7 +608,7 @@ const AppDefinition = {
         system_prompt: this.charForm.system_prompt || null,
         post_history_instructions: this.charForm.post_history_instructions || null,
         creator_notes: this.charForm.creator_notes || null,
-        lorebook_id: this.charForm.lorebook_id || null,
+        lorebook_ids: [...this.charForm.lorebook_ids],
         tags: tags,
       };
 
@@ -883,6 +931,180 @@ const AppDefinition = {
     },
 
     // =========================================================================
+    // Groups Management
+    // =========================================================================
+    async loadGroups() {
+      try {
+        const res = await fetch('/api/v1/groups');
+        if (res.ok) this.groups = await res.json();
+      } catch (err) {
+        console.error('Failed to load groups:', err);
+      }
+      this.refreshIcons();
+    },
+
+    characterName(charId) {
+      const c = this.characters.find((x) => x.char_id === charId);
+      return c ? c.name : charId;
+    },
+
+    personaName(personaId) {
+      const p = this.personas[personaId];
+      return p ? p.name : 'User';
+    },
+
+    selectGroup(id) {
+      const g = this.groups[id];
+      if (!g) return;
+      this.selectedGroupId = id;
+      this.groupForm = {
+        group_id: g.group_id,
+        name: g.name || '',
+        char_ids: [...(g.char_ids || [])],
+        scenario: g.scenario || '',
+        lorebook_ids: [...(g.lorebook_ids || [])],
+      };
+      this.refreshIcons();
+    },
+
+    newGroup() {
+      this.selectedGroupId = null;
+      this.groupForm = { group_id: '', name: '', char_ids: [], scenario: '', lorebook_ids: [] };
+      this.refreshIcons();
+    },
+
+    // Members speak in the order they were added when the speaker selector picks no one.
+    toggleGroupMember(charId) {
+      const ids = this.groupForm.char_ids;
+      const i = ids.indexOf(charId);
+      if (i >= 0) ids.splice(i, 1);
+      else ids.push(charId);
+    },
+
+    async saveGroup() {
+      const groupId = (this.groupForm.group_id || '').trim();
+      const name = (this.groupForm.name || '').trim();
+      if (!groupId || !name) {
+        this.showToast('Group ID and name are required.', 'error');
+        return;
+      }
+      if (this.groupForm.char_ids.length === 0) {
+        this.showToast('Add at least one character to the group.', 'error');
+        return;
+      }
+      const payload = {
+        group_id: groupId,
+        name: name,
+        char_ids: [...this.groupForm.char_ids],
+        scenario: this.groupForm.scenario || '',
+        lorebook_ids: [...this.groupForm.lorebook_ids],
+      };
+      try {
+        const res = await fetch('/api/v1/groups', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        if (res.ok) {
+          this.showToast(`Group "${name}" saved!`, 'success');
+          this.selectedGroupId = groupId;
+          await this.loadGroups();
+        } else {
+          const err = await res.json().catch(() => ({ detail: 'Failed to save group' }));
+          this.showToast(err.detail || 'Save failed', 'error');
+        }
+      } catch (err) {
+        this.showToast('Network error while saving group', 'error');
+      }
+    },
+
+    async deleteGroup(id) {
+      if (!id || !confirm(`Are you sure you want to delete group "${id}"?`)) return;
+      try {
+        const res = await fetch(`/api/v1/groups/${encodeURIComponent(id)}`, { method: 'DELETE' });
+        if (res.ok) {
+          this.showToast(`Group "${id}" deleted.`, 'success');
+          if (this.selectedGroupId === id) this.newGroup();
+          await this.loadGroups();
+        } else {
+          const err = await res.json().catch(() => ({ detail: 'Failed to delete' }));
+          this.showToast(err.detail || 'Delete failed', 'error');
+        }
+      } catch (err) {
+        this.showToast('Network error while deleting group', 'error');
+      }
+    },
+
+    async loadPersonas() {
+      try {
+        const res = await fetch('/api/v1/personas');
+        if (res.ok) this.personas = await res.json();
+      } catch (err) {
+        console.error('Failed to load personas:', err);
+      }
+      this.refreshIcons();
+    },
+
+    selectPersona(id) {
+      const p = this.personas[id];
+      if (!p) return;
+      this.selectedPersonaId = id;
+      this.personaForm = { persona_id: p.persona_id, name: p.name || '', description: p.description || '' };
+      this.refreshIcons();
+    },
+
+    newPersona() {
+      this.selectedPersonaId = null;
+      this.personaForm = { persona_id: '', name: '', description: '' };
+      this.refreshIcons();
+    },
+
+    async savePersona() {
+      const personaId = (this.personaForm.persona_id || '').trim();
+      const name = (this.personaForm.name || '').trim();
+      if (!personaId || !name) {
+        this.showToast('Persona ID and name are required.', 'error');
+        return;
+      }
+      try {
+        const res = await fetch('/api/v1/personas', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ persona_id: personaId, name: name, description: this.personaForm.description || '' }),
+        });
+        if (res.ok) {
+          this.showToast(`Persona "${name}" saved!`, 'success');
+          this.selectedPersonaId = personaId;
+          await this.loadPersonas();
+        } else {
+          const err = await res.json().catch(() => ({ detail: 'Failed to save persona' }));
+          this.showToast(err.detail || 'Save failed', 'error');
+        }
+      } catch (err) {
+        this.showToast('Network error while saving persona', 'error');
+      }
+    },
+
+    async deletePersona(id) {
+      if (!id || !confirm(`Are you sure you want to delete persona "${id}"?`)) return;
+      try {
+        const res = await fetch(`/api/v1/personas/${encodeURIComponent(id)}`, { method: 'DELETE' });
+        if (res.ok) {
+          this.showToast(`Persona "${id}" deleted.`, 'success');
+          if (this.selectedPersonaId === id) this.newPersona();
+          if (this.rpPersonaId === id) this.rpPersonaId = '';
+          if (this.groupPersonaId === id) this.groupPersonaId = '';
+          await this.loadPersonas();
+        } else {
+          const err = await res.json().catch(() => ({ detail: 'Failed to delete' }));
+          this.showToast(err.detail || 'Delete failed', 'error');
+        }
+      } catch (err) {
+        this.showToast('Network error while deleting persona', 'error');
+      }
+    },
+
+    // =========================================================================
     // Roleplay Tab Reactive Logic & SSE Streaming (Task 6)
     // =========================================================================
     scrollRPChatToBottom() {
@@ -945,7 +1167,7 @@ const AppDefinition = {
       this.rpSessionId = 'sess_' + Math.random().toString(36).substring(2, 10);
       this.rpMessages = [];
       const char = this.characters.find((c) => c.char_id === this.rpCharId);
-      this.rpLorebookId = (char && char.lorebook_id) || '';
+      this.rpLorebookIds = [...((char && char.lorebook_ids) || [])];
       if (char) {
         let text = char.first_mes || '';
         if (
@@ -1023,13 +1245,17 @@ const AppDefinition = {
       this.editingSessionId = null;
     },
 
-    // kind is 'rp' or 'story'. Runs on Enter and on blur; the first call wins.
+    // kind is 'rp', 'group' or 'story'. Runs on Enter and on blur; the first call wins.
     async saveRename(kind, s) {
       if (this.editingSessionId !== s.session_id) return;
       this.editingSessionId = null;
       const title = this.editingTitle.trim();
       if (title === (s.title || '')) return;
-      const base = kind === 'rp' ? '/api/v1/rp/sessions' : '/api/v1/story/sessions';
+      const base = {
+        rp: '/api/v1/rp/sessions',
+        group: '/api/v1/group/sessions',
+        story: '/api/v1/story/sessions',
+      }[kind];
       try {
         const res = await fetch(`${base}/${encodeURIComponent(s.session_id)}`, {
           method: 'PATCH',
@@ -1073,10 +1299,11 @@ const AppDefinition = {
         }
         this.rpSessionId = s.session_id;
         this.rpMessages = messages;
-        this.rpUserName = s.user_name || 'User';
+        // A deleted persona falls back to "no persona".
+        this.rpPersonaId = this.personas[s.persona_id] ? s.persona_id : '';
         this.rpAuthorsNote = s.authors_note || '';
-        this.rpLorebookId = s.lorebook_id || '';
-        this.rpLorebookSentKey = null; // re-send the selected lorebook with the next message
+        this.rpLorebookIds = [...(s.lorebook_ids || [])];
+        this.rpLorebookSentKey = null; // re-send the selected lorebooks with the next message
         this.showRPHistory = false;
         this.refreshIcons();
         this.scrollRPChatToBottom();
@@ -1331,14 +1558,15 @@ const AppDefinition = {
         // The greeting lives only in the UI, so the backend gets it with each message.
         greeting: firstMsg && firstMsg.isGreeting ? firstMsg.content : null,
         authors_note: this.rpAuthorsNote ? this.rpAuthorsNote.trim() : null,
-        user_name: this.rpUserName ? this.rpUserName.trim() : 'User',
+        // undefined drops the key, so the backend plays as "User".
+        persona_id: this.rpPersonaId || undefined,
         chunk_size: Number(this.rpChunkSize) || 1,
       };
-      // The backend keeps the lorebook in the session, so only send it when the
-      // session or the selection changed ('' clears it).
-      const lorebookKey = `${this.rpSessionId}|${this.rpLorebookId || ''}`;
+      // The backend keeps the lorebooks in the session, so only send them when the
+      // session or the selection changed ([] clears them).
+      const lorebookKey = `${this.rpSessionId}|${this.rpLorebookIds.join(',')}`;
       if (lorebookKey !== this.rpLorebookSentKey) {
-        payload.lorebook_id = this.rpLorebookId || '';
+        payload.lorebook_ids = [...this.rpLorebookIds];
       }
 
       try {
@@ -1453,6 +1681,217 @@ const AppDefinition = {
     },
 
     // =========================================================================
+    // Group Chat: the speaker selector picks who replies; each reply streams into its own bubble
+    // =========================================================================
+    scrollGroupChatToBottom() {
+      this.$nextTick(() => {
+        const feed = document.getElementById('group-chat-feed');
+        if (feed) feed.scrollTop = feed.scrollHeight;
+      });
+    },
+
+    groupSpeakerName(msg) {
+      if (msg.role === 'user') return this.personaName(this.groupPersonaId);
+      return this.characterName(msg.speaker);
+    },
+
+    onGroupChatChange() {
+      // Each group gets its own chats, so switching starts a new session.
+      this.newGroupSession();
+      this.loadGroupSessions();
+    },
+
+    newGroupSession() {
+      this.stopGeneratingGroup();
+      this.groupSessionId = 'group_' + Math.random().toString(36).substring(2, 10);
+      this.groupMessages = [];
+      this.groupLorebookSentKey = null;
+      // A group chat has no greeting: the user's first message opens the scene.
+      this.groupLorebookIds = [...((this.activeGroup && this.activeGroup.lorebook_ids) || [])];
+      this.refreshIcons();
+      this.scrollGroupChatToBottom();
+    },
+
+    toggleGroupHistory() {
+      this.showGroupHistory = !this.showGroupHistory;
+      if (this.showGroupHistory) this.loadGroupSessions();
+    },
+
+    async loadGroupSessions() {
+      if (!this.groupChatId) {
+        this.groupSessions = [];
+        return;
+      }
+      try {
+        const res = await fetch(`/api/v1/group/sessions?group_id=${encodeURIComponent(this.groupChatId)}`);
+        if (res.ok) this.groupSessions = await res.json();
+      } catch (err) {
+        console.warn('Failed to load group chat history:', err);
+      }
+      this.refreshIcons();
+    },
+
+    async openGroupSession(s) {
+      this.stopGeneratingGroup();
+      try {
+        const res = await fetch(`/api/v1/group/sessions/${encodeURIComponent(s.session_id)}/turns`);
+        if (!res.ok) throw new Error(`Server returned HTTP ${res.status}`);
+        const { turns } = await res.json();
+        const messages = turns.map((t) => ({
+          role: t.role === 'user' ? 'user' : 'assistant',
+          speaker: t.speaker,
+          content: t.text,
+          timestamp: '',
+        }));
+        this.groupSessionId = s.session_id;
+        this.groupMessages = messages;
+        this.groupPersonaId = this.personas[s.persona_id] ? s.persona_id : '';
+        this.groupAuthorsNote = s.authors_note || '';
+        this.groupLorebookIds = [...(s.lorebook_ids || [])];
+        this.groupLorebookSentKey = null; // re-send the selected lorebooks with the next message
+        this.showGroupHistory = false;
+        this.refreshIcons();
+        this.scrollGroupChatToBottom();
+      } catch (err) {
+        this.showToast(err.message || 'Failed to open chat.', 'error');
+      }
+    },
+
+    async deleteGroupSession(s) {
+      if (!confirm('Delete this chat? This cannot be undone.')) return;
+      await fetch(`/api/v1/group/sessions/${encodeURIComponent(s.session_id)}`, { method: 'DELETE' });
+      if (s.session_id === this.groupSessionId) this.newGroupSession();
+      this.loadGroupSessions();
+    },
+
+    stopGeneratingGroup() {
+      if (this.groupAbortController) this.groupAbortController.abort();
+      this.groupAbortController = null;
+      this.isGeneratingGroup = false;
+    },
+
+    async deleteGroupTurn(index) {
+      const msg = this.groupMessages[index];
+      if (!msg || this.isGeneratingGroup) return;
+      try {
+        const res = await fetch(`/api/v1/group/sessions/${encodeURIComponent(this.groupSessionId)}/turns/delete`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ turn_index: index, truncate_subsequent: false }),
+        });
+        if (!res.ok) throw new Error(`Server returned HTTP ${res.status}`);
+      } catch (err) {
+        this.showToast(err.message || 'Failed to delete message.', 'error');
+        return;
+      }
+      this.groupMessages.splice(index, 1);
+    },
+
+    async sendGroupMessage() {
+      const text = (this.groupInput || '').trim();
+      if (this.isGeneratingGroup || !text) return;
+      if (!this.groupChatId) {
+        this.showToast('Please select a group first.', 'error');
+        return;
+      }
+      this.groupInput = '';
+      this.groupMessages.push({ role: 'user', speaker: null, content: text, timestamp: this._timeNow() });
+      this.scrollGroupChatToBottom();
+      await this._streamGroupReplies(text);
+    },
+
+    async _streamGroupReplies(promptText) {
+      this.isGeneratingGroup = true;
+      this.groupAbortController = new AbortController();
+      this.refreshIcons();
+
+      const payload = {
+        group_id: this.groupChatId,
+        session_id: this.groupSessionId,
+        message: promptText,
+        authors_note: this.groupAuthorsNote ? this.groupAuthorsNote.trim() : null,
+        persona_id: this.groupPersonaId || undefined,
+        chunk_size: Number(this.groupChunkSize) || 1,
+      };
+      // Like RP: the backend keeps the lorebooks in the session, so only send them when they changed ([] clears them).
+      const lorebookKey = `${this.groupSessionId}|${this.groupLorebookIds.join(',')}`;
+      if (lorebookKey !== this.groupLorebookSentKey) {
+        payload.lorebook_ids = [...this.groupLorebookIds];
+      }
+
+      let current = null; // the bubble being streamed; a new speaker opens a new one
+      const handle = (data) => {
+        if (data.error) throw new Error(data.error);
+        if (!data.delta) return;
+        if (!current || current.speaker !== data.speaker) {
+          this.groupMessages.push({ role: 'assistant', speaker: data.speaker, content: '', timestamp: this._timeNow() });
+          // Mutate the reactive copy in the array so Vue re-renders as text arrives.
+          current = this.groupMessages[this.groupMessages.length - 1];
+        }
+        current.content += data.delta;
+        this.scrollGroupChatToBottom();
+      };
+
+      try {
+        const res = await fetch('/api/v1/group/chat/stream', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+          signal: this.groupAbortController.signal,
+        });
+        if (!res.ok) {
+          let detail = `Server returned HTTP ${res.status}`;
+          try {
+            const errJson = await res.json();
+            if (errJson.detail) detail = errJson.detail;
+          } catch (_) {}
+          throw new Error(detail);
+        }
+
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder('utf-8');
+        let buffer = '';
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true }).replace(/\r\n/g, '\n');
+          const blocks = buffer.split('\n\n');
+          buffer = blocks.pop();
+          for (const block of blocks) {
+            const line = block.trim();
+            if (!line.startsWith('data:')) continue;
+            const raw = line.slice(5).trim();
+            if (raw === '[DONE]') continue;
+            let data;
+            try {
+              data = JSON.parse(raw);
+            } catch (_) {
+              continue; // ignore a malformed chunk
+            }
+            handle(data);
+          }
+        }
+
+        // Marked only after a completed turn; re-sending on a failed one is harmless.
+        this.groupLorebookSentKey = lorebookKey;
+        if (!current) this.showToast('No character replied.', 'info');
+      } catch (err) {
+        if (err.name === 'AbortError') {
+          this.showToast('Generation stopped.', 'info');
+        } else {
+          console.error('Group chat streaming error:', err);
+          this.showToast(err.message || 'Error generating group replies.', 'error');
+        }
+      } finally {
+        this.isGeneratingGroup = false;
+        this.groupAbortController = null;
+        this.loadGroupSessions();
+        this.scrollGroupChatToBottom();
+        this.refreshIcons();
+      }
+    },
+
+    // =========================================================================
     // Story Co-Pilot Chat: a setup card starts the story, then it is a chat
     // =========================================================================
     scrollStoryChatToBottom() {
@@ -1522,7 +1961,7 @@ const AppDefinition = {
         tone: this.effectiveTone || 'Balanced',
       };
       this.storyMessages.push({ role: 'user', content: instruction, setup, timestamp: this._timeNow() });
-      await this._streamStoryReply({ ...setup, lorebook_id: this.storyLorebookId || null, instruction });
+      await this._streamStoryReply({ ...setup, lorebook_ids: [...this.storyLorebookIds], instruction });
     },
 
     async sendStoryMessage() {
@@ -1640,6 +2079,8 @@ const AppDefinition = {
     this.healthInterval = setInterval(() => this.checkHealth(), 10000);
     this.loadCharacters();
     this.loadLorebooks();
+    this.loadGroups();
+    this.loadPersonas();
     this.loadStorySessions();
     this.refreshIcons();
   },

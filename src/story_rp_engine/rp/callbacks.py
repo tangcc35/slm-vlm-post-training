@@ -19,7 +19,7 @@ def content_text(content: types.Content) -> str:
 
 
 def matching_lore(lorebook, text: str) -> List[LorebookEntry]:
-    """Entries of the session-state lorebook whose keys appear in text."""
+    """Entries of the session-state lorebooks (a list, or one lorebook in older sessions) whose keys appear in text."""
     if not lorebook or not text:
         return []
     # Lorebooks loaded into session state come back from the database as dicts.

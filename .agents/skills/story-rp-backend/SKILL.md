@@ -38,21 +38,25 @@ flowchart TD
   - `story_rp_engine.api.routes_rp`: Character card CRUD (`/api/v1/characters`), RP turn execution (`/api/v1/rp/chat`), turn history (`/api/v1/rp/sessions/{session_id}/turns`), and session deletion.
   - `story_rp_engine.api.routes_story`: Multi-agent collaborative narrative expansion (`/api/v1/story/expand`).
   - `story_rp_engine.api.routes_lorebook`: World info codex CRUD (`/api/v1/lorebooks`).
+  - `story_rp_engine.api.routes_group`: Group CRUD (`/api/v1/groups`), group chat turns (`/api/v1/group/chat/stream`), and group chat sessions (`/api/v1/group/sessions...`).
+  - `story_rp_engine.api.routes_persona`: Persona CRUD (`/api/v1/personas`).
+  - `story_rp_engine.api.chat_sessions`: session helpers shared by the RP and group routers (state delta, session list, turns, rename, turn delete); each router passes its ADK app name (`rp_app`, `group_app`).
 - Enforce strict ID validation with `_sanitize_key` to prevent path traversal attacks.
 - Intercept Pydantic validation errors with `validation_exception_handler` to return structured HTTP 400 responses.
 - Consult `references/api-endpoints-and-sse.md` for complete endpoint schemas and status codes.
 
 ### 3. Wire DatabaseSessionService Persistence & Context Compaction
 - Persist multi-turn conversation events and state deltas using Google ADK's `DatabaseSessionService` backed by `aiosqlite`.
-- Structure storage directory at `.engine_data/` containing `characters/`, `lorebooks/`, and `sessions.db`.
+- Structure storage directory at `.engine_data/` containing `characters/`, `lorebooks/`, `groups/`, `personas/`, and `sessions.db`.
 - Configure hybrid context compaction using `EventsCompactionConfig` with explicit `LlmEventSummarizer(llm=model)` on `App` (enabling both token-based safety net and sliding-window periodic compression).
 - Extract message turns via `get_session` and surface compaction events with `role: "compaction"` and `is_compaction: true`. Handle turn deletion or history rewind via the atomic session re-creation pattern.
 - Consult `references/database-session-storage.md` for SQLite tables (`sessions`, `events`, `app_states`, `user_states`), context compaction lifecycle, and async CRUD patterns.
 
 ### 4. Stream Tokens via Server-Sent Events (SSE)
-- Expose streaming endpoints (`/api/v1/rp/chat/stream` and `/api/v1/story/expand/stream`) using Starlette `StreamingResponse(media_type="text/event-stream")`.
+- Expose streaming endpoints (`/api/v1/rp/chat/stream`, `/api/v1/story/expand/stream` and `/api/v1/group/chat/stream`) using Starlette `StreamingResponse(media_type="text/event-stream")`.
 - Execute agent workflows with `RunConfig(streaming_mode=StreamingMode.SSE)`.
 - Wrap token generators with `format_sse_stream` to yield structured JSON deltas (`data: {"delta": "..."}\n\n`), consolidated completion payloads (`data: {"full_text": "...", "done": true}\n\n`), and the termination sentinel (`data: [DONE]\n\n`).
+- Group chat streams `(char_id, text)` pairs from `stream_group_turn`; `format_sse_stream` then labels each delta (`data: {"speaker": "...", "delta": "..."}\n\n`), flushes when the speaker changes, and ends with `data: {"replies": [{"speaker": "...", "text": "..."}], "done": true}\n\n` before `[DONE]`.
 - Respect `chunk_size` buffering and trigger immediate flushes on newline (`\n`) characters.
 - Consult `references/api-endpoints-and-sse.md` for SSE wire formats and client consumption patterns.
 
@@ -72,9 +76,9 @@ flowchart TD
 ## Critical Guardrails
 
 1. **Path Traversal Sanitization**:
-   - All dynamic path parameters and body IDs (`char_id`, `session_id`, `lorebook_id`) must be sanitized using `_sanitize_key`. Any ID containing `/`, `\`, or `..` must immediately raise HTTP 400.
+   - All dynamic path parameters and body IDs (`char_id`, `session_id`, `lorebook_id`, `group_id`) must be sanitized using `_sanitize_key`. Any ID containing `/`, `\`, or `..` must immediately raise HTTP 400.
 2. **Strict SSE Protocol & Sentinel Formatting**:
-   - Streaming endpoints must strictly follow SSE framing: `data: {"delta": "..."}\n\n`, final payload `data: {"full_text": "...", "done": true}\n\n`, and end with `data: [DONE]\n\n`. Never terminate a stream without the `[DONE]` sentinel.
+   - Streaming endpoints must strictly follow SSE framing: `data: {"delta": "..."}\n\n`, final payload `data: {"full_text": "...", "done": true}\n\n`, and end with `data: [DONE]\n\n`. Group chat is the one variant: each delta also carries `"speaker"`, and the final payload is `data: {"replies": [...], "done": true}\n\n`. Never terminate a stream without the `[DONE]` sentinel.
 3. **Structured Validation Error Normalization**:
    - Validation errors must be caught by `validation_exception_handler` and returned as HTTP 400 with a structured body (`{"error": ..., "detail": ..., "missing_fields": [...]}`). Avoid raw 422 Unprocessable Entity responses for user input validation.
 4. **Atomic Session Rewind & Turn Truncation**:

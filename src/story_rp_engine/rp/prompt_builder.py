@@ -17,8 +17,9 @@ def build_rp_system_instruction(
     active_lore: Optional[List[LorebookEntry]] = None,
     user_name: str = "User",
     greeting: Optional[str] = None,
+    user_persona: str = "",
 ) -> str:
-    """Builds the roleplay system prompt from a character card, optional lore, and the opening greeting."""
+    """Builds the roleplay system prompt from a character card, optional lore, the user's persona and the opening greeting."""
     char_name = card.name
 
     def fill(text: Optional[str]) -> str:
@@ -37,6 +38,8 @@ def build_rp_system_instruction(
         sections.append(f"<personality>\n{fill(card.personality)}\n</personality>")
     if card.scenario:
         sections.append(f"<scenario>\n{fill(card.scenario)}\n</scenario>")
+    if user_persona:
+        sections.append(f"<user_persona>\n{fill(user_persona)}\n</user_persona>")
     if active_lore:
         lore_snippets = "\n".join(f"- {entry.content}" for entry in active_lore)
         sections.append(f"<world_info>\n{lore_snippets}\n</world_info>")

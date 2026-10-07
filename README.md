@@ -16,6 +16,7 @@ Two packages in one repo:
 **Story & roleplay engine**
 - **Roleplay**: Character Card V2 fields, `{{char}}`/`{{user}}` macros, and the opening greeting in a system prompt that stays the same every turn (so prompt caching works). An ADK `before_model_callback` appends per-turn context to the latest user message: keyword-triggered lorebook entries and an author's note.
 - **Story co-pilot**: a chat-style ADK `Workflow`. Each turn, a **Director** reads the whole session and writes notes; a **Writer** sees only those notes plus the end of the story and writes the next passage.
+- **Group chat**: a saved group puts several characters in one scene. Each turn, a **speaker selector** agent returns the list of characters who reply (structured output), and each one answers in order, seeing the others' lines but never the selector's.
 - **State**: ADK `DatabaseSessionService` (SQLite locally, Postgres/Neon via `DATABASE_URL`) with automatic context compaction.
 - **Models**: Gemini through the native client; anything else (Ollama, llama.cpp, vLLM, OpenAI-compatible) through LiteLLM.
 - **Serving**: SSE streaming, a built-in web UI, Arize Phoenix tracing, and a Vercel deployment in `vercel/`.
@@ -84,11 +85,15 @@ flowchart LR
     UI[Web UI / client] -->|SSE| API[FastAPI]
     API --> RP["RP agent (character card)"]
     API --> WF["Story workflow: Director → Writer"]
+    API --> GW["Group workflow: speaker selector → characters"]
     INJ["lorebook · author's note"] -. before_model_callback .-> RP
+    INJ -. before_model_callback .-> GW
     RP --> LLM[Gemini / LiteLLM]
     WF --> LLM
+    GW --> LLM
     RP --> DB[("ADK sessions: SQLite / Postgres")]
     WF --> DB
+    GW --> DB
 ```
 
 ```bash
@@ -106,7 +111,7 @@ The web UI is at http://localhost:8000 and the API docs at `/docs`. To use your 
 | `GOOGLE_API_KEY` / `STORY_RP_API_KEY` | – | Provider API key |
 | `STORY_RP_TEMPERATURE` / `STORY_RP_TOP_P` | `0.8` / `0.9` | Sampling settings for every agent |
 | `STORY_RP_MAX_TOKENS` | unset | Output token cap; unset means the model's own limit |
-| `DATABASE_URL` | unset | Postgres for sessions, characters and lorebooks (`STORY_RP_DB_URL` and `POSTGRES_URL` also work). Unset: SQLite plus JSON files in `STORY_RP_STORAGE_DIR` (`.engine_data`) |
+| `DATABASE_URL` | unset | Postgres for sessions, characters, lorebooks and groups (`STORY_RP_DB_URL` and `POSTGRES_URL` also work). Unset: SQLite plus JSON files in `STORY_RP_STORAGE_DIR` (`.engine_data`) |
 | `STORY_RP_COMPACTION_ENABLED` | `1` | ADK context compaction; tune with `STORY_RP_COMPACTION_*` (see `core/config.py`) |
 | `PHOENIX_ENABLED` | `0` | Send OpenTelemetry traces to Arize Phoenix |
 
@@ -118,17 +123,20 @@ The web UI is at http://localhost:8000 and the API docs at `/docs`. To use your 
 | `POST·GET·DELETE /api/v1/lorebooks[/{id}]` | Lorebooks |
 | `POST /api/v1/rp/chat[/stream]` | Roleplay turn |
 | `GET /api/v1/rp/sessions/{id}/turns`, `POST …/turns/delete`, `DELETE /api/v1/rp/sessions/{id}` | View, rewind or clear chat history |
+| `POST·GET·DELETE /api/v1/groups[/{id}]` | Group chat groups (several characters in one scene) |
+| `POST /api/v1/group/chat/stream` | Group chat turn: a speaker selector picks who replies, each reply streams with its `speaker` |
+| `GET /api/v1/group/sessions?group_id=`, `GET …/sessions/{id}/turns`, `PATCH`·`DELETE …/sessions/{id}`, `POST …/turns/delete` | List, view, rename, rewind or clear group chats |
 | `POST /api/v1/story/expand[/stream]` | Story chat turn |
 
 ```bash
 curl -N -X POST http://localhost:8000/api/v1/rp/chat/stream -H "Content-Type: application/json" -d '{
   "char_id": "elena", "session_id": "s1", "message": "Did you hear that?",
-  "user_name": "Explorer", "greeting": "Watch your step!", "lorebook_id": "ruins",
+  "user_name": "Explorer", "greeting": "Watch your step!", "lorebook_ids": ["ruins"],
   "authors_note": "A rumble echoes from above."
 }'
 ```
 
-`lorebook_id` is loaded into the session once: leave it out on later turns, and send `""` to remove it. Lorebook entries are added when one of their keys appears in the user's latest message.
+The `lorebook_ids` lorebooks are loaded into the session once: leave the field out on later turns, and send `[]` to remove them. Lorebook entries are added when one of their keys appears in the user's latest message.
 
 Story sessions work the same way: the first turn sends the setup (`premise`, `genre`, `tone`) with an `instruction`, and it stays in session state, so later turns send only `session_id` and `instruction`. The engine rebuilds the story text from the session's earlier passages; there's no `current_text` field.
 

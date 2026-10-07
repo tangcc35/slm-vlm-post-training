@@ -39,14 +39,14 @@ class EngineConfig(BaseModel):
     )
     storage_dir: str = Field(
         default_factory=lambda: os.getenv("STORY_RP_STORAGE_DIR", ".engine_data"),
-        description="Directory for local storage (characters, lorebooks, sessions)",
+        description="Directory for local storage (characters, lorebooks, groups, sessions)",
     )
     db_url: Optional[str] = Field(
         # DATABASE_URL / POSTGRES_URL are the names Neon's Vercel integration injects.
         default_factory=lambda: os.getenv("STORY_RP_DB_URL")
         or os.getenv("DATABASE_URL")
         or os.getenv("POSTGRES_URL"),
-        description="Database URL (e.g. Neon Postgres) for sessions, characters and lorebooks; "
+        description="Database URL (e.g. Neon Postgres) for sessions, characters, lorebooks and groups; "
         "unset means local SQLite sessions plus JSON files",
     )
     db_null_pool: bool = Field(

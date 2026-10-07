@@ -1,6 +1,6 @@
 import json
 import logging
-from typing import AsyncIterator, Optional
+from typing import AsyncIterator, Dict, Optional, Tuple, Union
 from google.adk.agents.run_config import RunConfig, StreamingMode
 from google.adk.runners import Runner
 from google.genai import types
@@ -97,18 +97,75 @@ async def stream_runner_turn(
                     yield w if i == 0 else " " + w
 
 
+async def stream_group_turn(
+    runner: Runner,
+    user_id: str,
+    session_id: str,
+    message: str,
+    speakers: Dict[str, str],
+    state_delta: Optional[dict] = None,
+) -> AsyncIterator[Tuple[str, str]]:
+    """Streams a group chat turn as (char_id, text) chunks.
+
+    `speakers` maps agent names to char_ids; events from other authors (the speaker selector) are skipped.
+    """
+    content = types.Content(role="user", parts=[types.Part.from_text(text=message)])
+    run_cfg = RunConfig(streaming_mode=StreamingMode.SSE)
+    streamed = set()  # speakers whose reply already arrived in partial chunks
+
+    async for event in runner.run_async(
+        user_id=user_id,
+        session_id=session_id,
+        new_message=content,
+        state_delta=state_delta,
+        run_config=run_cfg,
+    ):
+        char_id = speakers.get(event.author)
+        if char_id is None or not event.content or not event.content.parts:
+            continue
+        text = "".join(p.text for p in event.content.parts if getattr(p, "text", None))
+        if not text:
+            continue
+        if event.partial:
+            streamed.add(char_id)
+            yield char_id, text
+        elif char_id not in streamed:
+            yield char_id, text
+
+
 async def format_sse_stream(
-    generator: AsyncIterator[str],
+    generator: AsyncIterator[Union[str, Tuple[str, str]]],
     chunk_size: Optional[int] = 4,
 ) -> AsyncIterator[str]:
-    """Buffers string chunks, yielding structured SSE JSON deltas and a final complete text."""
+    """Buffers string chunks, yielding structured SSE JSON deltas and a final complete text.
+
+    Group chat streams (speaker, text) pairs instead: each delta then carries its speaker, a new speaker flushes
+    the buffer, and the final event lists each speaker's reply in place of full_text.
+    """
     buffer = []
     full_text_chunks = []
+    replies = []  # [{"speaker", "text"}], filled from (speaker, text) chunks
     chunk_threshold = max(1, chunk_size or 4)
     buffered_tokens = 0
 
+    def delta_event() -> str:
+        data = {"delta": "".join(buffer)}
+        if replies:
+            data = {"speaker": replies[-1]["speaker"], **data}
+        return f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
+
     try:
         async for chunk in generator:
+            if isinstance(chunk, tuple):
+                speaker, chunk = chunk
+                if chunk and (not replies or replies[-1]["speaker"] != speaker):
+                    if buffer:
+                        yield delta_event()
+                        buffer.clear()
+                        buffered_tokens = 0
+                    replies.append({"speaker": speaker, "text": ""})
+                if chunk:
+                    replies[-1]["text"] += chunk
             if not chunk:
                 continue
             buffer.append(chunk)
@@ -119,8 +176,7 @@ async def format_sse_stream(
             buffered_tokens += chunk_tokens
 
             if chunk_threshold <= 1 or buffered_tokens >= chunk_threshold or len(buffer) >= chunk_threshold or "\n" in chunk:
-                combined = "".join(buffer)
-                yield f"data: {json.dumps({'delta': combined}, ensure_ascii=False)}\n\n"
+                yield delta_event()
                 buffer.clear()
                 buffered_tokens = 0
     except Exception as e:
@@ -131,10 +187,12 @@ async def format_sse_stream(
         return
 
     if buffer:
-        combined = "".join(buffer)
-        yield f"data: {json.dumps({'delta': combined}, ensure_ascii=False)}\n\n"
+        yield delta_event()
         buffer.clear()
 
-    full_text = "".join(full_text_chunks)
-    yield f"data: {json.dumps({'full_text': full_text, 'done': True}, ensure_ascii=False)}\n\n"
+    if replies:
+        done = {"replies": replies, "done": True}
+    else:
+        done = {"full_text": "".join(full_text_chunks), "done": True}
+    yield f"data: {json.dumps(done, ensure_ascii=False)}\n\n"
     yield "data: [DONE]\n\n"

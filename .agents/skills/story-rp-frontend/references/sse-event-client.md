@@ -15,7 +15,7 @@ sequenceDiagram
     participant API as FastAPI Backend (/stream)
     participant Runner as ADK Agent Runner
 
-    User->>API: POST /api/v1/rp/chat/stream or /api/v1/story/expand/stream
+    User->>API: POST /api/v1/rp/chat/stream, /api/v1/story/expand/stream or /api/v1/group/chat/stream
     API-->>User: HTTP 200 (content-type: text/event-stream)
     loop Stream Chunks
         Runner->>API: emit token chunk
@@ -102,15 +102,15 @@ if (buffer && buffer.trim()) {
 
 ## 3. Streaming Endpoints Comparison
 
-The application provides two distinct streaming workflows tailored to roleplay conversation turns and narrative story generation:
+The application provides three streaming workflows: roleplay turns, group chat turns and narrative story generation:
 
-| Characteristic | Roleplay Chat (`_streamAssistantReply`) | Story Co-Pilot (`_streamStoryReply`) |
-| :--- | :--- | :--- |
-| **Endpoint** | `POST /api/v1/rp/chat/stream` | `POST /api/v1/story/expand/stream` |
-| **Request Model** | `RPStreamChatRequest` (`char_id`, `session_id`, `message`, `authors_note`, `user_name`, `chunk_size`) | `StoryRequest` (`session_id`, `instruction`, `chunk_size`; `premise`, `genre`, `tone` on the first turn only) |
-| **Target Destination** | Appends to assistant turn in `rpMessages` array | Appends to assistant turn in `storyMessages` array |
-| **Cancellation** | `this.rpAbortController.abort()` | `this.storyAbortController.abort()` |
-| **UI Indicator** | Animated `▌` cursor inside active bubble | Animated `▌` cursor inside active bubble |
+| Characteristic | Roleplay Chat (`_streamAssistantReply`) | Group Chat (`_streamGroupReplies`) | Story Co-Pilot (`_streamStoryReply`) |
+| :--- | :--- | :--- | :--- |
+| **Endpoint** | `POST /api/v1/rp/chat/stream` | `POST /api/v1/group/chat/stream` | `POST /api/v1/story/expand/stream` |
+| **Request Model** | `RPStreamChatRequest` (`char_id`, `session_id`, `message`, `authors_note`, `persona_id` (or `user_name`), `chunk_size`) | `GroupChatRequest` (`group_id`, `session_id`, `message`, `authors_note`, `persona_id` (or `user_name`), `lorebook_ids`, `chunk_size`) | `StoryRequest` (`session_id`, `instruction`, `chunk_size`; `premise`, `genre`, `tone` on the first turn only) |
+| **Target Destination** | Appends to assistant turn in `rpMessages` array | Opens a new bubble in `groupMessages` whenever the delta's `speaker` changes | Appends to assistant turn in `storyMessages` array |
+| **Cancellation** | `this.rpAbortController.abort()` | `this.groupAbortController.abort()` | `this.storyAbortController.abort()` |
+| **UI Indicator** | Animated `▌` cursor inside active bubble | Animated `▌` cursor inside the last bubble | Animated `▌` cursor inside active bubble |
 
 ---
 
@@ -135,6 +135,19 @@ data: {"full_text": "Complete generated text...", "done": true}
 ### 3. Termination Sentinel
 Indicates stream termination; signals client loop completion:
 ```text
+data: [DONE]
+
+```
+
+### 4. Group Chat Variant
+`/api/v1/group/chat/stream` adds the speaking character's `char_id` to every delta and ends with a `replies` list instead of `full_text`. A change of `speaker` means the next character has started, so the client opens a new bubble:
+```text
+data: {"speaker": "mara", "delta": "Not tonight, darling."}
+
+data: {"speaker": "siqi", "delta": "A gull fought the gale by the crane."}
+
+data: {"replies": [{"speaker": "mara", "text": "Not tonight, darling."}, {"speaker": "siqi", "text": "A gull fought the gale by the crane."}], "done": true}
+
 data: [DONE]
 
 ```

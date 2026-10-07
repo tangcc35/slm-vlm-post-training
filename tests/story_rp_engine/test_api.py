@@ -253,20 +253,22 @@ async def test_story_follow_up_uses_end_of_writer_replies(tmp_path):
 
 
 @pytest.mark.anyio
-async def test_story_lorebook_id_copies_lorebook_into_session(tmp_path):
+async def test_story_lorebook_ids_copy_lorebooks_into_session(tmp_path):
     store = EngineStore(storage_dir=str(tmp_path))
-    lorebook = Lorebook(name="World", entries=[LorebookEntry(keys=["dragon"], content="Dragons sleep under Mount Ash.")])
-    await store.save_lorebook("world", lorebook)
+    world = Lorebook(name="World", entries=[LorebookEntry(keys=["dragon"], content="Dragons sleep under Mount Ash.")])
+    court = Lorebook(name="Court", entries=[LorebookEntry(keys=["queen"], content="The queen is blind.")])
+    await store.save_lorebook("world", world)
+    await store.save_lorebook("court", court)
     client = TestClient(create_app(store=store, config=EngineConfig()))
 
     with patch("story_rp_engine.api.routes_story.execute_runner_turn", new_callable=AsyncMock, return_value="") as mock_exec:
-        res = client.post("/api/v1/story/expand", json={"session_id": "s1", "lorebook_id": "world"})
+        res = client.post("/api/v1/story/expand", json={"session_id": "s1", "lorebook_ids": ["world", "court"]})
         assert res.status_code == 200
-        assert mock_exec.call_args.kwargs["state_delta"]["lorebook"] == lorebook.model_dump()
+        assert mock_exec.call_args.kwargs["state_delta"]["lorebook"] == [world.model_dump(), court.model_dump()]
 
-        res = client.post("/api/v1/story/expand", json={"session_id": "s1", "lorebook_id": "missing"})
+        res = client.post("/api/v1/story/expand", json={"session_id": "s1", "lorebook_ids": ["world", "missing"]})
         assert res.status_code == 404
-        assert res.json()["detail"] == "Lorebook not found"
+        assert res.json()["detail"] == "Lorebook not found: missing"
 
 
 def test_story_expand_endpoint_missing_session_id_fails(tmp_path):
@@ -430,7 +432,9 @@ def test_rp_chat_authors_note_and_custom_user(tmp_path):
         assert kwargs["message"] == "Play the hidden song."
         assert kwargs["state_delta"] == {
             "authors_note": "[Style: Melancholy]",
+            "persona_id": None,
             "user_name": "Adventurer",
+            "user_persona": "",
             "greeting": None,
             "char_id": "lyra",
             "last_message": "Play the hidden song.",
@@ -882,48 +886,53 @@ async def _recording_rp_app(tmp_path):
     await store.save_lorebook(
         "world", Lorebook(name="World", entries=[LorebookEntry(keys=["dragon"], content="Dragons sleep under Mount Ash.")])
     )
+    await store.save_lorebook(
+        "court", Lorebook(name="Court", entries=[LorebookEntry(keys=["queen"], content="The queen is blind.")])
+    )
     agent = await app.state.agent_registry.get_or_create_rp_agent("ava")
     agent.model = RecordingLlm()
     return TestClient(app), prompts
 
 
 @pytest.mark.anyio
-async def test_rp_chat_lorebook_loaded_once_stays_in_session(tmp_path):
+async def test_rp_chat_lorebooks_loaded_once_stay_in_session(tmp_path):
     client, prompts = await _recording_rp_app(tmp_path)
-    chat = {"char_id": "ava", "session_id": "s1", "message": "Where is the dragon?"}
+    chat = {"char_id": "ava", "session_id": "s1", "message": "Does the queen fear the dragon?"}
 
-    res = client.post("/api/v1/rp/chat/stream", json={**chat, "lorebook_id": "world"})
+    res = client.post("/api/v1/rp/chat/stream", json={**chat, "lorebook_ids": ["world", "court"]})
     assert res.status_code == 200
     assert "Dragons sleep under Mount Ash." in prompts[-1]
+    assert "The queen is blind." in prompts[-1]
 
-    # Later messages omit lorebook_id; the copy loaded into the session is still used.
+    # Later messages omit lorebook_ids; the copies loaded into the session are still used.
     res = client.post("/api/v1/rp/chat/stream", json=chat)
     assert res.status_code == 200
     assert "Dragons sleep under Mount Ash." in prompts[-1]
+    assert "The queen is blind." in prompts[-1]
 
 
 @pytest.mark.anyio
-async def test_rp_chat_empty_lorebook_id_clears_session_lorebook(tmp_path):
+async def test_rp_chat_empty_lorebook_ids_clears_session_lorebooks(tmp_path):
     client, prompts = await _recording_rp_app(tmp_path)
     chat = {"char_id": "ava", "session_id": "s1", "message": "Where is the dragon?"}
 
-    assert client.post("/api/v1/rp/chat", json={**chat, "lorebook_id": "world"}).status_code == 200
+    assert client.post("/api/v1/rp/chat", json={**chat, "lorebook_ids": ["world"]}).status_code == 200
     assert "Dragons sleep under Mount Ash." in prompts[-1]
-    assert client.post("/api/v1/rp/chat", json={**chat, "lorebook_id": ""}).status_code == 200
+    assert client.post("/api/v1/rp/chat", json={**chat, "lorebook_ids": []}).status_code == 200
     assert "Dragons sleep under Mount Ash." not in prompts[-1]
 
 
 @pytest.mark.anyio
-async def test_rp_session_list_returns_lorebook_id(tmp_path):
+async def test_rp_session_list_returns_lorebook_ids(tmp_path):
     client, _ = await _recording_rp_app(tmp_path)
     chat = {"char_id": "ava", "session_id": "s1", "message": "Hi"}
 
-    assert client.post("/api/v1/rp/chat", json={**chat, "lorebook_id": "world"}).status_code == 200
+    assert client.post("/api/v1/rp/chat", json={**chat, "lorebook_ids": ["world", "court"]}).status_code == 200
     assert client.post("/api/v1/rp/chat", json=chat).status_code == 200
-    assert client.get("/api/v1/rp/sessions?char_id=ava").json()[0]["lorebook_id"] == "world"
+    assert client.get("/api/v1/rp/sessions?char_id=ava").json()[0]["lorebook_ids"] == ["world", "court"]
 
-    assert client.post("/api/v1/rp/chat", json={**chat, "lorebook_id": ""}).status_code == 200
-    assert client.get("/api/v1/rp/sessions?char_id=ava").json()[0]["lorebook_id"] is None
+    assert client.post("/api/v1/rp/chat", json={**chat, "lorebook_ids": []}).status_code == 200
+    assert client.get("/api/v1/rp/sessions?char_id=ava").json()[0]["lorebook_ids"] == []
 
 
 @pytest.mark.anyio
@@ -931,10 +940,10 @@ async def test_rp_chat_unknown_lorebook_id_returns_404(tmp_path):
     client, prompts = await _recording_rp_app(tmp_path)
     res = client.post(
         "/api/v1/rp/chat/stream",
-        json={"char_id": "ava", "session_id": "s1", "message": "Hi", "lorebook_id": "missing"},
+        json={"char_id": "ava", "session_id": "s1", "message": "Hi", "lorebook_ids": ["world", "missing"]},
     )
     assert res.status_code == 404
-    assert res.json()["detail"] == "Lorebook not found"
+    assert res.json()["detail"] == "Lorebook not found: missing"
     assert prompts == []
 
 
@@ -1044,3 +1053,62 @@ async def test_story_session_rename(tmp_path):
     assert client.patch("/api/v1/story/sessions/s1", json={"title": "The Lamp"}).status_code == 200
     assert client.get("/api/v1/story/sessions").json()[0]["title"] == "The Lamp"
     assert client.get("/api/v1/story/sessions/s1/messages").json()["messages"] == [{"role": "assistant", "content": "Once."}]
+
+
+def test_persona_crud(tmp_path):
+    client = TestClient(create_app(store=EngineStore(storage_dir=str(tmp_path)), config=EngineConfig()))
+    sam = {"persona_id": "sam", "name": "Sam", "description": "A wandering cartographer."}
+
+    assert client.post("/api/v1/personas", json=sam).json() == {"status": "saved", "persona_id": "sam"}
+    assert client.get("/api/v1/personas/sam").json() == sam
+    assert list(client.get("/api/v1/personas").json()) == ["sam"]
+    assert client.post("/api/v1/personas", json={**sam, "persona_id": "../evil"}).status_code == 400
+
+    assert client.delete("/api/v1/personas/sam").json() == {"status": "deleted", "persona_id": "sam"}
+    assert client.get("/api/v1/personas/sam").status_code == 404
+    assert client.delete("/api/v1/personas/sam").status_code == 404
+
+
+SAM = {"persona_id": "sam", "name": "Sam", "description": "{{user}} is a cartographer who owes {{char}} money."}
+
+
+@pytest.mark.anyio
+async def test_rp_chat_persona_sets_name_and_description(tmp_path):
+    client, prompts = await _recording_rp_app(tmp_path)
+    assert client.post("/api/v1/personas", json=SAM).status_code == 200
+    chat = {"char_id": "ava", "session_id": "s1", "message": "Hi"}
+
+    assert client.post("/api/v1/rp/chat", json={**chat, "persona_id": "sam"}).status_code == 200
+    assert "Ava owes Sam a favor." in prompts[-1]
+    assert "Sam is a cartographer who owes Ava money." in prompts[-1]
+    assert client.get("/api/v1/rp/sessions?char_id=ava").json()[0]["persona_id"] == "sam"
+
+    # Without persona_id the chat falls back to user_name and drops the description.
+    assert client.post("/api/v1/rp/chat", json={**chat, "user_name": "Alice"}).status_code == 200
+    assert "Ava owes Alice a favor." in prompts[-1]
+    assert "cartographer" not in prompts[-1]
+    assert client.get("/api/v1/rp/sessions?char_id=ava").json()[0]["persona_id"] is None
+
+
+@pytest.mark.anyio
+async def test_rp_chat_uses_edited_persona_on_next_turn(tmp_path):
+    client, prompts = await _recording_rp_app(tmp_path)
+    chat = {"char_id": "ava", "session_id": "s1", "message": "Hi", "persona_id": "sam"}
+    client.post("/api/v1/personas", json=SAM)
+    assert client.post("/api/v1/rp/chat", json=chat).status_code == 200
+
+    # Braces that aren't macros reach the prompt as-is; ADK's {state} templating never sees the description.
+    client.post("/api/v1/personas", json={**SAM, "name": "Samantha", "description": "Carries a {lucky} coin."})
+    assert client.post("/api/v1/rp/chat", json=chat).status_code == 200
+    assert "Carries a {lucky} coin." in prompts[-1]
+    assert "Ava owes Samantha a favor." in prompts[-1]
+    assert "cartographer" not in prompts[-1]
+
+
+@pytest.mark.anyio
+async def test_rp_chat_unknown_persona_returns_404(tmp_path):
+    client, prompts = await _recording_rp_app(tmp_path)
+    res = client.post("/api/v1/rp/chat", json={"char_id": "ava", "session_id": "s1", "message": "Hi", "persona_id": "ghost"})
+    assert res.status_code == 404
+    assert res.json()["detail"] == "Persona not found: ghost"
+    assert prompts == []

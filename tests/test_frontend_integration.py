@@ -465,3 +465,40 @@ def test_rp_chat_and_stream_endpoints_integration(client):
         assert 'data: {"full_text": "We should move quickly.", "done": true}\n\n' in body
         assert "data: [DONE]\n\n" in body
         assert mock_stream_fn.called
+
+
+def test_groups_tab_is_served(client):
+    html = client.get("/").text
+    assert "activeTab === 'groups'" in html
+    assert "saveGroup" in html
+    js = client.get("/app.js").text
+    assert "'/api/v1/groups'" in js
+
+
+def test_group_chat_tab_is_served(client):
+    html = client.get("/").text
+    assert "activeTab === 'group'" in html
+    assert "group-chat-feed" in html
+    js = client.get("/app.js").text
+    assert "/api/v1/group/chat/stream" in js
+    assert "/api/v1/group/sessions" in js
+
+
+def test_personas_tab_is_served(client):
+    html = client.get("/").text
+    assert "activeTab === 'personas'" in html
+    assert "savePersona" in html
+    js = client.get("/app.js").text
+    assert "'/api/v1/personas'" in js
+
+
+def test_chat_tabs_pick_a_saved_persona(client):
+    html = client.get("/").text
+    assert 'v-model="rpPersonaId"' in html
+    assert 'v-model="groupPersonaId"' in html
+    js = client.get("/app.js").text
+    assert "persona_id: this.rpPersonaId" in js
+    assert "persona_id: this.groupPersonaId" in js
+    # The free-text name fields are gone; the name comes from the persona.
+    assert "rpUserName" not in js + html
+    assert "groupUserName" not in js + html

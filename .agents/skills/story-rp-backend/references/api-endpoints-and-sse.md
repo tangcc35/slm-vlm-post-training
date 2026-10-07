@@ -12,9 +12,11 @@ All primary application API routes are mounted under the `/api/v1` prefix.
 graph TD
     Client["Client (Browser / Native)"] -->|HTTP / SSE| FastAPI["FastAPI Application"]
     FastAPI --> RP["RP Router (/api/v1/rp)"]
+    FastAPI --> Group["Group Router (/api/v1/group, /api/v1/groups)"]
     FastAPI --> Story["Story Router (/api/v1/story)"]
     FastAPI --> Chars["Character Router (/api/v1/characters)"]
     FastAPI --> Lore["Lorebook Router (/api/v1/lorebooks)"]
+    FastAPI --> Personas["Persona Router (/api/v1/personas)"]
     FastAPI --> Health["Health Check (/health)"]
 ```
 
@@ -36,7 +38,7 @@ Creates or updates a character card persona stored as JSON.
   - `alternate_greetings` (list[str], optional): Additional opening greetings.
   - `creator_notes` (str, optional): Metadata notes.
   - `tags` (list[str], optional): Category tags.
-  - `lorebook_id` (str, optional): Lorebook the web UI selects when a new chat with this character starts.
+  - `lorebook_ids` (list of str, optional): Lorebooks the web UI selects when a new chat with this character starts.
 - **Response**: `200 OK`
   ```json
   {
@@ -95,6 +97,7 @@ Executes a synchronous roleplay chat turn via Google ADK Runner.
   - `message` (str, required): User message text.
   - `authors_note` (str, optional): Steering guidance injected into prompt context.
   - `user_name` (str, optional): User persona name (defaults to `"User"`).
+  - `persona_id` (str, optional): Saved persona to play as; sets the user's name and adds its description to the prompt, overriding `user_name`. `404` if it doesn't exist.
   - `chunk_size` (int, optional): Buffer size (default: 16).
 - **Response**: `200 OK`
   ```json
@@ -194,7 +197,35 @@ Streams literary prose expansion via Server-Sent Events (SSE).
 
 ---
 
-### 1.4 System Endpoints
+### 1.4 Group Chat Endpoints (`/api/v1/groups` & `/api/v1/group`)
+
+A group puts several characters in one scene; a speaker selector picks who replies each turn.
+
+- `POST /api/v1/groups`: Saves a `GroupCard` (`group_id`, `name`, `char_ids`, `scenario`, `lorebook_ids`). Groups have no greeting; the user's first message opens the scene. Returns `{"status": "saved", "group_id": ...}`; `400` for an invalid `group_id`.
+- `GET /api/v1/groups`: Returns all groups keyed by `group_id`.
+- `GET /api/v1/groups/{group_id}`: Retrieves one group (`404` if missing).
+- `DELETE /api/v1/groups/{group_id}`: Deletes the group and evicts its cached runner (`404` if missing).
+- `POST /api/v1/group/chat/stream`: Streams one group turn over SSE (see section 2.1). Body `GroupChatRequest`: `group_id`, `session_id`, `message` (required); `authors_note`, `user_name`, `persona_id`, `lorebook_ids`, `chunk_size` (optional, as in `RPChatRequest`; there is no `greeting`). `404` if the group, lorebook or persona is missing; `400` if the group has no characters or the session ID is invalid.
+- `GET /api/v1/group/sessions?group_id=`: Chats with one group, newest first.
+- `GET /api/v1/group/sessions/{session_id}/turns`: Same shape as the RP turns plus `speaker` (the `char_id`, `null` for the user); the selector's events are hidden.
+- `PATCH /api/v1/group/sessions/{session_id}`: Renames the chat (`{"title": ...}`).
+- `DELETE /api/v1/group/sessions/{session_id}`: Deletes the session.
+- `POST /api/v1/group/sessions/{session_id}/turns/delete`: Same body as the RP route; indexes ignore the selector's events.
+
+---
+
+### 1.5 Persona Endpoints (`/api/v1/personas`)
+
+A persona is who the user plays as in roleplay and group chats: a `name` and a `description` that goes into the character prompts.
+
+- `POST /api/v1/personas`: Saves a `Persona` (`persona_id`, `name`, `description`). Returns `{"status": "saved", "persona_id": ...}`; `400` for an invalid `persona_id`.
+- `GET /api/v1/personas`: Returns all personas keyed by `persona_id`.
+- `GET /api/v1/personas/{persona_id}`: Retrieves one persona (`404` if missing).
+- `DELETE /api/v1/personas/{persona_id}`: Deletes the persona (`404` if missing). Chats that used it keep their copy in session state.
+
+---
+
+### 1.6 System Endpoints
 
 - `GET /health`: Returns `{"status": "ok"}` for container liveness/readiness probes.
 - `GET /`: Serves static web UI assets from `src/story_rp_engine/web` if the directory exists.
@@ -250,6 +281,20 @@ sequenceDiagram
    data: [DONE]
    ```
 
+4. **Group Chat Variant** (`/api/v1/group/chat/stream`):
+   Each delta carries the speaking character's `char_id`, and the final payload lists every reply instead of `full_text`:
+   ```http
+   data: {"speaker": "bob", "delta": "Bob "}
+
+   data: {"speaker": "bob", "delta": "line"}
+
+   data: {"speaker": "alice", "delta": "Alice line"}
+
+   data: {"replies": [{"speaker": "bob", "text": "Bob line"}, {"speaker": "alice", "text": "Alice line"}], "done": true}
+
+   data: [DONE]
+   ```
+
 #### Alternative `sse-starlette` Chunk Formatting
 For clients parsing custom SSE event fields (`event: message` and `event: done`):
 ```http
@@ -294,7 +339,7 @@ In `src/story_rp_engine/api/app.py`, Pydantic's `RequestValidationError` is inte
 ```
 
 ### 3.2 Path Traversal Sanitization
-All ID parameters (`char_id`, `session_id`, `lorebook_id`) are validated using `_sanitize_key`:
+All ID parameters (`char_id`, `group_id`, `session_id`, `lorebook_id`) are validated using `_sanitize_key`:
 - Rejects any string containing `/`, `\`, or `..`.
 - Rejects empty or whitespace-only keys.
 - Raises `HTTPException(status_code=400, detail="Invalid ID: path traversal characters not allowed")`.

@@ -1,4 +1,4 @@
 interface:
   display_name: "Story & RP Web Frontend"
-  short_description: "Single-page dual-mode web interface, SSE streaming reader, and card manager."
+  short_description: "Single-page web interface (roleplay, group chat, story), SSE streaming reader, and card/group manager."
   default_prompt: "Use $story-rp-frontend to modify UI components, styles, or client-side event streaming."

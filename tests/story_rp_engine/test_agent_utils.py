@@ -96,3 +96,42 @@ async def test_format_sse_stream_reports_model_error():
         'data: {"error": "429 RESOURCE_EXHAUSTED"}\n\n',
         "data: [DONE]\n\n",
     ]
+
+
+@pytest.mark.anyio
+async def test_format_sse_stream_labels_group_replies_by_speaker():
+    async def mock_gen():
+        yield ("bob", "Bob ")
+        yield ("bob", "line")
+        yield ("alice", "Alice line")
+
+    events = [ev async for ev in format_sse_stream(mock_gen(), chunk_size=16)]
+    assert events == [
+        'data: {"speaker": "bob", "delta": "Bob line"}\n\n',
+        'data: {"speaker": "alice", "delta": "Alice line"}\n\n',
+        'data: {"replies": [{"speaker": "bob", "text": "Bob line"}, {"speaker": "alice", "text": "Alice line"}], "done": true}\n\n',
+        "data: [DONE]\n\n",
+    ]
+
+
+@pytest.mark.anyio
+async def test_stream_group_turn_yields_speaker_chunks_without_the_selector(group_models):
+    from google.adk.apps import App
+    from google.adk.runners import Runner
+    from google.adk.sessions import InMemorySessionService
+    from story_rp_engine.core.agent_utils import stream_group_turn
+    from story_rp_engine.core.config import EngineConfig
+    from story_rp_engine.core.types import CharacterCard, GroupCard
+    from story_rp_engine.group.workflow import create_group_workflow, group_speakers
+
+    group_models.plan = {"speakers": ["bob", "alice"]}
+    group = GroupCard(group_id="g", name="G", char_ids=["alice", "bob"])
+    cards = [CharacterCard(char_id="alice", name="Alice"), CharacterCard(char_id="bob", name="Bob")]
+    runner = Runner(
+        app=App(name="group_app", root_agent=create_group_workflow(group, cards, EngineConfig())),
+        session_service=InMemorySessionService(),
+        auto_create_session=True,
+    )
+
+    chunks = [c async for c in stream_group_turn(runner, "User", "s1", "Hi.", speakers=group_speakers(group))]
+    assert chunks == [("bob", "Bob "), ("bob", "line"), ("alice", "Alice "), ("alice", "line")]
