@@ -29,7 +29,7 @@ from story_rp_engine.api.app import create_app
 base_app = create_app()
 if base_app.state.config.db_url is None:
     logging.getLogger("story_rp_engine.vercel").warning(
-        "No DATABASE_URL configured: characters, lorebooks, groups and sessions are kept in /tmp "
+        "No DATABASE_URL configured: characters, lorebooks, groups, personas and sessions are kept in /tmp "
         "and lost whenever this instance is recycled."
     )
 

@@ -96,7 +96,7 @@ flowchart LR
   - `rpSessionId`: Reactive session identifier string (`sess_<random>`).
   - **New (`newRPSession()`)**: Aborts any active generation, generates a fresh session ID, clears `rpMessages`, and repopulates the active character's greeting.
   - **Clear (`clearRPSession()`)**: Calls `DELETE /api/v1/rp/sessions/{session_id}` on the backend and empties `rpMessages`.
-- **Persona (`rpPersonaId`)**: `<select>` over `personas` plus "User (no persona)" (`''`). Sent as `persona_id` (left out when `''`); user bubbles are labelled `personaName(rpPersonaId)`. Reopening a chat reselects its `persona_id` if that persona still exists.
+- **Persona (`rpPersonaId`)**: `<select>` over `personas` plus "User (no persona)" (`''`). Sent as `persona_id` (left out when `''`); user bubbles are labelled `personaName(rpPersonaId)`. Reopening a chat reselects its `persona_id` if that persona still exists. Chats saved before personas existed (with a free-text name) reopen as "User (no persona)", so their next turn uses "User".
 - **Active Lorebooks (`rpLorebookIds`)**: Checkbox list of the lorebooks whose entries are retrieved by keyword.
 - **Author's Note (`rpAuthorsNote`)**: Injected prompt steering placed at depth into the system prompt.
 - **SSE Chunk Size Slider (`rpChunkSize`)**: Token chunk buffering range (1–64 tokens, default 16).

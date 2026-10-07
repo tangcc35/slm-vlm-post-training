@@ -107,7 +107,7 @@ The application provides three streaming workflows: roleplay turns, group chat t
 | Characteristic | Roleplay Chat (`_streamAssistantReply`) | Group Chat (`_streamGroupReplies`) | Story Co-Pilot (`_streamStoryReply`) |
 | :--- | :--- | :--- | :--- |
 | **Endpoint** | `POST /api/v1/rp/chat/stream` | `POST /api/v1/group/chat/stream` | `POST /api/v1/story/expand/stream` |
-| **Request Model** | `RPStreamChatRequest` (`char_id`, `session_id`, `message`, `authors_note`, `persona_id`, `chunk_size`) | `GroupChatRequest` (`group_id`, `session_id`, `message`, `authors_note`, `persona_id`, `lorebook_ids`, `chunk_size`) | `StoryRequest` (`session_id`, `instruction`, `chunk_size`; `premise`, `genre`, `tone` on the first turn only) |
+| **Request Model** | `RPStreamChatRequest` (`char_id`, `session_id`, `message`, `authors_note`, `persona_id` (or `user_name`), `chunk_size`) | `GroupChatRequest` (`group_id`, `session_id`, `message`, `authors_note`, `persona_id` (or `user_name`), `lorebook_ids`, `chunk_size`) | `StoryRequest` (`session_id`, `instruction`, `chunk_size`; `premise`, `genre`, `tone` on the first turn only) |
 | **Target Destination** | Appends to assistant turn in `rpMessages` array | Opens a new bubble in `groupMessages` whenever the delta's `speaker` changes | Appends to assistant turn in `storyMessages` array |
 | **Cancellation** | `this.rpAbortController.abort()` | `this.groupAbortController.abort()` | `this.storyAbortController.abort()` |
 | **UI Indicator** | Animated `▌` cursor inside active bubble | Animated `▌` cursor inside the last bubble | Animated `▌` cursor inside active bubble |
