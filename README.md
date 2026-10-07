@@ -131,12 +131,12 @@ The web UI is at http://localhost:8000 and the API docs at `/docs`. To use your 
 ```bash
 curl -N -X POST http://localhost:8000/api/v1/rp/chat/stream -H "Content-Type: application/json" -d '{
   "char_id": "elena", "session_id": "s1", "message": "Did you hear that?",
-  "user_name": "Explorer", "greeting": "Watch your step!", "lorebook_id": "ruins",
+  "user_name": "Explorer", "greeting": "Watch your step!", "lorebook_ids": ["ruins"],
   "authors_note": "A rumble echoes from above."
 }'
 ```
 
-`lorebook_id` is loaded into the session once: leave it out on later turns, and send `""` to remove it. Lorebook entries are added when one of their keys appears in the user's latest message.
+The `lorebook_ids` lorebooks are loaded into the session once: leave the field out on later turns, and send `[]` to remove them. Lorebook entries are added when one of their keys appears in the user's latest message.
 
 Story sessions work the same way: the first turn sends the setup (`premise`, `genre`, `tone`) with an `instruction`, and it stays in session state, so later turns send only `session_id` and `instruction`. The engine rebuilds the story text from the session's earlier passages; there's no `current_text` field.
 

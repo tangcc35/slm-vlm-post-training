@@ -26,8 +26,19 @@ def checked_session_id(session_id: str) -> str:
         raise HTTPException(status_code=400, detail=str(e))
 
 
+async def load_lorebooks(request: Request, lorebook_ids: List[str]) -> List[dict]:
+    """The lorebooks to copy into session state; 404 if one is missing."""
+    lorebooks = []
+    for lorebook_id in lorebook_ids:
+        lorebook = await request.app.state.store.get_lorebook(lorebook_id)
+        if lorebook is None:
+            raise HTTPException(status_code=404, detail=f"Lorebook not found: {lorebook_id}")
+        lorebooks.append(lorebook.model_dump())
+    return lorebooks
+
+
 async def chat_state_delta(req, request: Request, **fields) -> dict:
-    """Session state changes for a chat turn; a lorebook is copied in only when lorebook_id is sent.
+    """Session state changes for a chat turn; lorebooks are copied in only when lorebook_ids is sent.
 
     `fields` adds the chat's own keys (char_id and greeting, or group_id). The owner ID and last_message are
     read by the history list, which gets session state but no events.
@@ -38,15 +49,10 @@ async def chat_state_delta(req, request: Request, **fields) -> dict:
         **fields,
         "last_message": req.message[:80],
     }
-    if req.lorebook_id is not None:
-        lorebook = None
-        if req.lorebook_id:
-            lorebook = await request.app.state.store.get_lorebook(req.lorebook_id)
-            if lorebook is None:
-                raise HTTPException(status_code=404, detail="Lorebook not found")
-        state_delta["lorebook"] = lorebook.model_dump() if lorebook else None
-        # Read by the history list, so reopening a chat reselects its lorebook.
-        state_delta["lorebook_id"] = req.lorebook_id or None
+    if req.lorebook_ids is not None:
+        state_delta["lorebook"] = await load_lorebooks(request, req.lorebook_ids)
+        # Read by the history list, so reopening a chat reselects its lorebooks.
+        state_delta["lorebook_ids"] = req.lorebook_ids
     return state_delta
 
 
@@ -78,7 +84,7 @@ async def list_chat_sessions(session_service, app_name: str, owner_key: str, own
             "greeting": s.state.get("greeting"),
             "user_name": s.state.get("user_name"),
             "authors_note": s.state.get("authors_note"),
-            "lorebook_id": s.state.get("lorebook_id"),
+            "lorebook_ids": s.state.get("lorebook_ids") or [],
         }
         for s in sorted(response.sessions, key=lambda s: s.last_update_time, reverse=True)
         if s.state.get(owner_key) == owner_id

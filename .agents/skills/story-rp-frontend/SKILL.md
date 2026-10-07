@@ -50,7 +50,7 @@ flowchart TD
   - Save via `POST /api/v1/lorebooks` and delete via `DELETE /api/v1/lorebooks/{id}`.
 - **Groups** (Groups tab):
   - Load via `GET /api/v1/groups` into `groups` (keyed by `group_id`); save via `POST /api/v1/groups` and delete via `DELETE /api/v1/groups/{id}`.
-  - `groupForm` holds `group_id`, `name`, `char_ids` (toggled with `toggleGroupMember`; selection order is the fallback speaking order), `scenario` and `lorebook_id`. Groups have no opening message: the user's first message opens the scene.
+  - `groupForm` holds `group_id`, `name`, `char_ids` (toggled with `toggleGroupMember`; selection order is the fallback speaking order), `scenario` and `lorebook_ids`. Groups have no opening message: the user's first message opens the scene.
 - Consult `references/ui-components-and-modes.md` for form fields, validation requirements, and JSON mapping schemas.
 
 ### 4. Implement & Buffer Client SSE Stream Readers

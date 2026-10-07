@@ -3,6 +3,7 @@ from fastapi.responses import StreamingResponse
 from google.adk.events import Event, EventActions
 from google.adk.runners import Runner
 from pydantic import BaseModel
+from story_rp_engine.api.chat_sessions import load_lorebooks
 from story_rp_engine.core.agent_utils import (
     execute_runner_turn,
     format_sse_stream,
@@ -51,11 +52,8 @@ async def _story_turn_inputs(req: StoryRequest, request: Request) -> tuple[Runne
     for key in ("premise", "genre", "tone"):
         if getattr(req, key):
             state_delta[key] = getattr(req, key)
-    if req.lorebook_id:
-        lorebook = await request.app.state.store.get_lorebook(req.lorebook_id)
-        if lorebook is None:
-            raise HTTPException(status_code=404, detail="Lorebook not found")
-        state_delta["lorebook"] = lorebook.model_dump()
+    if req.lorebook_ids:
+        state_delta["lorebook"] = await load_lorebooks(request, req.lorebook_ids)
     return runner, instruction, state_delta
 
 

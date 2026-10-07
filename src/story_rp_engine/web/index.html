@@ -233,15 +233,14 @@
 
           <!-- Active Lorebook Association -->
           <div class="space-y-1.5">
-            <label class="block text-xs font-medium text-neutral-300">Active Lorebook</label>
-            <select
-              v-model="rpLorebookId"
-              class="w-full bg-neutral-950 border border-neutral-800 rounded-md px-3 py-1.5 text-xs text-neutral-200 focus:border-indigo-500">
-              <option value="">None (No Lorebook)</option>
-              <option v-for="(lb, id) in lorebooks" :key="id" :value="id">
-                {{ lb.name || id }}
-              </option>
-            </select>
+            <label class="block text-xs font-medium text-neutral-300">Active Lorebooks</label>
+            <div class="max-h-32 overflow-y-auto space-y-1 bg-neutral-950 border border-neutral-800 rounded-md px-3 py-2">
+              <label v-for="(lb, id) in lorebooks" :key="id" class="flex items-center space-x-1.5 text-xs text-neutral-200 cursor-pointer">
+                <input type="checkbox" :value="id" v-model="rpLorebookIds" class="rounded bg-neutral-800 border-neutral-700 text-indigo-600 focus:ring-0">
+                <span class="truncate">{{ lb.name || id }}</span>
+              </label>
+              <p v-if="Object.keys(lorebooks).length === 0" class="text-[11px] text-neutral-500">No lorebooks yet.</p>
+            </div>
           </div>
 
           <!-- Author's Note -->
@@ -499,15 +498,14 @@
 
           <!-- Active Lorebook -->
           <div class="space-y-1.5">
-            <label class="block text-xs font-medium text-neutral-300">Active Lorebook</label>
-            <select
-              v-model="groupLorebookId"
-              class="w-full bg-neutral-950 border border-neutral-800 rounded-md px-3 py-1.5 text-xs text-neutral-200 focus:border-indigo-500">
-              <option value="">None (No Lorebook)</option>
-              <option v-for="(lb, id) in lorebooks" :key="id" :value="id">
-                {{ lb.name || id }}
-              </option>
-            </select>
+            <label class="block text-xs font-medium text-neutral-300">Active Lorebooks</label>
+            <div class="max-h-32 overflow-y-auto space-y-1 bg-neutral-950 border border-neutral-800 rounded-md px-3 py-2">
+              <label v-for="(lb, id) in lorebooks" :key="id" class="flex items-center space-x-1.5 text-xs text-neutral-200 cursor-pointer">
+                <input type="checkbox" :value="id" v-model="groupLorebookIds" class="rounded bg-neutral-800 border-neutral-700 text-indigo-600 focus:ring-0">
+                <span class="truncate">{{ lb.name || id }}</span>
+              </label>
+              <p v-if="Object.keys(lorebooks).length === 0" class="text-[11px] text-neutral-500">No lorebooks yet.</p>
+            </div>
           </div>
 
           <!-- Author's Note -->
@@ -794,15 +792,14 @@
             </div>
 
             <div class="space-y-1.5">
-              <label class="block text-xs font-medium text-neutral-300">Lorebook</label>
-              <select
-                v-model="storyLorebookId"
-                class="w-full bg-neutral-950 border border-neutral-800 rounded-md px-3 py-1.5 text-xs text-neutral-200 focus:border-indigo-500">
-                <option value="">None (No Lorebook)</option>
-                <option v-for="(lb, id) in lorebooks" :key="id" :value="id">
-                  {{ lb.name || id }}
-                </option>
-              </select>
+              <label class="block text-xs font-medium text-neutral-300">Lorebooks</label>
+              <div class="max-h-32 overflow-y-auto space-y-1 bg-neutral-950 border border-neutral-800 rounded-md px-3 py-2">
+                <label v-for="(lb, id) in lorebooks" :key="id" class="flex items-center space-x-1.5 text-xs text-neutral-200 cursor-pointer">
+                  <input type="checkbox" :value="id" v-model="storyLorebookIds" class="rounded bg-neutral-800 border-neutral-700 text-indigo-600 focus:ring-0">
+                  <span class="truncate">{{ lb.name || id }}</span>
+                </label>
+                <p v-if="Object.keys(lorebooks).length === 0" class="text-[11px] text-neutral-500">No lorebooks yet.</p>
+              </div>
             </div>
 
             <div class="space-y-1.5">
@@ -1173,15 +1170,14 @@
             </div>
 
             <div class="space-y-1.5">
-              <label class="block text-xs font-medium text-neutral-300">Default Lorebook</label>
-              <select
-                v-model="charForm.lorebook_id"
-                class="w-full bg-neutral-900 border border-neutral-800 rounded-md px-3 py-1.5 text-xs text-neutral-200 focus:border-indigo-500">
-                <option value="">None (No Lorebook)</option>
-                <option v-for="(lb, id) in lorebooks" :key="id" :value="id">
-                  {{ lb.name || id }}
-                </option>
-              </select>
+              <label class="block text-xs font-medium text-neutral-300">Default Lorebooks</label>
+              <div class="max-h-32 overflow-y-auto space-y-1 bg-neutral-900 border border-neutral-800 rounded-md px-3 py-2">
+                <label v-for="(lb, id) in lorebooks" :key="id" class="flex items-center space-x-1.5 text-xs text-neutral-200 cursor-pointer">
+                  <input type="checkbox" :value="id" v-model="charForm.lorebook_ids" class="rounded bg-neutral-800 border-neutral-700 text-indigo-600 focus:ring-0">
+                  <span class="truncate">{{ lb.name || id }}</span>
+                </label>
+                <p v-if="Object.keys(lorebooks).length === 0" class="text-[11px] text-neutral-500">No lorebooks yet.</p>
+              </div>
             </div>
           </div>
 
@@ -1320,15 +1316,14 @@
           </div>
 
           <div class="space-y-1.5 pb-8">
-            <label class="block text-xs font-medium text-neutral-300">Default Lorebook</label>
-            <select
-              v-model="groupForm.lorebook_id"
-              class="w-full bg-neutral-900 border border-neutral-800 rounded-md px-3 py-1.5 text-xs text-neutral-200 focus:border-indigo-500">
-              <option value="">None (No Lorebook)</option>
-              <option v-for="(lb, id) in lorebooks" :key="id" :value="id">
-                {{ lb.name || id }}
-              </option>
-            </select>
+            <label class="block text-xs font-medium text-neutral-300">Default Lorebooks</label>
+            <div class="max-h-32 overflow-y-auto space-y-1 bg-neutral-900 border border-neutral-800 rounded-md px-3 py-2">
+              <label v-for="(lb, id) in lorebooks" :key="id" class="flex items-center space-x-1.5 text-xs text-neutral-200 cursor-pointer">
+                <input type="checkbox" :value="id" v-model="groupForm.lorebook_ids" class="rounded bg-neutral-800 border-neutral-700 text-indigo-600 focus:ring-0">
+                <span class="truncate">{{ lb.name || id }}</span>
+              </label>
+              <p v-if="Object.keys(lorebooks).length === 0" class="text-[11px] text-neutral-500">No lorebooks yet.</p>
+            </div>
           </div>
         </div>
 

@@ -69,7 +69,7 @@ flowchart LR
         - Greeting Picker (selectedGreetingIndex)
         - Session ID & New/Clear (rpSessionId)
         - User Persona Name (rpUserName)
-        - Active Lorebook (rpLorebookId)
+        - Active Lorebooks (rpLorebookIds)
         - Author's Note (rpAuthorsNote)
         - SSE Chunk Slider (rpChunkSize)"]
         ChatFeed["Right Chat Feed (#rp-chat-feed)
@@ -95,7 +95,7 @@ flowchart LR
   - **New (`newRPSession()`)**: Aborts any active generation, generates a fresh session ID, clears `rpMessages`, and repopulates the active character's greeting.
   - **Clear (`clearRPSession()`)**: Calls `DELETE /api/v1/rp/sessions/{session_id}` on the backend and empties `rpMessages`.
 - **User Persona Name (`rpUserName`)**: String injected into the turn request payload (default `"User"`).
-- **Active Lorebook Association (`rpLorebookId`)**: Dropdown linking world info codex entries for keyword retrieval.
+- **Active Lorebooks (`rpLorebookIds`)**: Checkbox list of the lorebooks whose entries are retrieved by keyword.
 - **Author's Note (`rpAuthorsNote`)**: Injected prompt steering placed at depth into the system prompt.
 - **SSE Chunk Size Slider (`rpChunkSize`)**: Token chunk buffering range (1–64 tokens, default 16).
 
@@ -203,8 +203,8 @@ Chat with a saved group of characters. Each turn the backend's speaker selector 
 
 ### Left Sidebar Controls
 - **Active Group** (`groupChatId`): `<select>` over `groups`; changing it calls `onGroupChatChange()`, which starts a new chat and reloads history. The member names show under the picker.
-- **Chat**: "New" (`newGroupSession()`, which starts an empty chat, since the user's first message opens the scene, and preselects the group's default lorebook) and a history dropdown (`groupSessions` from `GET /api/v1/group/sessions?group_id=`) with open, rename (`saveRename('group', s)`) and delete (`deleteGroupSession(s)`).
-- **User Persona Name** (`groupUserName`), **Active Lorebook** (`groupLorebookId`, sent only when the session or selection changed, tracked by `groupLorebookSentKey`), **Author's Note** (`groupAuthorsNote`) and **SSE Chunk Size** (`groupChunkSize`).
+- **Chat**: "New" (`newGroupSession()`, which starts an empty chat, since the user's first message opens the scene, and preselects the group's default lorebooks) and a history dropdown (`groupSessions` from `GET /api/v1/group/sessions?group_id=`) with open, rename (`saveRename('group', s)`) and delete (`deleteGroupSession(s)`).
+- **User Persona Name** (`groupUserName`), **Active Lorebooks** (`groupLorebookIds`, sent only when the session or selection changed, tracked by `groupLorebookSentKey`), **Author's Note** (`groupAuthorsNote`) and **SSE Chunk Size** (`groupChunkSize`).
 
 ### Right Chat Feed (`#group-chat-feed`)
 - `groupMessages` entries are `{ role, speaker, content, timestamp }`; `speaker` is a `char_id` (null for the user).
@@ -228,7 +228,7 @@ Editor for saved groups of characters.
   1. **Identity**: `group_id` (slug) and `name`.
   2. **Members**: a grid of saved characters; clicking toggles membership (`toggleGroupMember(char_id)`), and the badge number is the selection order, which is the fallback speaking order.
   3. **Scene**: `scenario` (replaces each member's own scenario in group chats). There is no opening message; the user's first message opens the scene.
-  4. **Default Lorebook**: `lorebook_id`, preselected for new chats.
+  4. **Default Lorebooks**: `lorebook_ids`, preselected for new chats.
   5. **Actions**: Save Group (`POST /api/v1/groups`), Delete Group (`DELETE /api/v1/groups/{id}`).
 
 ---

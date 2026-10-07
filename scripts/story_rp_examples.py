@@ -68,7 +68,7 @@ def play_rp(base_url: str, demo: dict, lorebook: Lorebook) -> None:
             "authors_note": authors_note or None,
         }
         if i == 0:
-            body["lorebook_id"] = demo["lorebook_id"]
+            body["lorebook_ids"] = [demo["lorebook_id"]]
         print_turn(turn["message"], turn, lorebook, authors_note)
         print("\n" + call(base_url, "POST", "/api/v1/rp/chat", body)["reply"])
     call(base_url, "PATCH", f"/api/v1/rp/sessions/{session_id}", {"title": demo["title"]})
@@ -77,9 +77,10 @@ def play_rp(base_url: str, demo: dict, lorebook: Lorebook) -> None:
 def play_story(base_url: str, demo: dict, lorebook: Lorebook) -> None:
     session_id = demo["session_id"]
     call(base_url, "DELETE", f"/api/v1/story/sessions/{session_id}")
+    setup = {**demo["setup"], "lorebook_ids": [demo["setup"]["lorebook_id"]]}
     for i, turn in enumerate(demo["turns"]):
         # The setup goes with the first turn only; the engine keeps it in session state.
-        body = {"session_id": session_id, "instruction": turn["instruction"], **(demo["setup"] if i == 0 else {})}
+        body = {"session_id": session_id, "instruction": turn["instruction"], **(setup if i == 0 else {})}
         print_turn(turn["instruction"], turn, lorebook)
         print("\n" + call(base_url, "POST", "/api/v1/story/expand", body)["expansion"])
     call(base_url, "PATCH", f"/api/v1/story/sessions/{session_id}", {"title": demo["title"]})

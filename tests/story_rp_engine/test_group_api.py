@@ -66,7 +66,7 @@ async def test_group_chat_loads_lorebook_and_scenario(tmp_path, group_models):
     client = await _group_client(tmp_path)
     group_models.plan = {"speakers": ["alice"]}
 
-    assert _chat(client, "Is the forge lit?", lorebook_id="world").status_code == 200
+    assert _chat(client, "Is the forge lit?", lorebook_ids=["world"]).status_code == 200
     request = group_models.requests["Alice"][-1]
     assert "The forge never cools." in "".join(p.text for p in request.contents[-1].parts)
     assert "A rainy night." in request.config.system_instruction
@@ -112,7 +112,7 @@ async def test_group_chat_rejects_bad_requests(tmp_path, group_models):
     assert res.status_code == 400
     assert "has no characters" in res.json()["detail"]
     assert _chat(client, "Hi", session_id="../evil").status_code == 400
-    assert _chat(client, "Hi", lorebook_id="missing").status_code == 404
+    assert _chat(client, "Hi", lorebook_ids=["missing"]).status_code == 404
 
 
 @pytest.mark.anyio

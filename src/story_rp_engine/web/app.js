@@ -43,7 +43,7 @@ const AppDefinition = {
         system_prompt: '',
         post_history_instructions: '',
         creator_notes: '',
-        lorebook_id: '',
+        lorebook_ids: [],
       },
 
       // =======================================================================
@@ -65,7 +65,7 @@ const AppDefinition = {
       groups: {}, // Object mapping group_id -> GroupCard
       selectedGroupId: null,
       groupSearchQuery: '',
-      groupForm: { group_id: '', name: '', char_ids: [], scenario: '', lorebook_id: '' },
+      groupForm: { group_id: '', name: '', char_ids: [], scenario: '', lorebook_ids: [] },
 
       // =======================================================================
       // Roleplay Tab Reactive State (Task 6)
@@ -74,8 +74,8 @@ const AppDefinition = {
       rpCharId: '',
       rpUserName: 'User',
       rpAuthorsNote: '',
-      rpLorebookId: '',
-      rpLorebookSentKey: null, // "<session>|<lorebook>" last loaded into the backend session
+      rpLorebookIds: [],
+      rpLorebookSentKey: null, // "<session>|<lorebook ids>" last loaded into the backend session
       rpChunkSize: 1,
       rpMessages: [],
       selectedGreetingIndex: 0,
@@ -95,8 +95,8 @@ const AppDefinition = {
       groupSessionId: 'group_' + Math.random().toString(36).substring(2, 10),
       groupUserName: 'User',
       groupAuthorsNote: '',
-      groupLorebookId: '',
-      groupLorebookSentKey: null, // "<session>|<lorebook>" last loaded into the backend session
+      groupLorebookIds: [],
+      groupLorebookSentKey: null, // "<session>|<lorebook ids>" last loaded into the backend session
       groupChunkSize: 1,
       groupMessages: [], // { role: 'user' | 'assistant', speaker: char_id | null, content, timestamp }
       isGeneratingGroup: false,
@@ -115,7 +115,7 @@ const AppDefinition = {
       customGenre: '',
       storyTone: 'Balanced',
       customTone: '',
-      storyLorebookId: '',
+      storyLorebookIds: [],
       storyInstruction: '',
       storyInput: '',
       storyChunkSize: 1,
@@ -379,7 +379,7 @@ const AppDefinition = {
           system_prompt: char.system_prompt || '',
           post_history_instructions: char.post_history_instructions || '',
           creator_notes: char.creator_notes || '',
-          lorebook_id: char.lorebook_id || '',
+          lorebook_ids: [...(char.lorebook_ids || [])],
         };
         this.charTagsInput = this.charForm.tags_str;
       }
@@ -402,7 +402,7 @@ const AppDefinition = {
         system_prompt: '',
         post_history_instructions: '',
         creator_notes: '',
-        lorebook_id: '',
+        lorebook_ids: [],
       };
       this.charTagsInput = '';
       this.refreshIcons();
@@ -465,7 +465,7 @@ const AppDefinition = {
         creator_notes: this.charForm.creator_notes
           ? this.charForm.creator_notes.trim()
           : null,
-        lorebook_id: this.charForm.lorebook_id || null,
+        lorebook_ids: [...this.charForm.lorebook_ids],
         tags: tags,
       };
 
@@ -565,7 +565,7 @@ const AppDefinition = {
             system_prompt: data.system_prompt || '',
             post_history_instructions: data.post_history_instructions || '',
             creator_notes: data.creator_notes || '',
-            lorebook_id: data.lorebook_id || '',
+            lorebook_ids: [...(data.lorebook_ids || [])],
           };
           this.charTagsInput = this.charForm.tags_str;
           this.selectedCharId = charId;
@@ -601,7 +601,7 @@ const AppDefinition = {
         system_prompt: this.charForm.system_prompt || null,
         post_history_instructions: this.charForm.post_history_instructions || null,
         creator_notes: this.charForm.creator_notes || null,
-        lorebook_id: this.charForm.lorebook_id || null,
+        lorebook_ids: [...this.charForm.lorebook_ids],
         tags: tags,
       };
 
@@ -950,14 +950,14 @@ const AppDefinition = {
         name: g.name || '',
         char_ids: [...(g.char_ids || [])],
         scenario: g.scenario || '',
-        lorebook_id: g.lorebook_id || '',
+        lorebook_ids: [...(g.lorebook_ids || [])],
       };
       this.refreshIcons();
     },
 
     newGroup() {
       this.selectedGroupId = null;
-      this.groupForm = { group_id: '', name: '', char_ids: [], scenario: '', lorebook_id: '' };
+      this.groupForm = { group_id: '', name: '', char_ids: [], scenario: '', lorebook_ids: [] };
       this.refreshIcons();
     },
 
@@ -985,7 +985,7 @@ const AppDefinition = {
         name: name,
         char_ids: [...this.groupForm.char_ids],
         scenario: this.groupForm.scenario || '',
-        lorebook_id: this.groupForm.lorebook_id || null,
+        lorebook_ids: [...this.groupForm.lorebook_ids],
       };
       try {
         const res = await fetch('/api/v1/groups', {
@@ -1086,7 +1086,7 @@ const AppDefinition = {
       this.rpSessionId = 'sess_' + Math.random().toString(36).substring(2, 10);
       this.rpMessages = [];
       const char = this.characters.find((c) => c.char_id === this.rpCharId);
-      this.rpLorebookId = (char && char.lorebook_id) || '';
+      this.rpLorebookIds = [...((char && char.lorebook_ids) || [])];
       if (char) {
         let text = char.first_mes || '';
         if (
@@ -1220,8 +1220,8 @@ const AppDefinition = {
         this.rpMessages = messages;
         this.rpUserName = s.user_name || 'User';
         this.rpAuthorsNote = s.authors_note || '';
-        this.rpLorebookId = s.lorebook_id || '';
-        this.rpLorebookSentKey = null; // re-send the selected lorebook with the next message
+        this.rpLorebookIds = [...(s.lorebook_ids || [])];
+        this.rpLorebookSentKey = null; // re-send the selected lorebooks with the next message
         this.showRPHistory = false;
         this.refreshIcons();
         this.scrollRPChatToBottom();
@@ -1479,11 +1479,11 @@ const AppDefinition = {
         user_name: this.rpUserName ? this.rpUserName.trim() : 'User',
         chunk_size: Number(this.rpChunkSize) || 1,
       };
-      // The backend keeps the lorebook in the session, so only send it when the
-      // session or the selection changed ('' clears it).
-      const lorebookKey = `${this.rpSessionId}|${this.rpLorebookId || ''}`;
+      // The backend keeps the lorebooks in the session, so only send them when the
+      // session or the selection changed ([] clears them).
+      const lorebookKey = `${this.rpSessionId}|${this.rpLorebookIds.join(',')}`;
       if (lorebookKey !== this.rpLorebookSentKey) {
-        payload.lorebook_id = this.rpLorebookId || '';
+        payload.lorebook_ids = [...this.rpLorebookIds];
       }
 
       try {
@@ -1624,7 +1624,7 @@ const AppDefinition = {
       this.groupMessages = [];
       this.groupLorebookSentKey = null;
       // A group chat has no greeting: the user's first message opens the scene.
-      this.groupLorebookId = (this.activeGroup && this.activeGroup.lorebook_id) || '';
+      this.groupLorebookIds = [...((this.activeGroup && this.activeGroup.lorebook_ids) || [])];
       this.refreshIcons();
       this.scrollGroupChatToBottom();
     },
@@ -1664,8 +1664,8 @@ const AppDefinition = {
         this.groupMessages = messages;
         this.groupUserName = s.user_name || 'User';
         this.groupAuthorsNote = s.authors_note || '';
-        this.groupLorebookId = s.lorebook_id || '';
-        this.groupLorebookSentKey = null; // re-send the selected lorebook with the next message
+        this.groupLorebookIds = [...(s.lorebook_ids || [])];
+        this.groupLorebookSentKey = null; // re-send the selected lorebooks with the next message
         this.showGroupHistory = false;
         this.refreshIcons();
         this.scrollGroupChatToBottom();
@@ -1730,10 +1730,10 @@ const AppDefinition = {
         user_name: this.groupUserName ? this.groupUserName.trim() : 'User',
         chunk_size: Number(this.groupChunkSize) || 1,
       };
-      // Like RP: the backend keeps the lorebook in the session, so only send it when it changed ('' clears it).
-      const lorebookKey = `${this.groupSessionId}|${this.groupLorebookId || ''}`;
+      // Like RP: the backend keeps the lorebooks in the session, so only send them when they changed ([] clears them).
+      const lorebookKey = `${this.groupSessionId}|${this.groupLorebookIds.join(',')}`;
       if (lorebookKey !== this.groupLorebookSentKey) {
-        payload.lorebook_id = this.groupLorebookId || '';
+        payload.lorebook_ids = [...this.groupLorebookIds];
       }
 
       let current = null; // the bubble being streamed; a new speaker opens a new one
@@ -1878,7 +1878,7 @@ const AppDefinition = {
         tone: this.effectiveTone || 'Balanced',
       };
       this.storyMessages.push({ role: 'user', content: instruction, setup, timestamp: this._timeNow() });
-      await this._streamStoryReply({ ...setup, lorebook_id: this.storyLorebookId || null, instruction });
+      await this._streamStoryReply({ ...setup, lorebook_ids: [...this.storyLorebookIds], instruction });
     },
 
     async sendStoryMessage() {
