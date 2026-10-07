@@ -59,3 +59,23 @@ class RPChatRequest(BaseModel):
     greeting: Optional[str] = Field(default=None, description="Opening message shown to the user before their first message.")
     chunk_size: Optional[int] = Field(default=16, ge=1, le=100, description="Number of tokens to buffer before yielding in streaming mode.")
 
+
+class GroupCard(BaseModel):
+    group_id: str
+    name: str
+    char_ids: List[str] = Field(default_factory=list, description="Members, in the order they speak when the speaker selector picks no one.")
+    scenario: str = Field(default="", description="The shared scene; replaces each member card's own scenario.")
+    first_mes: str = Field(default="", description="Opening message shown before the user's first message.")
+    lorebook_id: Optional[str] = Field(default=None, description="Lorebook selected by default when a new chat with this group starts.")
+
+
+class GroupChatRequest(BaseModel):
+    group_id: str
+    session_id: str
+    message: str
+    authors_note: Optional[str] = None
+    lorebook_id: Optional[str] = Field(default=None, description="Loads this lorebook into the session; omit to keep the current one, empty string to clear it.")
+    user_name: Optional[str] = "User"
+    greeting: Optional[str] = Field(default=None, description="The group's opening message, shown to the user before their first message.")
+    chunk_size: Optional[int] = Field(default=16, ge=1, le=100, description="Number of tokens to buffer before yielding in streaming mode.")
+

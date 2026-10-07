@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy.pool import NullPool
 from story_rp_engine.core.types import (
     CharacterCard,
+    GroupCard,
     Lorebook,
     LorebookEntry,
 )
@@ -313,3 +314,17 @@ async def test_database_session_service_custom_url(tmp_path):
     )
     assert session.id == "sess_custom"
     assert db_file.is_file()
+
+
+@pytest.mark.anyio
+async def test_group_crud(make_store):
+    store = make_store()
+    group = GroupCard(group_id="tavern", name="Tavern", char_ids=["valerie", "思琪"], scenario="A rainy night.")
+    await store.save_group("tavern", group)
+
+    assert await store.get_group("tavern") == group
+    assert await store.list_groups() == {"tavern": group}
+
+    assert await store.delete_group("tavern") is True
+    assert await store.get_group("tavern") is None
+    assert await store.delete_group("tavern") is False
