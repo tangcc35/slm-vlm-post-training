@@ -7,7 +7,7 @@ This guide documents the persistent storage architecture, SQLite table schema, a
 ## 1. Storage Architecture Overview
 
 State management in the Story & Roleplay engine is split across two tiers:
-1. **File-based Asset Storage**: Character cards (`characters/{char_id}.json`), lorebooks (`lorebooks/{lorebook_id}.json`) and groups (`groups/{group_id}.json`) managed by `EngineStore` (with a DB URL these are the `story_rp_characters`, `story_rp_lorebooks` and `story_rp_groups` tables instead).
+1. **File-based Asset Storage**: Character cards (`characters/{char_id}.json`), lorebooks (`lorebooks/{lorebook_id}.json`), groups (`groups/{group_id}.json`) and personas (`personas/{persona_id}.json`) managed by `EngineStore` (with a DB URL these are the `story_rp_characters`, `story_rp_lorebooks`, `story_rp_groups` and `story_rp_personas` tables instead).
 2. **Relational Session & Event Storage**: Conversation history, state deltas, and multi-turn message events managed asynchronously by Google ADK's `DatabaseSessionService` backed by SQLite through `aiosqlite`.
 
 ```mermaid
@@ -16,6 +16,7 @@ graph TD
     Store --> DiskCards["Disk: characters/*.json"]
     Store --> DiskLore["Disk: lorebooks/*.json"]
     Store --> DiskGroups["Disk: groups/*.json"]
+    Store --> DiskPersonas["Disk: personas/*.json"]
     Store --> DSS["DatabaseSessionService"]
     DSS -->|aiosqlite| DB[("SQLite Database: sessions.db")]
     DB --> TabSessions["sessions table"]
@@ -37,6 +38,8 @@ By default, the engine establishes its storage directory at `.engine_data/` (con
 │   └── sci_fi_codex.json
 ├── groups/
 │   └── tavern_regulars.json
+├── personas/
+│   └── sam.json
 └── sessions.db          # SQLite relational database
 ```
 

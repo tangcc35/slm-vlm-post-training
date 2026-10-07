@@ -68,6 +68,14 @@ class GroupCard(BaseModel):
     lorebook_ids: List[str] = Field(default_factory=list, description="Lorebooks selected by default when a new chat with this group starts.")
 
 
+class Persona(BaseModel):
+    """Who the user plays as in roleplay and group chats."""
+
+    persona_id: str
+    name: str
+    description: str = Field(default="", description="Added to the character prompts; {{user}} and {{char}} macros work.")
+
+
 class GroupChatRequest(BaseModel):
     group_id: str
     session_id: str

@@ -39,6 +39,7 @@ flowchart TD
   - `story_rp_engine.api.routes_story`: Multi-agent collaborative narrative expansion (`/api/v1/story/expand`).
   - `story_rp_engine.api.routes_lorebook`: World info codex CRUD (`/api/v1/lorebooks`).
   - `story_rp_engine.api.routes_group`: Group CRUD (`/api/v1/groups`), group chat turns (`/api/v1/group/chat/stream`), and group chat sessions (`/api/v1/group/sessions...`).
+  - `story_rp_engine.api.routes_persona`: Persona CRUD (`/api/v1/personas`).
   - `story_rp_engine.api.chat_sessions`: session helpers shared by the RP and group routers (state delta, session list, turns, rename, turn delete); each router passes its ADK app name (`rp_app`, `group_app`).
 - Enforce strict ID validation with `_sanitize_key` to prevent path traversal attacks.
 - Intercept Pydantic validation errors with `validation_exception_handler` to return structured HTTP 400 responses.
@@ -46,7 +47,7 @@ flowchart TD
 
 ### 3. Wire DatabaseSessionService Persistence & Context Compaction
 - Persist multi-turn conversation events and state deltas using Google ADK's `DatabaseSessionService` backed by `aiosqlite`.
-- Structure storage directory at `.engine_data/` containing `characters/`, `lorebooks/`, `groups/`, and `sessions.db`.
+- Structure storage directory at `.engine_data/` containing `characters/`, `lorebooks/`, `groups/`, `personas/`, and `sessions.db`.
 - Configure hybrid context compaction using `EventsCompactionConfig` with explicit `LlmEventSummarizer(llm=model)` on `App` (enabling both token-based safety net and sliding-window periodic compression).
 - Extract message turns via `get_session` and surface compaction events with `role: "compaction"` and `is_compaction: true`. Handle turn deletion or history rewind via the atomic session re-creation pattern.
 - Consult `references/database-session-storage.md` for SQLite tables (`sessions`, `events`, `app_states`, `user_states`), context compaction lifecycle, and async CRUD patterns.

@@ -16,6 +16,7 @@ graph TD
     FastAPI --> Story["Story Router (/api/v1/story)"]
     FastAPI --> Chars["Character Router (/api/v1/characters)"]
     FastAPI --> Lore["Lorebook Router (/api/v1/lorebooks)"]
+    FastAPI --> Personas["Persona Router (/api/v1/personas)"]
     FastAPI --> Health["Health Check (/health)"]
 ```
 
@@ -212,7 +213,18 @@ A group puts several characters in one scene; a speaker selector picks who repli
 
 ---
 
-### 1.5 System Endpoints
+### 1.5 Persona Endpoints (`/api/v1/personas`)
+
+A persona is who the user plays as in roleplay and group chats: a `name` and a `description` that goes into the character prompts.
+
+- `POST /api/v1/personas`: Saves a `Persona` (`persona_id`, `name`, `description`). Returns `{"status": "saved", "persona_id": ...}`; `400` for an invalid `persona_id`.
+- `GET /api/v1/personas`: Returns all personas keyed by `persona_id`.
+- `GET /api/v1/personas/{persona_id}`: Retrieves one persona (`404` if missing).
+- `DELETE /api/v1/personas/{persona_id}`: Deletes the persona (`404` if missing). Chats that used it keep their copy in session state.
+
+---
+
+### 1.6 System Endpoints
 
 - `GET /health`: Returns `{"status": "ok"}` for container liveness/readiness probes.
 - `GET /`: Serves static web UI assets from `src/story_rp_engine/web` if the directory exists.

@@ -10,7 +10,7 @@ from sqlalchemy import Column, DateTime, MetaData, String, Table, Text, delete, 
 from sqlalchemy.dialects import postgresql, sqlite
 from sqlalchemy.exc import IntegrityError, ProgrammingError
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
-from story_rp_engine.core.types import CharacterCard, GroupCard, Lorebook
+from story_rp_engine.core.types import CharacterCard, GroupCard, Lorebook, Persona
 from story_rp_engine.storage.db import engine_kwargs_for, normalize_db_url, redact_db_url
 
 logger = logging.getLogger("story_rp_engine.storage")
@@ -44,6 +44,14 @@ groups_table = Table(
     _metadata,
     Column("group_id", String(MAX_DB_KEY_LENGTH), primary_key=True),
     Column("group_json", Text, nullable=False),
+    Column("updated_at", DateTime),
+)
+
+personas_table = Table(
+    "story_rp_personas",
+    _metadata,
+    Column("persona_id", String(MAX_DB_KEY_LENGTH), primary_key=True),
+    Column("persona_json", Text, nullable=False),
     Column("updated_at", DateTime),
 )
 
@@ -99,7 +107,7 @@ class _FileCollection(Generic[ModelT]):
 
 
 class _SqlTables:
-    """Creates the character, lorebook and group tables on first use."""
+    """Creates the character, lorebook, group and persona tables on first use."""
 
     def __init__(self, engine: AsyncEngine):
         self.engine = engine
@@ -174,10 +182,10 @@ class _SqlCollection(Generic[ModelT]):
 
 
 class EngineStore:
-    """Persists ADK sessions, character cards, lorebooks and groups.
+    """Persists ADK sessions, character cards, lorebooks, groups and personas.
 
     With a database URL (e.g. Neon Postgres) everything lives in that database, so
-    stateless serverless instances share it. Without one, characters, lorebooks and groups
+    stateless serverless instances share it. Without one, characters, lorebooks, groups and personas
     are JSON files under storage_dir and sessions go to a local SQLite file.
     """
 
@@ -192,6 +200,7 @@ class EngineStore:
         self.char_dir = os.path.join(storage_dir, "characters")
         self.lorebooks_dir = os.path.join(storage_dir, "lorebooks")
         self.groups_dir = os.path.join(storage_dir, "groups")
+        self.personas_dir = os.path.join(storage_dir, "personas")
         self.db_url = normalize_db_url(db_url)
         engine_kwargs = engine_kwargs_for(self.db_url, db_null_pool) if self.db_url else {}
 
@@ -216,11 +225,13 @@ class EngineStore:
             self._characters = _FileCollection(self.char_dir, CharacterCard)
             self._lorebooks = _FileCollection(self.lorebooks_dir, Lorebook)
             self._groups = _FileCollection(self.groups_dir, GroupCard)
+            self._personas = _FileCollection(self.personas_dir, Persona)
         else:
             tables = _SqlTables(engine)
             self._characters = _SqlCollection(tables, characters_table, "char_id", "card_json", CharacterCard)
             self._lorebooks = _SqlCollection(tables, lorebooks_table, "lorebook_id", "lorebook_json", Lorebook)
             self._groups = _SqlCollection(tables, groups_table, "group_id", "group_json", GroupCard)
+            self._personas = _SqlCollection(tables, personas_table, "persona_id", "persona_json", Persona)
 
     async def get_or_create_session(
         self,
@@ -281,3 +292,16 @@ class EngineStore:
     async def delete_group(self, group_id: str) -> bool:
         """Deletes a group; returns False if it did not exist."""
         return await self._groups.delete(_sanitize_key(group_id))
+
+    async def save_persona(self, persona_id: str, persona: Persona) -> None:
+        await self._personas.put(_sanitize_key(persona_id), persona)
+
+    async def get_persona(self, persona_id: str) -> Optional[Persona]:
+        return await self._personas.get(_sanitize_key(persona_id))
+
+    async def list_personas(self) -> Dict[str, Persona]:
+        return await self._personas.list()
+
+    async def delete_persona(self, persona_id: str) -> bool:
+        """Deletes a persona; returns False if it did not exist."""
+        return await self._personas.delete(_sanitize_key(persona_id))

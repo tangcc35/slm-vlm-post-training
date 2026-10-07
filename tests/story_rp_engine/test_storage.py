@@ -13,6 +13,7 @@ from story_rp_engine.core.types import (
     GroupCard,
     Lorebook,
     LorebookEntry,
+    Persona,
 )
 from story_rp_engine.storage.db import normalize_db_url
 from story_rp_engine.storage.store import EngineStore
@@ -328,3 +329,17 @@ async def test_group_crud(make_store):
     assert await store.delete_group("tavern") is True
     assert await store.get_group("tavern") is None
     assert await store.delete_group("tavern") is False
+
+
+@pytest.mark.anyio
+async def test_persona_crud(make_store):
+    store = make_store()
+    persona = Persona(persona_id="sam", name="Sam", description="A wandering cartographer.")
+    await store.save_persona("sam", persona)
+
+    assert await store.get_persona("sam") == persona
+    assert await store.list_personas() == {"sam": persona}
+
+    assert await store.delete_persona("sam") is True
+    assert await store.get_persona("sam") is None
+    assert await store.delete_persona("sam") is False

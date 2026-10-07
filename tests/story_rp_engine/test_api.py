@@ -1051,3 +1051,17 @@ async def test_story_session_rename(tmp_path):
     assert client.patch("/api/v1/story/sessions/s1", json={"title": "The Lamp"}).status_code == 200
     assert client.get("/api/v1/story/sessions").json()[0]["title"] == "The Lamp"
     assert client.get("/api/v1/story/sessions/s1/messages").json()["messages"] == [{"role": "assistant", "content": "Once."}]
+
+
+def test_persona_crud(tmp_path):
+    client = TestClient(create_app(store=EngineStore(storage_dir=str(tmp_path)), config=EngineConfig()))
+    sam = {"persona_id": "sam", "name": "Sam", "description": "A wandering cartographer."}
+
+    assert client.post("/api/v1/personas", json=sam).json() == {"status": "saved", "persona_id": "sam"}
+    assert client.get("/api/v1/personas/sam").json() == sam
+    assert list(client.get("/api/v1/personas").json()) == ["sam"]
+    assert client.post("/api/v1/personas", json={**sam, "persona_id": "../evil"}).status_code == 400
+
+    assert client.delete("/api/v1/personas/sam").json() == {"status": "deleted", "persona_id": "sam"}
+    assert client.get("/api/v1/personas/sam").status_code == 404
+    assert client.delete("/api/v1/personas/sam").status_code == 404
