@@ -465,3 +465,11 @@ def test_rp_chat_and_stream_endpoints_integration(client):
         assert 'data: {"full_text": "We should move quickly.", "done": true}\n\n' in body
         assert "data: [DONE]\n\n" in body
         assert mock_stream_fn.called
+
+
+def test_groups_tab_is_served(client):
+    html = client.get("/").text
+    assert "activeTab === 'groups'" in html
+    assert "saveGroup" in html
+    js = client.get("/app.js").text
+    assert "'/api/v1/groups'" in js

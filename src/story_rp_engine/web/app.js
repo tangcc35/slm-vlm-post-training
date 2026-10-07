@@ -11,7 +11,7 @@ const AppDefinition = {
   data() {
     return {
       // Global navigation & application health
-      activeTab: 'roleplay', // 'roleplay' | 'story' | 'characters' | 'lorebooks'
+      activeTab: 'roleplay', // 'roleplay' | 'group' | 'story' | 'characters' | 'groups' | 'lorebooks'
       backendOnline: false,
       healthInterval: null,
       toast: {
@@ -58,6 +58,14 @@ const AppDefinition = {
         description: '',
         entries: [],
       },
+
+      // =======================================================================
+      // Groups Management State
+      // =======================================================================
+      groups: {}, // Object mapping group_id -> GroupCard
+      selectedGroupId: null,
+      groupSearchQuery: '',
+      groupForm: { group_id: '', name: '', char_ids: [], scenario: '', first_mes: '', lorebook_id: '' },
 
       // =======================================================================
       // Roleplay Tab Reactive State (Task 6)
@@ -153,6 +161,15 @@ const AppDefinition = {
           });
         return nameMatch || descMatch || idMatch || entryMatch;
       });
+    },
+
+    filteredGroups() {
+      const query = (this.groupSearchQuery || '').toLowerCase().trim();
+      const list = Object.values(this.groups || {});
+      if (!query) return list;
+      return list.filter((g) =>
+        [g.name, g.group_id, g.scenario].some((s) => (s || '').toLowerCase().includes(query)),
+      );
     },
 
     // Active Character Alternate Greetings in RP tab
@@ -880,6 +897,108 @@ const AppDefinition = {
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
       this.showToast(`Lorebook "${payload.name}" exported.`, 'info');
+    },
+
+    // =========================================================================
+    // Groups Management
+    // =========================================================================
+    async loadGroups() {
+      try {
+        const res = await fetch('/api/v1/groups');
+        if (res.ok) this.groups = await res.json();
+      } catch (err) {
+        console.error('Failed to load groups:', err);
+      }
+      this.refreshIcons();
+    },
+
+    characterName(charId) {
+      const c = this.characters.find((x) => x.char_id === charId);
+      return c ? c.name : charId;
+    },
+
+    selectGroup(id) {
+      const g = this.groups[id];
+      if (!g) return;
+      this.selectedGroupId = id;
+      this.groupForm = {
+        group_id: g.group_id,
+        name: g.name || '',
+        char_ids: [...(g.char_ids || [])],
+        scenario: g.scenario || '',
+        first_mes: g.first_mes || '',
+        lorebook_id: g.lorebook_id || '',
+      };
+      this.refreshIcons();
+    },
+
+    newGroup() {
+      this.selectedGroupId = null;
+      this.groupForm = { group_id: '', name: '', char_ids: [], scenario: '', first_mes: '', lorebook_id: '' };
+      this.refreshIcons();
+    },
+
+    // Members speak in the order they were added when the speaker selector picks no one.
+    toggleGroupMember(charId) {
+      const ids = this.groupForm.char_ids;
+      const i = ids.indexOf(charId);
+      if (i >= 0) ids.splice(i, 1);
+      else ids.push(charId);
+    },
+
+    async saveGroup() {
+      const groupId = (this.groupForm.group_id || '').trim();
+      const name = (this.groupForm.name || '').trim();
+      if (!groupId || !name) {
+        this.showToast('Group ID and name are required.', 'error');
+        return;
+      }
+      if (this.groupForm.char_ids.length === 0) {
+        this.showToast('Add at least one character to the group.', 'error');
+        return;
+      }
+      const payload = {
+        group_id: groupId,
+        name: name,
+        char_ids: [...this.groupForm.char_ids],
+        scenario: this.groupForm.scenario || '',
+        first_mes: this.groupForm.first_mes || '',
+        lorebook_id: this.groupForm.lorebook_id || null,
+      };
+      try {
+        const res = await fetch('/api/v1/groups', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        if (res.ok) {
+          this.showToast(`Group "${name}" saved!`, 'success');
+          this.selectedGroupId = groupId;
+          await this.loadGroups();
+        } else {
+          const err = await res.json().catch(() => ({ detail: 'Failed to save group' }));
+          this.showToast(err.detail || 'Save failed', 'error');
+        }
+      } catch (err) {
+        this.showToast('Network error while saving group', 'error');
+      }
+    },
+
+    async deleteGroup(id) {
+      if (!id || !confirm(`Are you sure you want to delete group "${id}"?`)) return;
+      try {
+        const res = await fetch(`/api/v1/groups/${encodeURIComponent(id)}`, { method: 'DELETE' });
+        if (res.ok) {
+          this.showToast(`Group "${id}" deleted.`, 'success');
+          if (this.selectedGroupId === id) this.newGroup();
+          await this.loadGroups();
+        } else {
+          const err = await res.json().catch(() => ({ detail: 'Failed to delete' }));
+          this.showToast(err.detail || 'Delete failed', 'error');
+        }
+      } catch (err) {
+        this.showToast('Network error while deleting group', 'error');
+      }
     },
 
     // =========================================================================
@@ -1640,6 +1759,7 @@ const AppDefinition = {
     this.healthInterval = setInterval(() => this.checkHealth(), 10000);
     this.loadCharacters();
     this.loadLorebooks();
+    this.loadGroups();
     this.loadStorySessions();
     this.refreshIcons();
   },

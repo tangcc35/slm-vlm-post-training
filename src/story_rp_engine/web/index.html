@@ -54,6 +54,13 @@
           <span>Characters</span>
         </button>
         <button
+          @click="activeTab = 'groups'"
+          :class="activeTab === 'groups' ? 'bg-indigo-600 text-white font-medium shadow-sm' : 'text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800/60'"
+          class="flex items-center space-x-1.5 px-3 py-1.5 rounded-md text-xs transition">
+          <i data-lucide="contact" class="w-3.5 h-3.5"></i>
+          <span>Groups</span>
+        </button>
+        <button
           @click="activeTab = 'lorebooks'"
           :class="activeTab === 'lorebooks' ? 'bg-indigo-600 text-white font-medium shadow-sm' : 'text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800/60'"
           class="flex items-center space-x-1.5 px-3 py-1.5 rounded-md text-xs transition">
@@ -948,6 +955,160 @@
             </div>
           </div>
 
+        </div>
+
+      </section>
+
+      <!-- ================================================================= -->
+      <!-- GROUPS MANAGEMENT WORKBENCH                                       -->
+      <!-- ================================================================= -->
+      <section v-show="activeTab === 'groups'" class="w-full h-full flex flex-col md:flex-row overflow-hidden">
+
+        <!-- Left Column: Group Directory -->
+        <aside class="w-full md:w-80 lg:w-96 flex-shrink-0 border-r border-neutral-800 bg-neutral-900/60 overflow-y-auto p-4 space-y-4">
+          <div class="flex items-center justify-between pb-2 border-b border-neutral-800">
+            <h2 class="text-xs font-semibold uppercase tracking-wider text-neutral-400 flex items-center space-x-1.5">
+              <i data-lucide="contact" class="w-3.5 h-3.5 text-indigo-400"></i>
+              <span>Groups Directory</span>
+            </h2>
+            <span class="text-[10px] font-mono text-neutral-500">{{ filteredGroups.length }} saved</span>
+          </div>
+
+          <button
+            @click="newGroup"
+            class="w-full flex items-center justify-center space-x-1 px-2.5 py-1.5 rounded-md bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium transition shadow-sm">
+            <i data-lucide="plus" class="w-3 h-3"></i>
+            <span>New Group</span>
+          </button>
+
+          <div class="relative">
+            <input
+              type="text"
+              v-model="groupSearchQuery"
+              placeholder="Search groups..."
+              class="w-full bg-neutral-950 border border-neutral-800 rounded-md pl-8 pr-3 py-1.5 text-xs text-neutral-200 placeholder-neutral-500 focus:border-indigo-500">
+            <i data-lucide="search" class="w-3.5 h-3.5 absolute left-2.5 top-2 text-neutral-500"></i>
+          </div>
+
+          <div class="space-y-2">
+            <div v-if="filteredGroups.length === 0" class="text-center py-6 text-xs text-neutral-500">
+              No groups found.
+            </div>
+            <div
+              v-for="g in filteredGroups"
+              :key="g.group_id"
+              @click="selectGroup(g.group_id)"
+              :class="selectedGroupId === g.group_id ? 'border-indigo-500 bg-indigo-950/20' : 'border-neutral-800 bg-neutral-950/50 hover:border-neutral-700'"
+              class="p-3 rounded-lg border cursor-pointer transition space-y-1.5 select-text">
+              <div class="flex items-center justify-between">
+                <span class="font-medium text-xs text-neutral-200">{{ g.name || g.group_id }}</span>
+                <span class="px-1.5 py-0.5 rounded bg-neutral-800 text-[10px] font-mono text-indigo-400">
+                  {{ g.char_ids.length }} members
+                </span>
+              </div>
+              <p class="text-[11px] text-neutral-400 line-clamp-2 leading-relaxed">
+                {{ g.char_ids.map(characterName).join(', ') }}
+              </p>
+            </div>
+          </div>
+        </aside>
+
+        <!-- Right Column: Group Editor -->
+        <div class="flex-1 overflow-y-auto p-4 md:p-6 space-y-6 bg-neutral-950">
+          <div class="flex items-center justify-between pb-4 border-b border-neutral-800">
+            <div>
+              <h2 class="text-sm md:text-base font-bold text-neutral-100 flex items-center space-x-2">
+                <span>{{ groupForm.name || 'New Group' }}</span>
+                <span v-if="selectedGroupId" class="text-xs font-mono text-neutral-500">({{ selectedGroupId }})</span>
+              </h2>
+              <p class="text-xs text-neutral-400">Characters who share one scene in Group Chat.</p>
+            </div>
+            <div class="flex items-center space-x-2">
+              <button
+                v-if="selectedGroupId"
+                @click="deleteGroup(selectedGroupId)"
+                class="flex items-center space-x-1.5 px-3 py-1.5 rounded-md bg-rose-600/80 hover:bg-rose-600 text-white text-xs font-medium transition shadow-sm">
+                <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                <span>Delete</span>
+              </button>
+              <button
+                @click="saveGroup"
+                class="flex items-center space-x-1.5 px-4 py-1.5 rounded-md bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium transition shadow-sm">
+                <i data-lucide="save" class="w-3.5 h-3.5"></i>
+                <span>Save Group</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="space-y-1.5">
+              <label class="block text-xs font-medium text-neutral-300">Group ID (Slug) <span class="text-rose-400">*</span></label>
+              <input
+                type="text"
+                v-model="groupForm.group_id"
+                placeholder="e.g. tavern_regulars"
+                class="w-full bg-neutral-900 border border-neutral-800 rounded-md px-3 py-1.5 text-xs text-neutral-200 font-mono focus:border-indigo-500">
+            </div>
+            <div class="space-y-1.5">
+              <label class="block text-xs font-medium text-neutral-300">Name <span class="text-rose-400">*</span></label>
+              <input
+                type="text"
+                v-model="groupForm.name"
+                placeholder="e.g. Tavern Regulars"
+                class="w-full bg-neutral-900 border border-neutral-800 rounded-md px-3 py-1.5 text-xs text-neutral-200 focus:border-indigo-500">
+            </div>
+          </div>
+
+          <div class="space-y-1.5">
+            <label class="block text-xs font-medium text-neutral-300">Members <span class="text-rose-400">*</span></label>
+            <p class="text-[11px] text-neutral-500">Click to add or remove. The number is the speaking order used when the speaker selector picks no one.</p>
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+              <button
+                v-for="c in characters"
+                :key="c.char_id"
+                @click="toggleGroupMember(c.char_id)"
+                :class="groupForm.char_ids.includes(c.char_id) ? 'border-indigo-500 bg-indigo-950/30 text-neutral-100' : 'border-neutral-800 bg-neutral-900 text-neutral-400 hover:border-neutral-700'"
+                class="flex items-center justify-between px-3 py-1.5 rounded-md border text-xs text-left transition">
+                <span class="truncate">{{ c.name }} <span class="font-mono text-neutral-500">({{ c.char_id }})</span></span>
+                <span
+                  v-if="groupForm.char_ids.includes(c.char_id)"
+                  class="ml-2 px-1.5 rounded bg-indigo-600 text-white text-[10px] font-mono">
+                  {{ groupForm.char_ids.indexOf(c.char_id) + 1 }}
+                </span>
+              </button>
+            </div>
+            <p v-if="characters.length === 0" class="text-[11px] text-neutral-500">No characters yet. Create some in the Characters tab.</p>
+          </div>
+
+          <div class="space-y-1.5">
+            <label class="block text-xs font-medium text-neutral-300">Scenario</label>
+            <textarea
+              v-model="groupForm.scenario"
+              rows="4"
+              placeholder="The shared scene. Replaces each member's own scenario in group chats."
+              class="w-full bg-neutral-900 border border-neutral-800 rounded-md px-3 py-2 text-xs text-neutral-200 placeholder-neutral-600 focus:border-indigo-500"></textarea>
+          </div>
+
+          <div class="space-y-1.5">
+            <label class="block text-xs font-medium text-neutral-300">Opening Message</label>
+            <textarea
+              v-model="groupForm.first_mes"
+              rows="4"
+              placeholder="Shown before the user's first message, e.g. narration that sets the scene."
+              class="w-full bg-neutral-900 border border-neutral-800 rounded-md px-3 py-2 text-xs text-neutral-200 placeholder-neutral-600 focus:border-indigo-500"></textarea>
+          </div>
+
+          <div class="space-y-1.5 pb-8">
+            <label class="block text-xs font-medium text-neutral-300">Default Lorebook</label>
+            <select
+              v-model="groupForm.lorebook_id"
+              class="w-full bg-neutral-900 border border-neutral-800 rounded-md px-3 py-1.5 text-xs text-neutral-200 focus:border-indigo-500">
+              <option value="">None (No Lorebook)</option>
+              <option v-for="(lb, id) in lorebooks" :key="id" :value="id">
+                {{ lb.name || id }}
+              </option>
+            </select>
+          </div>
         </div>
 
       </section>
