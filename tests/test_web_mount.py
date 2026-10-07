@@ -45,7 +45,7 @@ def test_web_static_assets():
         # Roleplay workbench methods & state (Task 6)
         "rpSessionId",
         "rpCharId",
-        "rpUserName",
+        "rpPersonaId",
         "rpAuthorsNote",
         "rpLorebookId",
         "rpChunkSize",

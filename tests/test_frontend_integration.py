@@ -490,3 +490,15 @@ def test_personas_tab_is_served(client):
     assert "savePersona" in html
     js = client.get("/app.js").text
     assert "'/api/v1/personas'" in js
+
+
+def test_chat_tabs_pick_a_saved_persona(client):
+    html = client.get("/").text
+    assert 'v-model="rpPersonaId"' in html
+    assert 'v-model="groupPersonaId"' in html
+    js = client.get("/app.js").text
+    assert "persona_id: this.rpPersonaId" in js
+    assert "persona_id: this.groupPersonaId" in js
+    # The free-text name fields are gone; the name comes from the persona.
+    assert "rpUserName" not in js + html
+    assert "groupUserName" not in js + html

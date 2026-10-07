@@ -79,7 +79,7 @@ const AppDefinition = {
       // =======================================================================
       rpSessionId: 'sess_' + Math.random().toString(36).substring(2, 10),
       rpCharId: '',
-      rpUserName: 'User',
+      rpPersonaId: '', // '' plays as "User"
       rpAuthorsNote: '',
       rpLorebookIds: [],
       rpLorebookSentKey: null, // "<session>|<lorebook ids>" last loaded into the backend session
@@ -100,7 +100,7 @@ const AppDefinition = {
       // =======================================================================
       groupChatId: '', // group being chatted with
       groupSessionId: 'group_' + Math.random().toString(36).substring(2, 10),
-      groupUserName: 'User',
+      groupPersonaId: '', // '' plays as "User"
       groupAuthorsNote: '',
       groupLorebookIds: [],
       groupLorebookSentKey: null, // "<session>|<lorebook ids>" last loaded into the backend session
@@ -948,6 +948,11 @@ const AppDefinition = {
       return c ? c.name : charId;
     },
 
+    personaName(personaId) {
+      const p = this.personas[personaId];
+      return p ? p.name : 'User';
+    },
+
     selectGroup(id) {
       const g = this.groups[id];
       if (!g) return;
@@ -1087,6 +1092,8 @@ const AppDefinition = {
         if (res.ok) {
           this.showToast(`Persona "${id}" deleted.`, 'success');
           if (this.selectedPersonaId === id) this.newPersona();
+          if (this.rpPersonaId === id) this.rpPersonaId = '';
+          if (this.groupPersonaId === id) this.groupPersonaId = '';
           await this.loadPersonas();
         } else {
           const err = await res.json().catch(() => ({ detail: 'Failed to delete' }));
@@ -1292,7 +1299,8 @@ const AppDefinition = {
         }
         this.rpSessionId = s.session_id;
         this.rpMessages = messages;
-        this.rpUserName = s.user_name || 'User';
+        // A deleted persona falls back to "no persona".
+        this.rpPersonaId = this.personas[s.persona_id] ? s.persona_id : '';
         this.rpAuthorsNote = s.authors_note || '';
         this.rpLorebookIds = [...(s.lorebook_ids || [])];
         this.rpLorebookSentKey = null; // re-send the selected lorebooks with the next message
@@ -1550,7 +1558,8 @@ const AppDefinition = {
         // The greeting lives only in the UI, so the backend gets it with each message.
         greeting: firstMsg && firstMsg.isGreeting ? firstMsg.content : null,
         authors_note: this.rpAuthorsNote ? this.rpAuthorsNote.trim() : null,
-        user_name: this.rpUserName ? this.rpUserName.trim() : 'User',
+        // undefined drops the key, so the backend plays as "User".
+        persona_id: this.rpPersonaId || undefined,
         chunk_size: Number(this.rpChunkSize) || 1,
       };
       // The backend keeps the lorebooks in the session, so only send them when the
@@ -1682,7 +1691,7 @@ const AppDefinition = {
     },
 
     groupSpeakerName(msg) {
-      if (msg.role === 'user') return this.groupUserName || 'User';
+      if (msg.role === 'user') return this.personaName(this.groupPersonaId);
       return this.characterName(msg.speaker);
     },
 
@@ -1736,7 +1745,7 @@ const AppDefinition = {
         }));
         this.groupSessionId = s.session_id;
         this.groupMessages = messages;
-        this.groupUserName = s.user_name || 'User';
+        this.groupPersonaId = this.personas[s.persona_id] ? s.persona_id : '';
         this.groupAuthorsNote = s.authors_note || '';
         this.groupLorebookIds = [...(s.lorebook_ids || [])];
         this.groupLorebookSentKey = null; // re-send the selected lorebooks with the next message
@@ -1801,7 +1810,7 @@ const AppDefinition = {
         session_id: this.groupSessionId,
         message: promptText,
         authors_note: this.groupAuthorsNote ? this.groupAuthorsNote.trim() : null,
-        user_name: this.groupUserName ? this.groupUserName.trim() : 'User',
+        persona_id: this.groupPersonaId || undefined,
         chunk_size: Number(this.groupChunkSize) || 1,
       };
       // Like RP: the backend keeps the lorebooks in the session, so only send them when they changed ([] clears them).

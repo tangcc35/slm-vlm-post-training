@@ -70,7 +70,7 @@ flowchart LR
         - Character Selector (rpCharId)
         - Greeting Picker (selectedGreetingIndex)
         - Session ID & New/Clear (rpSessionId)
-        - User Persona Name (rpUserName)
+        - Persona (rpPersonaId)
         - Active Lorebooks (rpLorebookIds)
         - Author's Note (rpAuthorsNote)
         - SSE Chunk Slider (rpChunkSize)"]
@@ -96,7 +96,7 @@ flowchart LR
   - `rpSessionId`: Reactive session identifier string (`sess_<random>`).
   - **New (`newRPSession()`)**: Aborts any active generation, generates a fresh session ID, clears `rpMessages`, and repopulates the active character's greeting.
   - **Clear (`clearRPSession()`)**: Calls `DELETE /api/v1/rp/sessions/{session_id}` on the backend and empties `rpMessages`.
-- **User Persona Name (`rpUserName`)**: String injected into the turn request payload (default `"User"`).
+- **Persona (`rpPersonaId`)**: `<select>` over `personas` plus "User (no persona)" (`''`). Sent as `persona_id` (left out when `''`); user bubbles are labelled `personaName(rpPersonaId)`. Reopening a chat reselects its `persona_id` if that persona still exists.
 - **Active Lorebooks (`rpLorebookIds`)**: Checkbox list of the lorebooks whose entries are retrieved by keyword.
 - **Author's Note (`rpAuthorsNote`)**: Injected prompt steering placed at depth into the system prompt.
 - **SSE Chunk Size Slider (`rpChunkSize`)**: Token chunk buffering range (1–64 tokens, default 16).
@@ -206,11 +206,11 @@ Chat with a saved group of characters. Each turn the backend's speaker selector 
 ### Left Sidebar Controls
 - **Active Group** (`groupChatId`): `<select>` over `groups`; changing it calls `onGroupChatChange()`, which starts a new chat and reloads history. The member names show under the picker.
 - **Chat**: "New" (`newGroupSession()`, which starts an empty chat, since the user's first message opens the scene, and preselects the group's default lorebooks) and a history dropdown (`groupSessions` from `GET /api/v1/group/sessions?group_id=`) with open, rename (`saveRename('group', s)`) and delete (`deleteGroupSession(s)`).
-- **User Persona Name** (`groupUserName`), **Active Lorebooks** (`groupLorebookIds`, sent only when the session or selection changed, tracked by `groupLorebookSentKey`), **Author's Note** (`groupAuthorsNote`) and **SSE Chunk Size** (`groupChunkSize`).
+- **Persona** (`groupPersonaId`, same as RP), **Active Lorebooks** (`groupLorebookIds`, sent only when the session or selection changed, tracked by `groupLorebookSentKey`), **Author's Note** (`groupAuthorsNote`) and **SSE Chunk Size** (`groupChunkSize`).
 
 ### Right Chat Feed (`#group-chat-feed`)
 - `groupMessages` entries are `{ role, speaker, content, timestamp }`; `speaker` is a `char_id` (null for the user).
-- Bubble labels come from `groupSpeakerName(msg)`: the user name, otherwise `characterName(msg.speaker)`.
+- Bubble labels come from `groupSpeakerName(msg)`: `personaName(groupPersonaId)` for the user, otherwise `characterName(msg.speaker)`.
 - `_streamGroupReplies()` posts to `POST /api/v1/group/chat/stream` and opens a new bubble whenever a delta's `speaker` changes.
 - Each bubble has Copy and Delete (`deleteGroupTurn(idx)`, which posts `turns/delete` with the UI index; there is no greeting to offset). There is no regenerate or rewind.
 - Reopening a chat (`openGroupSession(s)`) rebuilds the bubbles from `GET /api/v1/group/sessions/{id}/turns`.
