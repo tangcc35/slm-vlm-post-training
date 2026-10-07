@@ -12,6 +12,7 @@ All primary application API routes are mounted under the `/api/v1` prefix.
 graph TD
     Client["Client (Browser / Native)"] -->|HTTP / SSE| FastAPI["FastAPI Application"]
     FastAPI --> RP["RP Router (/api/v1/rp)"]
+    FastAPI --> Group["Group Router (/api/v1/group, /api/v1/groups)"]
     FastAPI --> Story["Story Router (/api/v1/story)"]
     FastAPI --> Chars["Character Router (/api/v1/characters)"]
     FastAPI --> Lore["Lorebook Router (/api/v1/lorebooks)"]
@@ -194,7 +195,24 @@ Streams literary prose expansion via Server-Sent Events (SSE).
 
 ---
 
-### 1.4 System Endpoints
+### 1.4 Group Chat Endpoints (`/api/v1/groups` & `/api/v1/group`)
+
+A group puts several characters in one scene; a speaker selector picks who replies each turn.
+
+- `POST /api/v1/groups`: Saves a `GroupCard` (`group_id`, `name`, `char_ids`, `scenario`, `first_mes`, `lorebook_id`). Returns `{"status": "saved", "group_id": ...}`; `400` for an invalid `group_id`.
+- `GET /api/v1/groups`: Returns all groups keyed by `group_id`.
+- `GET /api/v1/groups/{group_id}`: Retrieves one group (`404` if missing).
+- `DELETE /api/v1/groups/{group_id}`: Deletes the group and evicts its cached runner (`404` if missing).
+- `POST /api/v1/group/chat/stream`: Streams one group turn over SSE (see section 2.1). Body `GroupChatRequest`: `group_id`, `session_id`, `message` (required); `authors_note`, `user_name`, `lorebook_id`, `greeting`, `chunk_size` (optional, as in `RPChatRequest`). `404` if the group or lorebook is missing; `400` if the group has no characters or the session ID is invalid.
+- `GET /api/v1/group/sessions?group_id=`: Chats with one group, newest first.
+- `GET /api/v1/group/sessions/{session_id}/turns`: Same shape as the RP turns plus `speaker` (the `char_id`, `null` for the user); the selector's events are hidden.
+- `PATCH /api/v1/group/sessions/{session_id}`: Renames the chat (`{"title": ...}`).
+- `DELETE /api/v1/group/sessions/{session_id}`: Deletes the session.
+- `POST /api/v1/group/sessions/{session_id}/turns/delete`: Same body as the RP route; indexes ignore the selector's events.
+
+---
+
+### 1.5 System Endpoints
 
 - `GET /health`: Returns `{"status": "ok"}` for container liveness/readiness probes.
 - `GET /`: Serves static web UI assets from `src/story_rp_engine/web` if the directory exists.
@@ -250,6 +268,18 @@ sequenceDiagram
    data: [DONE]
    ```
 
+4. **Group Chat Variant** (`/api/v1/group/chat/stream`):
+   Each delta carries the speaking character's `char_id`, and the final payload lists every reply instead of `full_text`:
+   ```http
+   data: {"speaker": "bob", "delta": "Bob "}
+
+   data: {"speaker": "alice", "delta": "Alice line"}
+
+   data: {"replies": [{"speaker": "bob", "text": "Bob line"}, {"speaker": "alice", "text": "Alice line"}], "done": true}
+
+   data: [DONE]
+   ```
+
 #### Alternative `sse-starlette` Chunk Formatting
 For clients parsing custom SSE event fields (`event: message` and `event: done`):
 ```http
@@ -294,7 +324,7 @@ In `src/story_rp_engine/api/app.py`, Pydantic's `RequestValidationError` is inte
 ```
 
 ### 3.2 Path Traversal Sanitization
-All ID parameters (`char_id`, `session_id`, `lorebook_id`) are validated using `_sanitize_key`:
+All ID parameters (`char_id`, `group_id`, `session_id`, `lorebook_id`) are validated using `_sanitize_key`:
 - Rejects any string containing `/`, `\`, or `..`.
 - Rejects empty or whitespace-only keys.
 - Raises `HTTPException(status_code=400, detail="Invalid ID: path traversal characters not allowed")`.

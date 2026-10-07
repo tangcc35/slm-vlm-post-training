@@ -128,3 +128,15 @@ async def test_group_chat_reports_unusable_selector_reply(tmp_path, group_models
     assert res.status_code == 200
     assert 'data: {"error": ' in res.text
     assert res.text.endswith("data: [DONE]\n\n")
+
+
+@pytest.mark.anyio
+async def test_characters_never_see_selector_json_across_persisted_turns(tmp_path, group_models):
+    client = await _group_client(tmp_path)
+    group_models.plan = {"speakers": ["bob", "alice"]}
+    _chat(client, "Hello!")
+    _chat(client, "And now?")
+
+    texts = ["".join(p.text or "" for p in c.parts) for c in group_models.requests["Alice"][-1].contents]
+    assert any("[char_bob] said:" in t for t in texts)
+    assert not any('"speakers"' in t for t in texts)

@@ -106,7 +106,7 @@ The web UI is at http://localhost:8000 and the API docs at `/docs`. To use your 
 | `GOOGLE_API_KEY` / `STORY_RP_API_KEY` | – | Provider API key |
 | `STORY_RP_TEMPERATURE` / `STORY_RP_TOP_P` | `0.8` / `0.9` | Sampling settings for every agent |
 | `STORY_RP_MAX_TOKENS` | unset | Output token cap; unset means the model's own limit |
-| `DATABASE_URL` | unset | Postgres for sessions, characters and lorebooks (`STORY_RP_DB_URL` and `POSTGRES_URL` also work). Unset: SQLite plus JSON files in `STORY_RP_STORAGE_DIR` (`.engine_data`) |
+| `DATABASE_URL` | unset | Postgres for sessions, characters, lorebooks and groups (`STORY_RP_DB_URL` and `POSTGRES_URL` also work). Unset: SQLite plus JSON files in `STORY_RP_STORAGE_DIR` (`.engine_data`) |
 | `STORY_RP_COMPACTION_ENABLED` | `1` | ADK context compaction; tune with `STORY_RP_COMPACTION_*` (see `core/config.py`) |
 | `PHOENIX_ENABLED` | `0` | Send OpenTelemetry traces to Arize Phoenix |
 
@@ -118,6 +118,9 @@ The web UI is at http://localhost:8000 and the API docs at `/docs`. To use your 
 | `POST·GET·DELETE /api/v1/lorebooks[/{id}]` | Lorebooks |
 | `POST /api/v1/rp/chat[/stream]` | Roleplay turn |
 | `GET /api/v1/rp/sessions/{id}/turns`, `POST …/turns/delete`, `DELETE /api/v1/rp/sessions/{id}` | View, rewind or clear chat history |
+| `POST·GET·DELETE /api/v1/groups[/{id}]` | Group chat groups (several characters in one scene) |
+| `POST /api/v1/group/chat/stream` | Group chat turn: a speaker selector picks who replies, each reply streams with its `speaker` |
+| `GET /api/v1/group/sessions?group_id=`, `GET …/sessions/{id}/turns`, `PATCH`·`DELETE …/sessions/{id}`, `POST …/turns/delete` | List, view, rename, rewind or clear group chats |
 | `POST /api/v1/story/expand[/stream]` | Story chat turn |
 
 ```bash

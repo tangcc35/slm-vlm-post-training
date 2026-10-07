@@ -33,7 +33,7 @@ flowchart TD
 
 ### 2. Bind Reactive State & Tab Navigation
 - Maintain centralized Vue 3 reactive state in `src/story_rp_engine/web/app.js` (`AppDefinition`):
-  - Global navigation: `activeTab` (`'roleplay'`, `'story'`, `'characters'`, `'lorebooks'`).
+  - Global navigation: `activeTab` (`'roleplay'`, `'group'`, `'story'`, `'characters'`, `'groups'`, `'lorebooks'`). `'group'` is the Group Chat tab and `'groups'` is the Groups editor.
   - Application health: `backendOnline` toggled via `checkHealth()` polling `/health` every 10 seconds.
   - Toast feedback: `toast` object with auto-dismiss timer.
 - Keep bidirectional watchers in sync for property aliases (e.g., `charSearchQuery` <-> `charSearch`, `lorebookSearchQuery` <-> `lbSearch`, `customGenre` <-> `storyCustomGenre`, `customTone` <-> `storyCustomTone`).
