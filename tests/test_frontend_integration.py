@@ -473,3 +473,12 @@ def test_groups_tab_is_served(client):
     assert "saveGroup" in html
     js = client.get("/app.js").text
     assert "'/api/v1/groups'" in js
+
+
+def test_group_chat_tab_is_served(client):
+    html = client.get("/").text
+    assert "activeTab === 'group'" in html
+    assert "group-chat-feed" in html
+    js = client.get("/app.js").text
+    assert "/api/v1/group/chat/stream" in js
+    assert "/api/v1/group/sessions" in js

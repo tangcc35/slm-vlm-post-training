@@ -89,6 +89,23 @@ const AppDefinition = {
       editingTitle: '',
 
       // =======================================================================
+      // Group Chat Reactive State
+      // =======================================================================
+      groupChatId: '', // group being chatted with
+      groupSessionId: 'group_' + Math.random().toString(36).substring(2, 10),
+      groupUserName: 'User',
+      groupAuthorsNote: '',
+      groupLorebookId: '',
+      groupLorebookSentKey: null, // "<session>|<lorebook>" last loaded into the backend session
+      groupChunkSize: 1,
+      groupMessages: [], // { role: 'user' | 'assistant', speaker: char_id | null, content, timestamp, isGreeting? }
+      isGeneratingGroup: false,
+      groupAbortController: null,
+      groupInput: '',
+      groupSessions: [], // past chats with the selected group, newest first
+      showGroupHistory: false,
+
+      // =======================================================================
       // Story Co-Pilot Reactive State (Task 7)
       // =======================================================================
       storySessionId: 'story_' + Math.random().toString(36).substring(2, 10),
@@ -119,6 +136,13 @@ const AppDefinition = {
     storySessionTitle() {
       const s = this.storySessions.find((x) => x.session_id === this.storySessionId);
       return (s && (s.title || s.premise || s.session_id)) || 'New story';
+    },
+    groupSessionTitle() {
+      const s = this.groupSessions.find((x) => x.session_id === this.groupSessionId);
+      return (s && (s.title || s.last_message)) || 'New chat';
+    },
+    activeGroup() {
+      return this.groups[this.groupChatId] || null;
     },
 
     // Character Filtering
@@ -1142,13 +1166,17 @@ const AppDefinition = {
       this.editingSessionId = null;
     },
 
-    // kind is 'rp' or 'story'. Runs on Enter and on blur; the first call wins.
+    // kind is 'rp', 'group' or 'story'. Runs on Enter and on blur; the first call wins.
     async saveRename(kind, s) {
       if (this.editingSessionId !== s.session_id) return;
       this.editingSessionId = null;
       const title = this.editingTitle.trim();
       if (title === (s.title || '')) return;
-      const base = kind === 'rp' ? '/api/v1/rp/sessions' : '/api/v1/story/sessions';
+      const base = {
+        rp: '/api/v1/rp/sessions',
+        group: '/api/v1/group/sessions',
+        story: '/api/v1/story/sessions',
+      }[kind];
       try {
         const res = await fetch(`${base}/${encodeURIComponent(s.session_id)}`, {
           method: 'PATCH',
@@ -1567,6 +1595,237 @@ const AppDefinition = {
         this.rpAbortController = null;
         this.loadRPSessions();
         this.scrollRPChatToBottom();
+        this.refreshIcons();
+      }
+    },
+
+    // =========================================================================
+    // Group Chat: the speaker selector picks who replies; each reply streams into its own bubble
+    // =========================================================================
+    scrollGroupChatToBottom() {
+      this.$nextTick(() => {
+        const feed = document.getElementById('group-chat-feed');
+        if (feed) feed.scrollTop = feed.scrollHeight;
+      });
+    },
+
+    groupSpeakerName(msg) {
+      if (msg.role === 'user') return this.groupUserName || 'User';
+      if (msg.isGreeting) return this.activeGroup ? this.activeGroup.name : 'Narrator';
+      return this.characterName(msg.speaker);
+    },
+
+    onGroupChatChange() {
+      // Each group gets its own chats, so switching starts a new session.
+      this.newGroupSession();
+      this.loadGroupSessions();
+    },
+
+    newGroupSession() {
+      this.stopGeneratingGroup();
+      this.groupSessionId = 'group_' + Math.random().toString(36).substring(2, 10);
+      this.groupMessages = [];
+      this.groupLorebookSentKey = null;
+      const group = this.activeGroup;
+      this.groupLorebookId = (group && group.lorebook_id) || '';
+      if (group && group.first_mes) {
+        this.groupMessages.push({
+          role: 'assistant',
+          speaker: null,
+          content: group.first_mes,
+          isGreeting: true,
+          timestamp: this._timeNow(),
+        });
+      }
+      this.refreshIcons();
+      this.scrollGroupChatToBottom();
+    },
+
+    toggleGroupHistory() {
+      this.showGroupHistory = !this.showGroupHistory;
+      if (this.showGroupHistory) this.loadGroupSessions();
+    },
+
+    async loadGroupSessions() {
+      if (!this.groupChatId) {
+        this.groupSessions = [];
+        return;
+      }
+      try {
+        const res = await fetch(`/api/v1/group/sessions?group_id=${encodeURIComponent(this.groupChatId)}`);
+        if (res.ok) this.groupSessions = await res.json();
+      } catch (err) {
+        console.warn('Failed to load group chat history:', err);
+      }
+      this.refreshIcons();
+    },
+
+    async openGroupSession(s) {
+      this.stopGeneratingGroup();
+      try {
+        const res = await fetch(`/api/v1/group/sessions/${encodeURIComponent(s.session_id)}/turns`);
+        if (!res.ok) throw new Error(`Server returned HTTP ${res.status}`);
+        const { turns } = await res.json();
+        const messages = turns.map((t) => ({
+          role: t.role === 'user' ? 'user' : 'assistant',
+          speaker: t.speaker,
+          content: t.text,
+          timestamp: '',
+        }));
+        if (s.greeting) {
+          messages.unshift({ role: 'assistant', speaker: null, content: s.greeting, isGreeting: true, timestamp: '' });
+        }
+        this.groupSessionId = s.session_id;
+        this.groupMessages = messages;
+        this.groupUserName = s.user_name || 'User';
+        this.groupAuthorsNote = s.authors_note || '';
+        this.groupLorebookId = s.lorebook_id || '';
+        this.groupLorebookSentKey = null; // re-send the selected lorebook with the next message
+        this.showGroupHistory = false;
+        this.refreshIcons();
+        this.scrollGroupChatToBottom();
+      } catch (err) {
+        this.showToast(err.message || 'Failed to open chat.', 'error');
+      }
+    },
+
+    async deleteGroupSession(s) {
+      if (!confirm('Delete this chat? This cannot be undone.')) return;
+      await fetch(`/api/v1/group/sessions/${encodeURIComponent(s.session_id)}`, { method: 'DELETE' });
+      if (s.session_id === this.groupSessionId) this.newGroupSession();
+      this.loadGroupSessions();
+    },
+
+    stopGeneratingGroup() {
+      if (this.groupAbortController) this.groupAbortController.abort();
+      this.groupAbortController = null;
+      this.isGeneratingGroup = false;
+    },
+
+    async deleteGroupTurn(index) {
+      const msg = this.groupMessages[index];
+      if (!msg || this.isGeneratingGroup) return;
+      // The greeting lives only in the UI; the backend counts the messages after it.
+      if (!msg.isGreeting) {
+        const hasGreeting = !!this.groupMessages[0].isGreeting;
+        try {
+          const res = await fetch(`/api/v1/group/sessions/${encodeURIComponent(this.groupSessionId)}/turns/delete`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ turn_index: hasGreeting ? index - 1 : index, truncate_subsequent: false }),
+          });
+          if (!res.ok) throw new Error(`Server returned HTTP ${res.status}`);
+        } catch (err) {
+          this.showToast(err.message || 'Failed to delete message.', 'error');
+          return;
+        }
+      }
+      this.groupMessages.splice(index, 1);
+    },
+
+    async sendGroupMessage() {
+      const text = (this.groupInput || '').trim();
+      if (this.isGeneratingGroup || !text) return;
+      if (!this.groupChatId) {
+        this.showToast('Please select a group first.', 'error');
+        return;
+      }
+      this.groupInput = '';
+      this.groupMessages.push({ role: 'user', speaker: null, content: text, timestamp: this._timeNow() });
+      this.scrollGroupChatToBottom();
+      await this._streamGroupReplies(text);
+    },
+
+    async _streamGroupReplies(promptText) {
+      this.isGeneratingGroup = true;
+      this.groupAbortController = new AbortController();
+      this.refreshIcons();
+
+      const firstMsg = this.groupMessages[0];
+      const payload = {
+        group_id: this.groupChatId,
+        session_id: this.groupSessionId,
+        message: promptText,
+        // The greeting lives only in the UI, so the backend gets it with each message.
+        greeting: firstMsg && firstMsg.isGreeting ? firstMsg.content : null,
+        authors_note: this.groupAuthorsNote ? this.groupAuthorsNote.trim() : null,
+        user_name: this.groupUserName ? this.groupUserName.trim() : 'User',
+        chunk_size: Number(this.groupChunkSize) || 1,
+      };
+      // Like RP: the backend keeps the lorebook in the session, so only send it when it changed ('' clears it).
+      const lorebookKey = `${this.groupSessionId}|${this.groupLorebookId || ''}`;
+      if (lorebookKey !== this.groupLorebookSentKey) {
+        payload.lorebook_id = this.groupLorebookId || '';
+      }
+
+      let current = null; // the bubble being streamed; a new speaker opens a new one
+      const handle = (data) => {
+        if (data.error) throw new Error(data.error);
+        if (!data.delta) return;
+        if (!current || current.speaker !== data.speaker) {
+          this.groupMessages.push({ role: 'assistant', speaker: data.speaker, content: '', timestamp: this._timeNow() });
+          // Mutate the reactive copy in the array so Vue re-renders as text arrives.
+          current = this.groupMessages[this.groupMessages.length - 1];
+        }
+        current.content += data.delta;
+        this.scrollGroupChatToBottom();
+      };
+
+      try {
+        const res = await fetch('/api/v1/group/chat/stream', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+          signal: this.groupAbortController.signal,
+        });
+        if (!res.ok) {
+          let detail = `Server returned HTTP ${res.status}`;
+          try {
+            const errJson = await res.json();
+            if (errJson.detail) detail = errJson.detail;
+          } catch (_) {}
+          throw new Error(detail);
+        }
+
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder('utf-8');
+        let buffer = '';
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true }).replace(/\r\n/g, '\n');
+          const blocks = buffer.split('\n\n');
+          buffer = blocks.pop();
+          for (const block of blocks) {
+            const line = block.trim();
+            if (!line.startsWith('data:')) continue;
+            const raw = line.slice(5).trim();
+            if (raw === '[DONE]') continue;
+            let data;
+            try {
+              data = JSON.parse(raw);
+            } catch (_) {
+              continue; // ignore a malformed chunk
+            }
+            handle(data);
+          }
+        }
+
+        // Marked only after a completed turn; re-sending on a failed one is harmless.
+        this.groupLorebookSentKey = lorebookKey;
+        if (!current) this.showToast('No character replied.', 'info');
+      } catch (err) {
+        if (err.name === 'AbortError') {
+          this.showToast('Generation stopped.', 'info');
+        } else {
+          console.error('Group chat streaming error:', err);
+          this.showToast(err.message || 'Error generating group replies.', 'error');
+        }
+      } finally {
+        this.isGeneratingGroup = false;
+        this.groupAbortController = null;
+        this.loadGroupSessions();
+        this.scrollGroupChatToBottom();
         this.refreshIcons();
       }
     },
