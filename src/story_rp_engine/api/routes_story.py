@@ -84,7 +84,7 @@ async def expand_story_stream(req: StoryRequest, request: Request):
     )
 
     return StreamingResponse(
-        format_sse_stream(generator, chunk_size=req.chunk_size),
+        format_sse_stream(generator, chunk_size=req.chunk_size, config=request.app.state.config),
         media_type="text/event-stream",
         headers={
             "X-Session-ID": req.session_id,

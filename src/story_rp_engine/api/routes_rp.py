@@ -118,7 +118,7 @@ async def chat_rp_stream(req: RPChatRequest, request: Request):
     )
 
     return StreamingResponse(
-        format_sse_stream(generator, chunk_size=req.chunk_size),
+        format_sse_stream(generator, chunk_size=req.chunk_size, config=request.app.state.config),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",

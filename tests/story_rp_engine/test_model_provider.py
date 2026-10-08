@@ -2,7 +2,7 @@ import os
 from unittest.mock import patch
 import pytest
 from story_rp_engine.core.config import EngineConfig
-from story_rp_engine.core.model_provider import get_adk_model
+from story_rp_engine.core.model_provider import get_adk_model, get_generate_config
 from google.adk.models.lite_llm import LiteLlm
 
 
@@ -169,4 +169,6 @@ def test_is_remote_model():
     assert not is_remote_model(EngineConfig(model_name="openai/custom", api_base="http://localhost:8080/v1"))
 
 
-
+def test_generate_config_sets_request_timeout():
+    # Without one, a stalled Gemini stream hangs the turn forever instead of failing.
+    assert get_generate_config(EngineConfig(model_timeout_seconds=30)).http_options.timeout == 30_000

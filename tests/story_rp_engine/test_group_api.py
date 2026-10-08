@@ -127,6 +127,16 @@ async def test_group_chat_reports_unusable_selector_reply(tmp_path, group_models
 
 
 @pytest.mark.anyio
+async def test_group_chat_names_the_model_that_timed_out(tmp_path, group_models):
+    client = await _group_client(tmp_path)
+    group_models.plan = TimeoutError()  # what a model call raises when it hits the timeout
+
+    res = _chat(client, "Hello!")
+    error = f"{EngineConfig().model_name} timed out after 120s"
+    assert res.text == f'data: {{"error": "{error}"}}\n\ndata: [DONE]\n\n'
+
+
+@pytest.mark.anyio
 async def test_characters_never_see_selector_json_across_persisted_turns(tmp_path, group_models):
     client = await _group_client(tmp_path)
     group_models.plan = {"speakers": ["bob", "alice"]}

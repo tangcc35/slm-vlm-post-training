@@ -111,6 +111,7 @@ The web UI is at http://localhost:8000 and the API docs at `/docs`. To use your 
 | `GOOGLE_API_KEY` / `STORY_RP_API_KEY` | – | Provider API key |
 | `STORY_RP_TEMPERATURE` / `STORY_RP_TOP_P` | `0.8` / `0.9` | Sampling settings for every agent |
 | `STORY_RP_MAX_TOKENS` | unset | Output token cap; unset means the model's own limit |
+| `STORY_RP_MODEL_TIMEOUT_SECONDS` | `120` | A model call fails after this instead of hanging; for Gemini it covers the whole reply |
 | `DATABASE_URL` | unset | Postgres for sessions, characters, lorebooks and groups (`STORY_RP_DB_URL` and `POSTGRES_URL` also work). Unset: SQLite plus JSON files in `STORY_RP_STORAGE_DIR` (`.engine_data`) |
 | `STORY_RP_COMPACTION_ENABLED` | `1` | ADK context compaction; tune with `STORY_RP_COMPACTION_*` (see `core/config.py`) |
 | `PHOENIX_ENABLED` | `0` | Send OpenTelemetry traces to Arize Phoenix |

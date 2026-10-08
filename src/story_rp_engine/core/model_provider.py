@@ -34,11 +34,12 @@ def is_remote_model(config: EngineConfig) -> bool:
 
 
 def get_generate_config(config: EngineConfig) -> types.GenerateContentConfig:
-    """Sampling settings from the engine config, applied to every agent."""
+    """Sampling settings and the request timeout from the engine config, applied to every agent."""
     return types.GenerateContentConfig(
         temperature=config.temperature,
         top_p=config.top_p,
         max_output_tokens=config.max_tokens,
+        http_options=types.HttpOptions(timeout=config.model_timeout_seconds * 1000),  # ms; LiteLlm reads it too
     )
 
 

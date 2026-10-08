@@ -99,6 +99,17 @@ async def test_format_sse_stream_reports_model_error():
 
 
 @pytest.mark.anyio
+async def test_format_sse_stream_names_an_error_without_a_message():
+    # The UI ignores an empty error.
+    async def mock_gen():
+        raise TimeoutError()
+        yield
+
+    events = [ev async for ev in format_sse_stream(mock_gen())]
+    assert events[0] == 'data: {"error": "TimeoutError"}\n\n'
+
+
+@pytest.mark.anyio
 async def test_format_sse_stream_labels_group_replies_by_speaker():
     async def mock_gen():
         yield ("bob", "Bob ")

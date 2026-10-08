@@ -37,6 +37,11 @@ class EngineConfig(BaseModel):
         le=131072,
         description="Output token cap; unset uses the model's own limit",
     )
+    model_timeout_seconds: int = Field(
+        default_factory=lambda: int(os.getenv("STORY_RP_MODEL_TIMEOUT_SECONDS", "120")),
+        ge=1,
+        description="Seconds before a model call fails instead of hanging; for Gemini it covers the whole reply",
+    )
     storage_dir: str = Field(
         default_factory=lambda: os.getenv("STORY_RP_STORAGE_DIR", ".engine_data"),
         description="Directory for local storage (characters, lorebooks, groups, sessions)",

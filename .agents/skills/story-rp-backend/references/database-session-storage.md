@@ -186,6 +186,7 @@ async def delete_or_truncate_turn(session_service, session_id: str, turn_index: 
 | `STORY_RP_TEMPERATURE` | `0.8` | Sampling temperature. |
 | `STORY_RP_TOP_P` | `0.9` | Nucleus sampling probability. |
 | `STORY_RP_MAX_TOKENS` | `131072` | Maximum generation token cap. |
+| `STORY_RP_MODEL_TIMEOUT_SECONDS` | `120` | Model call timeout; for Gemini it covers the whole reply. |
 
 ### 4.2 Auto-Injection of Local API Key
 When pointing to local inference servers (vLLM, llama.cpp, LocalAI) via `openai/*` model strings, LiteLLM requires an API key. If none is supplied, the provider automatically injects `"local"`:

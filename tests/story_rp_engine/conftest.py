@@ -16,7 +16,7 @@ def _reply(text, partial=False):
 def group_models(monkeypatch):
     """Fake models for group chat agents.
 
-    The selector replies with `group_models.plan` (a dict, or a raw string). Each character replies
+    The selector replies with `group_models.plan` (a dict, or a raw string), or raises it if it's an exception. Each character replies
     "<Name> line", streamed as "<Name> " + "line", and reads its name from its system prompt. Requests are
     recorded in `group_models.requests`, keyed by "speaker_selector" or the character's name.
     """
@@ -27,6 +27,8 @@ def group_models(monkeypatch):
 
         async def generate_content_async(self, llm_request, stream=False):
             fake.requests.setdefault("speaker_selector", []).append(llm_request)
+            if isinstance(fake.plan, Exception):
+                raise fake.plan
             yield _reply(fake.plan if isinstance(fake.plan, str) else json.dumps(fake.plan))
 
     class CharacterLlm(BaseLlm):

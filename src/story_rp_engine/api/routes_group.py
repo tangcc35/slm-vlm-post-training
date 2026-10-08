@@ -79,7 +79,7 @@ async def chat_group_stream(req: GroupChatRequest, request: Request):
         state_delta=state_delta,
     )
     return StreamingResponse(
-        format_sse_stream(generator, chunk_size=req.chunk_size),
+        format_sse_stream(generator, chunk_size=req.chunk_size, config=request.app.state.config),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",

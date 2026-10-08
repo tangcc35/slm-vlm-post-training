@@ -4,6 +4,7 @@ from typing import AsyncIterator, Dict, Optional, Tuple, Union
 from google.adk.agents.run_config import RunConfig, StreamingMode
 from google.adk.runners import Runner
 from google.genai import types
+from story_rp_engine.core.config import EngineConfig
 
 logger = logging.getLogger(__name__)
 
@@ -136,11 +137,13 @@ async def stream_group_turn(
 async def format_sse_stream(
     generator: AsyncIterator[Union[str, Tuple[str, str]]],
     chunk_size: Optional[int] = 4,
+    config: Optional[EngineConfig] = None,
 ) -> AsyncIterator[str]:
     """Buffers string chunks, yielding structured SSE JSON deltas and a final complete text.
 
     Group chat streams (speaker, text) pairs instead: each delta then carries its speaker, a new speaker flushes
-    the buffer, and the final event lists each speaker's reply in place of full_text.
+    the buffer, and the final event lists each speaker's reply in place of full_text. With `config`, a timed-out
+    model call is reported by model name.
     """
     buffer = []
     full_text_chunks = []
@@ -182,7 +185,12 @@ async def format_sse_stream(
     except Exception as e:
         # The 200 response has already started, so report model errors (e.g. Gemini API errors) in-stream.
         logger.exception("Model turn failed")
-        yield f"data: {json.dumps({'error': str(e)}, ensure_ascii=False)}\n\n"
+        if isinstance(e, TimeoutError) and config:
+            # A model call hit the timeout from get_generate_config; the raw error has no message.
+            message = f"{config.model_name} timed out after {config.model_timeout_seconds}s"
+        else:
+            message = str(e) or type(e).__name__  # the UI ignores an empty error
+        yield f"data: {json.dumps({'error': message}, ensure_ascii=False)}\n\n"
         yield "data: [DONE]\n\n"
         return
 
