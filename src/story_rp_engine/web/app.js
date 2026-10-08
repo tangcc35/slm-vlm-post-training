@@ -14,6 +14,7 @@ const AppDefinition = {
       activeTab: 'roleplay', // 'roleplay' | 'group' | 'story' | 'characters' | 'groups' | 'lorebooks' | 'personas'
       backendOnline: false,
       healthInterval: null,
+      showSidebar: window.innerWidth >= 768, // side panels start collapsed on phones
       toast: {
         show: false,
         message: '',
