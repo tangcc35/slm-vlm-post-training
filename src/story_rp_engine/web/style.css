@@ -112,6 +112,15 @@ select:focus {
   border-color: #6366f1 !important;
 }
 
+/* iOS Safari zooms into any field under 16px when it gets focus */
+@media (max-width: 767px) {
+  input,
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+}
+
 /* Accordion transition helper */
 .accordion-content {
   transition: max-height 0.3s ease, opacity 0.3s ease;
