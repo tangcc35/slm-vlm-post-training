@@ -1,10 +1,10 @@
 import json
 import pytest
-from slm_post_train.data.nsfw_story import (
+from slm_post_train.data.story_writing import (
     clean_prompt,
     clean_story,
     format_story_sample,
-    process_nsfw_story_dataset,
+    process_story_dataset,
     curate_and_save_dataset,
     curate_from_config,
     DEFAULT_STORY_SYSTEM_PROMPT,
@@ -12,9 +12,9 @@ from slm_post_train.data.nsfw_story import (
 
 
 def test_clean_prompt_removes_reddit_tags():
-    raw_prompt = "[WP] [NSFW] As a secret agent, your cover is blown in the bedroom."
+    raw_prompt = "[WP] [CW] As a secret agent, your cover is blown at a dinner party."
     cleaned = clean_prompt(raw_prompt)
-    assert cleaned == "As a secret agent, your cover is blown in the bedroom."
+    assert cleaned == "As a secret agent, your cover is blown at a dinner party."
 
 
 def test_clean_prompt_removes_urls_and_subreddits():
@@ -71,7 +71,7 @@ def test_format_story_sample_without_system():
     assert sample["conversations"][1]["role"] == "assistant"
 
 
-def test_process_nsfw_story_dataset_filtering():
+def test_process_story_dataset_filtering():
     raw_records = [
         # Valid sample
         {
@@ -96,7 +96,7 @@ def test_process_nsfw_story_dataset_filtering():
         },
     ]
 
-    processed = process_nsfw_story_dataset(
+    processed = process_story_dataset(
         raw_records,
         min_words=20,
         max_words=2000,
@@ -108,7 +108,7 @@ def test_process_nsfw_story_dataset_filtering():
 
 
 def test_curate_and_save_dataset_local(tmp_path):
-    from slm_post_train.data.nsfw_story import curate_and_save_dataset
+    from slm_post_train.data.story_writing import curate_and_save_dataset
 
     raw_file = tmp_path / "raw_data.jsonl"
     with open(raw_file, "w", encoding="utf-8") as f:

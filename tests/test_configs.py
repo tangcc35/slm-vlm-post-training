@@ -10,7 +10,7 @@ CONFIG_PATHS = [
     "configs/grpo/smoke_test.yaml",
     "configs/sft/gemma_text_sft.yaml",
     "configs/grpo/gemma_sudoku_rl.yaml",
-    "configs/sft/qwen35_08b_nsfw_story.yaml",
+    "configs/sft/qwen35_08b_story_writing.yaml",
 ]
 
 

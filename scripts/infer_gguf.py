@@ -10,7 +10,7 @@ from llama_cpp import Llama
 # =====================================================================
 # CONFIGURATION
 # =====================================================================
-MODEL_PATH = "outputs/qwen35_08b_nsfw_story/gguf/Qwen3.5-0.8B.Q8_0.gguf"
+MODEL_PATH = "outputs/qwen35_08b_story_writing/gguf/Qwen3.5-0.8B.Q8_0.gguf"
 SYSTEM_PROMPT = "You are a creative writer."
 PROMPT = "Write a short opening scene for a mystery story."
 

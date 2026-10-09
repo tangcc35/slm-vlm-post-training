@@ -9,7 +9,7 @@ from typing import Any, Dict, Iterable, List, Optional, Tuple, Union
 logger = logging.getLogger(__name__)
 
 DEFAULT_STORY_SYSTEM_PROMPT = (
-    "You are an uncensored, immersive creative writer specializing in atmospheric adult fiction "
+    "You are an immersive creative writer specializing in atmospheric fiction "
     "with rich sensory detail, engaging dialogue, and vivid scene descriptions."
 )
 
@@ -37,7 +37,7 @@ def clean_prompt(prompt: str) -> str:
     if not prompt:
         return ""
     text = prompt.strip()
-    # Strip multiple consecutive tag prefixes (e.g. [WP] [NSFW])
+    # Strip multiple consecutive tag prefixes (e.g. [WP] [CW])
     while True:
         m = PROMPT_TAG_PATTERN.match(text)
         if m:
@@ -128,7 +128,7 @@ def extract_prompt_and_story(record: Dict[str, Any]) -> Tuple[Optional[str], Opt
     return None, None
 
 
-def process_nsfw_story_dataset(
+def process_story_dataset(
     records: Iterable[Dict[str, Any]],
     min_words: int = 200,
     max_words: int = 2500,
@@ -184,7 +184,7 @@ def save_dataset_jsonl(samples: List[Dict[str, Any]], output_path: Union[str, pa
 
 def curate_and_save_dataset(
     dataset_name_or_path: Union[str, pathlib.Path] = "ChaoticNeutrals/Reddit-NSFW-Writing_Prompts_ShareGPT",
-    output_dir: Union[str, pathlib.Path] = "data/processed/nsfw_story",
+    output_dir: Union[str, pathlib.Path] = "data/processed/story_writing",
     split: str = "train",
     min_words: int = 200,
     max_words: int = 2500,
@@ -194,7 +194,7 @@ def curate_and_save_dataset(
     max_samples: Optional[int] = None,
     seed: int = 42,
 ) -> Tuple[pathlib.Path, pathlib.Path]:
-    """Curates, filters, and splits an NSFW story dataset, saving to JSONL format."""
+    """Curates, filters, and splits a story-writing dataset, saving to JSONL format."""
     from datasets import load_dataset
 
     source_path = str(dataset_name_or_path)
@@ -215,7 +215,7 @@ def curate_and_save_dataset(
         raw_data = raw_data.select(range(min(len(raw_data), max_samples)))
 
     logger.info(f"Processing {len(raw_data)} raw records...")
-    processed = process_nsfw_story_dataset(
+    processed = process_story_dataset(
         records=raw_data,
         min_words=min_words,
         max_words=max_words,
@@ -252,7 +252,7 @@ def curate_from_config(config: Dict[str, Any]) -> Tuple[pathlib.Path, pathlib.Pa
         or config.get("dataset_name_or_path")
         or "ChaoticNeutrals/Reddit-NSFW-Writing_Prompts_ShareGPT"
     )
-    output_dir = config.get("output_dir", "data/processed/nsfw_story")
+    output_dir = config.get("output_dir", "data/processed/story_writing")
     split = config.get("split", "train")
     min_words = int(config.get("min_words", 200))
     max_words = int(config.get("max_words", 2500))
@@ -282,7 +282,7 @@ def main():
     import argparse
     from slm_post_train.cli import load_yaml_config
 
-    parser = argparse.ArgumentParser(description="Curate and format NSFW story writing dataset from YAML config.")
+    parser = argparse.ArgumentParser(description="Curate and format story writing dataset from YAML config.")
     parser.add_argument("--config", required=True, help="Path to YAML training configuration file")
     args = parser.parse_args()
 

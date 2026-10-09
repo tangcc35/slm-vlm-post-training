@@ -17,19 +17,19 @@ uv run wandb login
 uv run hf auth whoami
 
 echo "********** Starting data curation **********"
-uv run slm-post-train curate-data --config configs/sft/qwen35_08b_nsfw_story.yaml
+uv run slm-post-train curate-data --config configs/sft/qwen35_08b_story_writing.yaml
 echo "********** Finished data curation **********"
 
 echo "********** Starting training **********"
-uv run slm-post-train train --config configs/sft/qwen35_08b_nsfw_story.yaml
+uv run slm-post-train train --config configs/sft/qwen35_08b_story_writing.yaml
 echo "********** Finished training **********"
 
 echo "********** Starting model export **********"
 # Training saves into a timestamped subdirectory (YYYYMMDD-HHMMSS); export the newest one
-MODEL_DIR=$(ls -d outputs/qwen35_08b_nsfw_story/[0-9]* | tail -n 1)
+MODEL_DIR=$(ls -d outputs/qwen35_08b_story_writing/[0-9]* | tail -n 1)
 uv run slm-post-train export \
     --model-path "$MODEL_DIR" \
-    --output-dir outputs/qwen35_08b_nsfw_story/gguf \
+    --output-dir outputs/qwen35_08b_story_writing/gguf \
     --format gguf \
     --quant q8_0
 echo "********** Finished model export **********"

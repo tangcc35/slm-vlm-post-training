@@ -42,7 +42,7 @@ uv run slm-post-train train --config configs/grpo/smoke_test.yaml   # 2-step GRP
 | Recipe | Purpose |
 |---|---|
 | `configs/sft/gemma_text_sft.yaml` | Gemma 2 2B instruction tuning on FineTome-100k |
-| `configs/sft/qwen35_08b_nsfw_story.yaml` | Qwen 3.5 0.8B story fine-tune |
+| `configs/sft/qwen35_08b_story_writing.yaml` | Qwen 3.5 0.8B story fine-tune |
 | `configs/grpo/gemma_sudoku_rl.yaml` | Gemma 2 2B reasoning with GRPO |
 
 Each YAML sets `stage: sft | grpo` plus `model`, `lora`, `dataset`, `training` and `output` sections. `slm-post-train curate-data --config <yaml>` runs the dataset curation defined in a config's `curation` section.

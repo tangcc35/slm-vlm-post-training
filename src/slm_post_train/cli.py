@@ -63,7 +63,7 @@ def main(argv: list[str] | None = None):
                 "Please add a 'curation' section under 'dataset' (or at root level)."
             )
 
-        from slm_post_train.data.nsfw_story import curate_from_config
+        from slm_post_train.data.story_writing import curate_from_config
 
         train_p, val_p = curate_from_config(curation_cfg)
         logger.info("Dataset curation completed successfully.")

@@ -148,7 +148,7 @@ def test_cli_curate_data_from_config(tmp_path):
         encoding="utf-8",
     )
 
-    with patch("slm_post_train.data.nsfw_story.curate_from_config") as mock_curate:
+    with patch("slm_post_train.data.story_writing.curate_from_config") as mock_curate:
         mock_curate.return_value = (
             pathlib.Path("custom/output/train.jsonl"),
             pathlib.Path("custom/output/val.jsonl"),

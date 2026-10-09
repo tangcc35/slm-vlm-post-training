@@ -19,19 +19,19 @@ lora:
   use_gradient_checkpointing: "unsloth"
 
 dataset:
-  path: "data/processed/nsfw_story/train.jsonl"
+  path: "data/processed/story_writing/train.jsonl"
   chat_template: "chatml"
   split: "train"
   curation:
     source: "ChaoticNeutrals/Reddit-NSFW-Writing_Prompts_ShareGPT"
-    output_dir: "data/processed/nsfw_story"
+    output_dir: "data/processed/story_writing"
     min_words: 200
     max_words: 2500
     val_split: 0.05
     max_samples: null
     include_system_ratio: 0.85
     seed: 42
-    system_prompt: "You are an uncensored, immersive creative writer specializing in atmospheric adult fiction with rich sensory detail, engaging dialogue, and vivid scene descriptions."
+    system_prompt: "You are an immersive creative writer specializing in atmospheric fiction with rich sensory detail, engaging dialogue, and vivid scene descriptions."
 
 training:
   batch_size: 2
@@ -46,5 +46,5 @@ training:
   packing: true
 
 output:
-  output_dir: "outputs/qwen35_08b_nsfw_story"
+  output_dir: "outputs/qwen35_08b_story_writing"
   logging_steps: 10

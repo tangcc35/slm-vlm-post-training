@@ -30,7 +30,7 @@ uv run pytest tests/test_rewards.py::test_name         # one test
 
 uv run slm-post-train train --config configs/sft/smoke_test.yaml    # 2-step real SFT run (needs CUDA GPU)
 uv run slm-post-train train --config configs/grpo/smoke_test.yaml   # 2-step real GRPO run
-uv run slm-post-train curate-data --config configs/sft/qwen35_08b_nsfw_story.yaml
+uv run slm-post-train curate-data --config configs/sft/qwen35_08b_story_writing.yaml
 uv run slm-post-train export --model-path <dir> --output-dir <dir> --format gguf --quant q4_k_m
 
 ./run_sh/run_story_rp_backend.sh   # engine on :8000 with --reload; sources .env, starts Phoenix if PHOENIX_ENABLED
@@ -48,7 +48,7 @@ Two packages under `src/` ship in one wheel but share no code. The engine can se
 
 ### `slm_post_train`
 
-- `cli.py` dispatches: `train` reads the YAML's `stage` and calls `trainers/sft_runner.run_sft` or `trainers/grpo_runner.run_grpo`; `curate-data` calls `data/nsfw_story.curate_from_config`; `export` calls `export/exporter.export_model`.
+- `cli.py` dispatches: `train` reads the YAML's `stage` and calls `trainers/sft_runner.run_sft` or `trainers/grpo_runner.run_grpo`; `curate-data` calls `data/story_writing.curate_from_config`; `export` calls `export/exporter.export_model`.
 - Runners take the raw YAML dict and read each section (`model`, `lora`, `dataset`, `training`, `output`, `rewards`) with `.get(key, default)`. There's no schema: defaults live in the runner code, and a new config knob means reading it in the runner.
 - `import unsloth` must come before any `trl`/`transformers` import so its kernel patches apply. `slm_post_train/__init__.py` does this and also patches `trl.import_utils` for transformers ≥ 5.
 - `models/loader.py` loads `FastLanguageModel` or `FastVisionModel` (chosen by `model.modality`) and attaches LoRA when the `lora` section is non-empty.
